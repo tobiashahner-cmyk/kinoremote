@@ -1,0 +1,193 @@
+#include "OptomaBeamer.h"
+
+// ===== Konstruktoren =====
+
+OptomaBeamer::OptomaBeamer(const IPAddress& ip, uint8_t beamerId)
+: _ip(ip), _id(beamerId) {}
+
+OptomaBeamer::OptomaBeamer(const String& ip, uint8_t beamerId)
+: _id(beamerId) {
+  _ip.fromString(ip);
+}
+
+// ===== Public API =====
+
+bool OptomaBeamer::begin() {
+  String response;
+  return getStatus();
+}
+
+bool OptomaBeamer::getStatus() {
+  String response;
+  if (!sendCommand("150", "1", response)) {
+    return false;
+  }
+  return parseStatusResponse(response);
+}
+
+bool OptomaBeamer::tick() {
+  if (_tickInterval == 0) return false;
+  int now = millis();
+  if (now - _lastTick >= _tickInterval) {
+    return getStatus();
+  }
+  return false;
+}
+
+bool OptomaBeamer::setPower(bool onoff) {
+  String response;
+  if (!sendCommand("00", onoff ? "1" : "0", response)) {
+    return false;
+  }
+  _powerState = onoff;
+  return true;
+}
+
+bool OptomaBeamer::setSource(InputSource src) {
+  String param;
+  if (!OptomaSourceLookup::toSetParameter(src, param)) {
+    return false;
+  }
+
+  String response;
+  if (!sendCommand("12", param, response)) {
+    return false;
+  }
+
+  _source = src;
+  return true;
+}
+
+bool OptomaBeamer::setSource(const String& srcName) {
+  InputSource src = OptomaSourceLookup::fromString(srcName);
+  if (src == InputSource::Unknown) {
+    return false;
+  }
+  return setSource(src);
+}
+
+bool OptomaBeamer::setDisplayMode(DisplayMode dm) {
+  String param = encodeDisplayMode(dm);
+
+  String response;
+  if (!sendCommand("20", param, response)) {
+    return false;
+  }
+
+  _displayMode = dm;
+  return true;
+}
+
+bool OptomaBeamer::freeze(bool onoff) {
+  String response;
+  return sendCommand("04", onoff ? "1" : "0", response);
+}
+
+bool OptomaBeamer::setTickInterval(int ms) {
+  if (ms == 0) { _tickInterval = 0; return true; }
+  if (ms < 0) return false;       // nur für bessere Lesbarkeit hier. negative Werte sind unerlaubt
+  if (ms < 2000) return false;    // schneller als alle 2 Sekunden erzeugt zu viel Traffic
+  _tickInterval = ms;
+  return true;
+}
+
+// ===== Getter =====
+
+bool OptomaBeamer::getPowerStatus() const {
+  return _powerState;
+}
+
+OptomaBeamer::InputSource OptomaBeamer::getSource() const {
+  return _source;
+}
+
+const char* OptomaBeamer::getSourceString() {
+  return OptomaSourceLookup::toString(_source);
+}
+
+OptomaBeamer::DisplayMode OptomaBeamer::getDisplayMode() const {
+  return _displayMode;
+}
+
+int OptomaBeamer::getLampHours() const {
+  return _lampHours;
+}
+
+int OptomaBeamer::getTickInterval() {
+  return _tickInterval;
+}
+
+// ===== Helper =====
+
+bool OptomaBeamer::sendCommand(const String& command,
+                              const String& parameter,
+                              String& response) {
+  if (!_client.connect(_ip, 23)) {
+    return false;
+  }
+
+  char cmd[32];
+  if (parameter.length() > 0) {
+    snprintf(cmd, sizeof(cmd),
+             "~%02u%s %s",
+             _id,
+             command.c_str(),
+             parameter.c_str());
+  } else {
+    snprintf(cmd, sizeof(cmd),
+             "~%02u%s",
+             _id,
+             command.c_str());
+  }
+
+  _client.print(cmd);
+  _client.print("\r");
+
+  unsigned long start = millis();
+  while (!_client.available()) {
+    if (millis() - start > 2000) {
+      _client.stop();
+      return false;
+    }
+  }
+
+  response = _client.readStringUntil('\r');
+  _client.stop();
+
+  return isOkResponse(response);
+}
+
+bool OptomaBeamer::isOkResponse(const String& response) {
+  return response.startsWith("Ok");
+}
+
+// ===== Parsing =====
+
+bool OptomaBeamer::parseStatusResponse(const String& response) {
+  if (!isOkResponse(response) || response.length() < 13) {
+    return false;
+  }
+
+  _powerState = (response.charAt(2) == '1');
+  _lampHours  = response.substring(3, 7).toInt();
+
+  uint8_t readCode = response.substring(7, 9).toInt();
+  _source = OptomaSourceLookup::fromReadCode(readCode);
+
+  return true;
+}
+
+// ===== Encoding =====
+
+String OptomaBeamer::encodeDisplayMode(DisplayMode dm) const {
+  switch (dm) {
+    case DisplayMode::Presentation: return "";
+    case DisplayMode::Bright:       return "2";
+    case DisplayMode::Movie:        return "3";
+    case DisplayMode::sRGB:         return "4";
+    case DisplayMode::User:         return "5";
+    case DisplayMode::Blackboard:   return "7";
+    case DisplayMode::DICOM_SIM:    return "13";
+    default:                        return "";
+  }
+}
