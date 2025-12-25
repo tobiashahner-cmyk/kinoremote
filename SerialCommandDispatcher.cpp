@@ -199,25 +199,43 @@ void handleSerialCommands() {
   method.trim();
   paramStr.trim();
 
-  // === Parameter splitten ===
-
-  String params[5];          // Max. 5 Parameter (leicht erweiterbar)
+  // === Parameter splitten (klammer-sensitiv) ===
+  uint8_t maxParamCount = 5;
+  String params[maxParamCount];          // Max. 5 Parameter
   uint8_t paramCount = 0;
-
+  
   if (!paramStr.isEmpty()) {
+    int braceDepth   = 0;    // {}
+    int bracketDepth = 0;    // []
+    int parenthesisDepth = 0;// ()
     int start = 0;
-    while (true) {
-      int comma = paramStr.indexOf(',', start);
-      if (comma < 0) {
-        params[paramCount++] = paramStr.substring(start);
-        break;
+  
+    for (int i = 0; i < paramStr.length(); ++i) {
+      char c = paramStr[i];
+  
+      if (c == '{') braceDepth++;
+      else if (c == '}') braceDepth--;
+      else if (c == '[') bracketDepth++;
+      else if (c == ']') bracketDepth--;
+      else if (c == '(') parenthesisDepth++;
+      else if (c == ')') parenthesisDepth--;
+  
+      // Nur splitten, wenn wir NICHT in Klammern sind
+      if (c == ',' && braceDepth == 0 && bracketDepth == 0 && parenthesisDepth == 0) {
+        if (paramCount < maxParamCount) {
+          params[paramCount++] = paramStr.substring(start, i);
+        }
+        start = i + 1;
       }
-      params[paramCount++] = paramStr.substring(start, comma);
-      start = comma + 1;
-      if (paramCount >= 5) break;
+    }
+  
+    // Letzten Parameter hinzufügen
+    if (paramCount < maxParamCount && start < paramStr.length()) {
+      params[paramCount++] = paramStr.substring(start);
     }
   }
-
+  
+  // Trimmen
   for (uint8_t i = 0; i < paramCount; ++i) {
     params[i].trim();
   }
@@ -230,7 +248,7 @@ void handleSerialCommands() {
     if (object == e.object && method == e.method) {
 
       //if (paramCount != e.expectedParams) {
-      if (paramCount < e.expectedParams) {
+      if (paramCount < e.expectedParams) { // paramCount darf ruhig grösser sein, das ermöglicht optionale Parameter in der API
         Serial.println(F("❌ Falsche Parameteranzahl: "));
         Serial.print(F("gegeben ")); Serial.print(paramCount); Serial.print(F(", erwartet ")); Serial.println(e.expectedParams);
         return;
@@ -254,18 +272,21 @@ void handleSerialCommands() {
 // SERIAL ONLY, for Debugging:
 
 bool kino_help(String* p, uint8_t n) {
+  String cmp = (n == 0) ? "" : p[0];
   Serial.println(F("Folgende Kommandos sind verfügbar:\n-------------------------"));
   for (size_t i = 0; i<commandCount; ++i) {
     const CommandEntry& com = commandTable[i];
-    Serial.print(com.object);
-    Serial.print(".");
-    Serial.print(com.method);
-    Serial.println("()");
-    Serial.print("\tParameter: ");
-    Serial.println(com.expectedParams);
-    Serial.print("\t");
-    Serial.println(com.help);
-    Serial.println();
+    if ((n==0) || (String(com.object) == cmp)) {
+      Serial.print(com.object);
+      Serial.print(".");
+      Serial.print(com.method);
+      Serial.println("()");
+      Serial.print("\tParameter: ");
+      Serial.println(com.expectedParams);
+      Serial.print("\t");
+      Serial.println(com.help);
+      Serial.println();
+    }
   }
   return true;
 }

@@ -54,11 +54,9 @@ std::vector<String> KinoMacroEngine::listMacros() {
 }
 
 bool KinoMacroEngine::addOrUpdateMacro(const String& json) {
-  Serial.println("KinoMacroEngine::addOrUpdateMacro(const String& json)");
   _macroDoc.clear();
   DeserializationError err = deserializeJson(_macroDoc, json);
   if (err) {
-    Serial.println(json);
     _addError(0,"JSON", err.c_str());
     return false;
   }
@@ -85,24 +83,7 @@ bool KinoMacroEngine::addOrUpdateMacro(const String& json) {
 
   return true;
 }
-/*
-bool KinoMacroEngine::addOrUpdateMacro(const String& json) {
-  _macroDoc.clear();
 
-  DeserializationError err = deserializeJson(_macroDoc, json);
-  if (err) {
-    addError(0,"","invalid macro Json");
-    return false;
-  }
-
-  if (!_macroDoc.containsKey("name") ||
-      !_macroDoc.containsKey("actions")) {
-    addError(0,"","Macro missing name or actions");
-    return false;
-  }
-
-  return true;
-}*/
 
 bool KinoMacroEngine::deleteMacro(const String& macroName) {
   String path = "/macros/" + macroName + ".json";
@@ -151,33 +132,6 @@ bool KinoMacroEngine::startMacro(const String& name) {
 
   return true;
 }
-/*
-bool KinoMacroEngine::startMacro(const String& name) {
-  clearErrors();
-
-  if (runtime.running) {
-    Serial.println("Macro already running");
-    return false;
-  }
-
-  if (_macroDoc.isNull()) {
-    Serial.println("No macro loaded");
-    return false;
-  }
-
-  const char* macroName = _macroDoc["name"];
-  if (!macroName || name != macroName) {
-    Serial.println("Macro not found");
-    return false;
-  }
-
-  runtime.actions = _macroDoc["actions"].as<JsonArray>();
-  runtime.index = 0;
-  runtime.running = true;
-
-  //Serial.printf("Macro started: %s\n", macroName);
-  return true;
-}*/
 
 
 void KinoMacroEngine::tick() {

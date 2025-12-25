@@ -19,24 +19,6 @@ WLEDDevice sound(SOUND_IP);
 HyperionDevice hyperion(HYPERION_IP);
 HueBridge hue(HUE_BRIDGE_IP,HUE_TOKEN);
 
-
-
-const char* testMacro = R"json(
-    {
-      "name": "radio",
-      "actions": [
-        { "cmd": "yamaha_power", "on": true },
-        { "cmd": "yamaha_input", "input": "NET RADIO" },
-        { "cmd": "yamaha_volume_percent", "percent": 20 },
-        { "cmd": "do_somethig_stupid", "what" : "dontknow" },
-        { "cmd": "beamer_power", "on": false },
-        { "cmd": "canvas_musicmode" },
-        { "cmd": "huegroup_brightness", "group" : "Kicker", "bri": 10, "commit":true },
-        { "cmd": "sound_musicmode" }
-      ]
-    }
-    )json";
-
 #include "tests.h"
 
 void setup() {
@@ -64,9 +46,6 @@ void setup() {
     
     Serial.println("\nSerial Command Dispatcher V1.0 ready");
 
-    
-    //KinoAPI::addOrUpdateMacro(testMacro);
-    //Serial.println("Test Makro geladen, MacroEngine bereit");
     if (!KinoAPI::startMacroEngine()) {
       Serial.println("MacroEngine konnte nicht gestartet werden!");
     } else {
