@@ -39,6 +39,10 @@ struct CommandEntry {
 bool kino_addOrUpdateMacro(String* p, uint8_t n);
 bool kino_executeMacro(String* p, uint8_t n);
 bool kino_listMacros(String* p, uint8_t n);
+bool kino_showMacro(String* p, uint8_t n);
+bool kino_addCommandToMacro(String* p, uint8_t n);
+bool kino_deleteCommandFromMacro(String* p, uint8_t n);
+bool kino_updateCommandInMacro(String* p, uint8_t n);
 bool kino_deleteMacro(String* p, uint8_t n);
 bool kino_help(String* p, uint8_t n);
 bool kino_RadioMode(String*p, uint8_t n);
@@ -105,7 +109,11 @@ bool hue_showSensors(String *p, uint8_t n);
 static const CommandEntry commandTable[] = {
   {"macro",  "run",       1, kino_executeMacro,         "lädt Makro und führt es aus"},
   {"macro",  "list",      0, kino_listMacros,           "zeigt eine Liste aller gespeicherten Makros"},
+  {"macro",  "show",      1, kino_showMacro,            "zeigt den Inhalt des angegebenen Makros"},
   {"macro",  "add",       1, kino_addOrUpdateMacro,     "speichert das gegebene JSON als Makro"},
+  {"macro",  "addLine",   3, kino_addCommandToMacro,    "fügt ein Kommando zu einem Macro hinzu. Param1: Macroname, Param2: Zeilennummer, Param3: action als json"},
+  {"macro",  "deleteLine",2, kino_deleteCommandFromMacro,"Löscht eine Zeile aus dem angegebenen Makro. Param1: Makroname, Param2: Zeilennummer"},
+  {"macro",  "updateLine",3, kino_updateCommandInMacro, "ersetzt eine Zeile im angegebenen Makro. Param1: Makroname, Param2: Zeilennummer, Param3: neue action als json"},
   {"macro",  "delete",    1, kino_deleteMacro,          "löscht das Makro mit dem gegebenen Namen"},
   {"kino",   "help",      0, kino_help,                 "zeigt diese Hilfe"},
   {"kino",   "radioModus",0, kino_RadioMode,            "startet Radio Modus im Kino"},
@@ -541,6 +549,37 @@ bool hue_showSensors(String* p, uint8_t n) {
 
 // MAKROS
 
+// helper function for showing macro errors
+void showMacroErrors() {
+  size_t errCount = KinoAPI::getMacroErrorCount();
+  Serial.print(errCount); Serial.println(" Errors:");
+  for (size_t i=0; i<errCount; i++) {
+    auto& e = KinoAPI::getMacroError(i);
+    Serial.printf(
+      " #%d cmd=%s msg=%s\n",
+      e.index,
+      e.cmd.c_str(),
+      e.message.c_str()
+    );
+  }
+}
+
+// helper function for showing actions inside a macro
+bool showMacroListing(const String& macroName) {
+  std::vector<String> lines;
+  bool ok = KinoAPI::getMacroLines(macroName, lines);
+  if (!ok) {
+    showMacroErrors();
+    return false;
+  }
+  for (auto& l : lines) {
+    Serial.print("\t");
+    Serial.println(l);
+  }
+  return true;
+}
+
+
 bool kino_listMacros(String* p, uint8_t n) {
   Serial.println("Gespeicherte Makros:");
   size_t i=0;
@@ -552,56 +591,71 @@ bool kino_listMacros(String* p, uint8_t n) {
   return true;
 }
 
+bool kino_showMacro(String* p, uint8_t n) {
+  Serial.print("actions in Makro "); Serial.println(p[0]);
+  return showMacroListing(p[0]);
+}
+
+bool kino_addCommandToMacro(String* p, uint8_t n) {
+  Serial.print("\tHänge neue Action\n\t");
+  Serial.print(p[2]);
+  Serial.print("\n\tin Zeile ");
+  Serial.print(p[1]);
+  Serial.print(" von Makro ");
+  Serial.print(p[0]);
+  Serial.print(" ein");
+  bool ok = KinoAPI::addMacroCommand(p[0], p[1].toInt(), p[2]);
+  if (!ok) {
+    showMacroErrors();
+    return false;
+  }
+  return showMacroListing(p[0]);
+}
+
+bool kino_deleteCommandFromMacro(String* p, uint8_t n) {
+  Serial.print("\tLösche Zeile ");
+  Serial.print(p[1].toInt());
+  Serial.print(" aus Makro ");
+  Serial.println(p[0]);
+  bool ok = KinoAPI::deleteMacroCommand(p[0], p[1].toInt());
+  if (!ok) {
+    showMacroErrors();
+    return false;
+  }
+  return showMacroListing(p[0]);
+}
+
+bool kino_updateCommandInMacro(String* p, uint8_t n) {
+  Serial.print("\tErsetze Zeile ");
+  Serial.print(p[1].toInt());
+  Serial.print(" in Makro ");
+  Serial.print(p[0]);
+  Serial.print(" durch\n\t");
+  Serial.println(p[2]);
+  bool ok = KinoAPI::updateMacroCommand(p[0], p[1].toInt(), p[2]);
+  if (!ok) {
+    showMacroErrors();
+    return false;
+  }
+  return showMacroListing(p[0]);
+}
+
 bool kino_addOrUpdateMacro(String* p, uint8_t n) {
   bool ok = KinoAPI::addOrUpdateMacro(p[0]);
-  if (!ok) {
-    size_t errCount = KinoAPI::getMacroErrorCount();
-    Serial.print(errCount); Serial.println(" Errors:");
-    for (size_t i=0; i<errCount; i++) {
-      auto& e = KinoAPI::getMacroError(i);
-      Serial.printf(
-        " #%d cmd=%s msg=%s\n",
-        e.index,
-        e.cmd.c_str(),
-        e.message.c_str()
-      );
-    }
-  }
+  if (!ok) showMacroErrors();
   return ok;
 }
 
 bool kino_deleteMacro(String*p, uint8_t n) {
   bool ok = KinoAPI::deleteMacro(p[0]);
-  if (!ok) {
-    size_t errCount = KinoAPI::getMacroErrorCount();
-    Serial.print(errCount); Serial.println(" Errors:");
-    for (size_t i=0; i<errCount; i++) {
-      auto& e = KinoAPI::getMacroError(i);
-      Serial.printf(
-        " #%d cmd=%s msg=%s\n",
-        e.index,
-        e.cmd.c_str(),
-        e.message.c_str()
-      );
-    }
-  }
+  if (!ok) showMacroErrors();
   return ok;
 }
 
 bool kino_executeMacro(String* p, uint8_t n) {
   //return KinoAPI::executeMacro(p[0]);
   if (!KinoAPI::executeMacro(p[0])) {
-    Serial.println("Macro finished with errors:");
-  
-    for (size_t i = 0; i < KinoAPI::getMacroErrorCount(); i++) {
-      auto& e = KinoAPI::getMacroError(i);
-      Serial.printf(
-        " #%d cmd=%s msg=%s\n",
-        e.index,
-        e.cmd.c_str(),
-        e.message.c_str()
-      );
-    }
+    showMacroErrors();
     return false;
   }
   return true;

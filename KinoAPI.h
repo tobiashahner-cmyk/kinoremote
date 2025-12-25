@@ -10,6 +10,10 @@ namespace KinoAPI {
   bool addOrUpdateMacro(const String& json);
   bool deleteMacro(const String& macroName);
   std::vector<String> listMacros();
+  bool getMacroLines(const String& macroName, std::vector<String>& lines);
+  bool addMacroCommand(const String& macroName, size_t index, const String& jsonActionElement);
+  bool deleteMacroCommand(const String& macroName, size_t index);
+  bool updateMacroCommand(const String& macroName, size_t index, const String& jsonActionElement);
   size_t getMacroErrorCount();
   const MacroError& getMacroError(size_t i);
   // Yamaha

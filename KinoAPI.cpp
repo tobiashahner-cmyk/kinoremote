@@ -35,6 +35,22 @@ namespace KinoAPI {
   std::vector<String> listMacros() {
     return macroEngine.listMacros();
   }
+
+  bool getMacroLines(const String& macroName, std::vector<String>& lines) {
+    return macroEngine.getMacroLines(macroName, lines);
+  }
+
+  bool addMacroCommand(const String& macroName, size_t index, const String& jsonActionElement) {
+    return macroEngine.addCommand(macroName, index, jsonActionElement);
+  }
+
+  bool deleteMacroCommand(const String& macroName, size_t index) {
+    return macroEngine.deleteCommand(macroName, index);
+  }
+
+  bool updateMacroCommand(const String& macroName, size_t index, const String& jsonActionElement) {
+    return macroEngine.updateCommand(macroName, index, jsonActionElement);
+  }
   
   bool executeMacro(const String& name) {
     return macroEngine.startMacro(name);
