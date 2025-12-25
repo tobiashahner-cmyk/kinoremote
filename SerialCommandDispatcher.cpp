@@ -36,7 +36,10 @@ struct CommandEntry {
 };
 
 // ==== Handler-Prototypen ====
+bool kino_addOrUpdateMacro(String* p, uint8_t n);
 bool kino_executeMacro(String* p, uint8_t n);
+bool kino_listMacros(String* p, uint8_t n);
+bool kino_deleteMacro(String* p, uint8_t n);
 bool kino_help(String* p, uint8_t n);
 bool kino_RadioMode(String*p, uint8_t n);
 bool kino_BlurayMode(String* p, uint8_t n);
@@ -100,7 +103,10 @@ bool hue_showSensors(String *p, uint8_t n);
 
 // ==== Tabelle ====
 static const CommandEntry commandTable[] = {
-  {"kino",   "runMacro",  1, kino_executeMacro,         "lädt Makro und führt es aus"},
+  {"macro",  "run",       1, kino_executeMacro,         "lädt Makro und führt es aus"},
+  {"macro",  "list",      0, kino_listMacros,           "zeigt eine Liste aller gespeicherten Makros"},
+  {"macro",  "add",       1, kino_addOrUpdateMacro,     "speichert das gegebene JSON als Makro"},
+  {"macro",  "delete",    1, kino_deleteMacro,          "löscht das Makro mit dem gegebenen Namen"},
   {"kino",   "help",      0, kino_help,                 "zeigt diese Hilfe"},
   {"kino",   "radioModus",0, kino_RadioMode,            "startet Radio Modus im Kino"},
   {"kino",   "blurayModus",0, kino_BlurayMode,          "startet Bluray Modus im Kino"},
@@ -510,6 +516,55 @@ bool hue_showSensors(String* p, uint8_t n) {
     Serial.println("Licht Sensor Theke nicht gefunden!");
   }
   return true;
+}
+
+// MAKROS
+
+bool kino_listMacros(String* p, uint8_t n) {
+  Serial.println("Gespeicherte Makros:");
+  size_t i=0;
+  for (auto& macroname : KinoAPI::listMacros()) {
+    Serial.print("\t"); Serial.println(macroname);
+    i++;
+  }
+  Serial.print(i); Serial.println(" Makros total");
+  return true;
+}
+
+bool kino_addOrUpdateMacro(String* p, uint8_t n) {
+  bool ok = KinoAPI::addOrUpdateMacro(p[0]);
+  if (!ok) {
+    size_t errCount = KinoAPI::getMacroErrorCount();
+    Serial.print(errCount); Serial.println(" Errors:");
+    for (size_t i=0; i<errCount; i++) {
+      auto& e = KinoAPI::getMacroError(i);
+      Serial.printf(
+        " #%d cmd=%s msg=%s\n",
+        e.index,
+        e.cmd.c_str(),
+        e.message.c_str()
+      );
+    }
+  }
+  return ok;
+}
+
+bool kino_deleteMacro(String*p, uint8_t n) {
+  bool ok = KinoAPI::deleteMacro(p[0]);
+  if (!ok) {
+    size_t errCount = KinoAPI::getMacroErrorCount();
+    Serial.print(errCount); Serial.println(" Errors:");
+    for (size_t i=0; i<errCount; i++) {
+      auto& e = KinoAPI::getMacroError(i);
+      Serial.printf(
+        " #%d cmd=%s msg=%s\n",
+        e.index,
+        e.cmd.c_str(),
+        e.message.c_str()
+      );
+    }
+  }
+  return ok;
 }
 
 bool kino_executeMacro(String* p, uint8_t n) {

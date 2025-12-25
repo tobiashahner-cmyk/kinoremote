@@ -26,6 +26,15 @@ namespace KinoAPI {
 
   // Macros sind ein Teil der API, also ist das hier genau richtig aufgehoben
   static KinoMacroEngine macroEngine;
+
+  bool startMacroEngine() {
+    if (macroEngine.isReady()) return true;
+    return macroEngine.begin();
+  }
+
+  std::vector<String> listMacros() {
+    return macroEngine.listMacros();
+  }
   
   bool executeMacro(const String& name) {
     return macroEngine.startMacro(name);
@@ -35,10 +44,13 @@ namespace KinoAPI {
     macroEngine.tick();
     return (macroEngine.errorCount() == 0);
   }
-  
-  // Hilfsfunktion für Tests:
-  bool loadMacroJson(const String& json) {
+
+  bool addOrUpdateMacro(const String& json) {
     return macroEngine.addOrUpdateMacro(json);
+  }
+
+  bool deleteMacro(const String& macroName) {
+    return macroEngine.deleteMacro(macroName);
   }
 
   size_t getMacroErrorCount() {

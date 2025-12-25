@@ -4,9 +4,12 @@
 
 namespace KinoAPI {
   // Macros
+  bool startMacroEngine();
   bool handleMacroTicks();
   bool executeMacro(const String& name);
-  bool loadMacroJson(const String& json);
+  bool addOrUpdateMacro(const String& json);
+  bool deleteMacro(const String& macroName);
+  std::vector<String> listMacros();
   size_t getMacroErrorCount();
   const MacroError& getMacroError(size_t i);
   // Yamaha

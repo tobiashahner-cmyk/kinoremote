@@ -23,7 +23,7 @@ HueBridge hue(HUE_BRIDGE_IP,HUE_TOKEN);
 
 const char* testMacro = R"json(
     {
-      "name": "radio_start",
+      "name": "radio",
       "actions": [
         { "cmd": "yamaha_power", "on": true },
         { "cmd": "yamaha_input", "input": "NET RADIO" },
@@ -65,8 +65,13 @@ void setup() {
     Serial.println("\nSerial Command Dispatcher V1.0 ready");
 
     
-    KinoAPI::loadMacroJson(testMacro);
-    Serial.println("Test Makro geladen, MacroEngine bereit");
+    //KinoAPI::addOrUpdateMacro(testMacro);
+    //Serial.println("Test Makro geladen, MacroEngine bereit");
+    if (!KinoAPI::startMacroEngine()) {
+      Serial.println("MacroEngine konnte nicht gestartet werden!");
+    } else {
+      Serial.println("MacroEngine bereit");
+    }
 }
 
 
