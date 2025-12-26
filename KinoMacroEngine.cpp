@@ -22,13 +22,14 @@ bool KinoMacroEngine::isReady() const {
   return _ready;
 }
 
-bool KinoMacroEngine::startMacro(const String& name) {
+bool KinoMacroEngine::startMacro(const String& name, MacroFinishedCallback cb/*=nullptr*/) {
   if (runtime.running) {
     _addError(0,"runtime", "macro already running");
     return false;
   }
   // always (re-)load the macro, to fill the runtime with correct data
   if (!_loadMacro(name)) return false;
+  _onFinished = cb;
   _errors.clear();
   runtime.actions = _macroDoc["actions"].as<JsonArray>();
   runtime.index = 0;
@@ -37,11 +38,20 @@ bool KinoMacroEngine::startMacro(const String& name) {
   return true;
 }
 
+String KinoMacroEngine::getName() const {
+  return (_macroDoc["name"] | "");
+}
+
 void KinoMacroEngine::tick() {
   if (!runtime.running) return;
 
   if (runtime.index >= runtime.actions.size()) {
     runtime.running = false;
+    bool success = _errors.empty();
+    if (_onFinished) {
+      _onFinished(success);
+      _onFinished = nullptr; // 🔥 wichtig!
+    }
     return;
   }
 
@@ -301,7 +311,9 @@ std::vector<String> KinoMacroEngine::listMacros() {
 }
 
 bool KinoMacroEngine::_loadMacro(const String& macroName) {
-  String path = "/macros/" + macroName + ".json";
+  String path;
+  path.reserve(32);
+  path += "/macros/" + macroName + ".json";
   if (!LittleFS.exists(path)) {
     _addError(0,"FS: not found", path);
     return false;
@@ -323,7 +335,9 @@ bool KinoMacroEngine::_loadMacro(const String& macroName) {
 
 bool KinoMacroEngine::_saveMacro() {
   String name = _macroDoc["name"].as<String>();
-  String path = "/macros/" + name + ".json";
+  String path;
+  path.reserve(32);
+  path += "/macros/" + name + ".json";
 
   File f = LittleFS.open(path, "w");
   if (!f) {

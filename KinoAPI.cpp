@@ -52,8 +52,12 @@ namespace KinoAPI {
     return macroEngine.updateCommand(macroName, index, jsonActionElement);
   }
   
-  bool executeMacro(const String& name) {
-    return macroEngine.startMacro(name);
+  bool executeMacro(const String& name,MacroFinishedCallback cb/*=nullptr*/) {
+    return macroEngine.startMacro(name, cb);
+  }
+
+  String getCurrentMacroName() {
+    return macroEngine.getName();
   }
 
   bool handleMacroTicks() {

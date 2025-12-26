@@ -552,6 +552,8 @@ bool hue_showSensors(String* p, uint8_t n) {
 // helper function for showing macro errors
 void showMacroErrors() {
   size_t errCount = KinoAPI::getMacroErrorCount();
+  Serial.print(KinoAPI::getCurrentMacroName());
+  Serial.print(" : ");
   Serial.print(errCount); Serial.println(" Errors:");
   for (size_t i=0; i<errCount; i++) {
     auto& e = KinoAPI::getMacroError(i);
@@ -652,11 +654,21 @@ bool kino_deleteMacro(String*p, uint8_t n) {
   return ok;
 }
 
+void serial_macroFinished(bool success) {
+  if (!success) {
+    showMacroErrors();
+    return;
+  }
+  Serial.print("Makro ");
+  Serial.print(KinoAPI::getCurrentMacroName());
+  Serial.println("sauber abgearbeitet\n");
+}
+
 bool kino_executeMacro(String* p, uint8_t n) {
   //return KinoAPI::executeMacro(p[0]);
-  if (!KinoAPI::executeMacro(p[0])) {
+  if (!KinoAPI::executeMacro(p[0], serial_macroFinished)) {
+    // Diese Fehler werden direkt beim Starten gefangen:
     showMacroErrors();
-    return false;
   }
   return true;
 }

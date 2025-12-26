@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+using MacroFinishedCallback = std::function<void(bool success)>;
+
 struct MacroRuntime {
   bool running = false;
   uint16_t index = 0;
@@ -23,7 +25,8 @@ public:
   bool begin();
   bool isReady() const;
   std::vector<String> listMacros();
-  bool startMacro(const String& name);
+  bool startMacro(const String& name, MacroFinishedCallback cb=nullptr);
+  String getName() const;
   void tick();
   bool isRunning() const;
   bool addOrUpdateMacro(const String& json);
@@ -46,6 +49,7 @@ private:
   bool _executeAction(const JsonObject& action, uint16_t index);
   void _clearErrors();
   std::vector<MacroError> _errors;
+  MacroFinishedCallback _onFinished;
 
   struct {
     bool running = false;
