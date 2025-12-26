@@ -46,8 +46,8 @@ namespace KinoAPI {
   // Leinwand
   bool canvas_setTicker(int ms);
   bool canvas_setPower(bool onoff, bool commit=false);
-  bool canvas_powerOn();
-  bool canvas_powerOff();
+  bool canvas_powerOn(bool commit=false);
+  bool canvas_powerOff(bool commit=false);
   bool canvas_setBrightness(uint8_t bri, bool commit=false);
   bool canvas_setEffect(uint16_t effectId, bool commit=false);
   bool canvas_setSpeed(uint8_t sx, bool commit=false);
@@ -72,8 +72,8 @@ namespace KinoAPI {
   // sound
   bool sound_setTicker(int ms);
   bool sound_setPower(bool onoff, bool commit=false);
-  bool sound_powerOn();
-  bool sound_powerOff();
+  bool sound_powerOn(bool commit=false);
+  bool sound_powerOff(bool commit=false);
   bool sound_setBrightness(uint8_t bri, bool commit=false);
   bool sound_setEffect(uint16_t effectId, bool commit=false);
   bool sound_setSpeed(uint8_t sx, bool commit=false);

@@ -659,9 +659,9 @@ void serial_macroFinished(bool success) {
     showMacroErrors();
     return;
   }
-  Serial.print("Makro ");
+  Serial.print("Makro \"");
   Serial.print(KinoAPI::getCurrentMacroName());
-  Serial.println("sauber abgearbeitet\n");
+  Serial.println("\" sauber abgearbeitet\n");
 }
 
 bool kino_executeMacro(String* p, uint8_t n) {

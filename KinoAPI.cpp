@@ -461,6 +461,10 @@ namespace KinoAPI {
     if (ok && commit) return sound.applyChanges();
     return ok;
   }
+
+  bool sound_setLive(bool onoff, bool commit/*=false*/) {
+    return true;
+  }
   
   bool sound_setSolid(uint8_t r, uint8_t g, uint8_t b, uint8_t bri) {
     //return sound.setColor(r,g,b,bri);

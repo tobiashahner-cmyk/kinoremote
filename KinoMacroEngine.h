@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "KinoMacroActions.h"
 
 using MacroFinishedCallback = std::function<void(bool success)>;
 

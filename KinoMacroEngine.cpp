@@ -67,6 +67,19 @@ bool KinoMacroEngine::isRunning() const {
 }
 
 bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
+    if (!a.containsKey("cmd")) {
+      _addError(index, "<none>", "Missing cmd");
+      return false;
+    }
+    if (!MacroActions::execute(a)) {
+        _addError(index, "CMD", "unknown or failed");
+        return false;
+    }
+    return true;
+}
+
+/*
+bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
   const char* cmd = a["cmd"];
 
   if (!cmd) {
@@ -119,7 +132,7 @@ bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
   yield();
   return ok;
 }
-
+*/
 
 
 // Error handling
