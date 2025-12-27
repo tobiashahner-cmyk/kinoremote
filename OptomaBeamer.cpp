@@ -13,7 +13,10 @@ OptomaBeamer::OptomaBeamer(const String& ip, uint8_t beamerId)
 // ===== Public API =====
 
 bool OptomaBeamer::begin() {
-  String response;
+  return getStatus();
+}
+
+bool OptomaBeamer::init() {
   return getStatus();
 }
 

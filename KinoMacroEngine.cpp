@@ -67,72 +67,20 @@ bool KinoMacroEngine::isRunning() const {
 }
 
 bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
-    if (!a.containsKey("cmd")) {
-      _addError(index, "<none>", "Missing cmd");
-      return false;
-    }
-    if (!MacroActions::execute(a)) {
-        _addError(index, "CMD", "unknown or failed");
-        return false;
-    }
-    return true;
-}
 
-/*
-bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
-  const char* cmd = a["cmd"];
+  ActionResult res = MacroActions::execute(a);
 
-  if (!cmd) {
-    _addError(index, "<none>", "Missing cmd");
+  if (!res.ok()) {
+    _addError(
+      index,
+      "ACTION",
+      String((int)res.error) + ": " + res.message
+    );
     return false;
   }
-
-  bool ok = false;
-  bool commit = a["commit"] | false;
   
-  yield();
-  if (strcmp(cmd, "yamaha_power") == 0) {
-    ok = KinoAPI::yamaha_setPower(a["on"] | false);
-  }
-  else if (strcmp(cmd, "yamaha_input") == 0) {
-    ok = KinoAPI::yamaha_setInput(a["input"].as<String>());
-  }
-  else if (strcmp(cmd, "yamaha_volume_percent") ==0) {
-    ok = KinoAPI::yamaha_setVolumePercent(a["percent"] | 0);
-  }
-  else if (strcmp(cmd, "beamer_power") == 0) {
-    ok = KinoAPI::beamer_setPower(a["on"] | false);
-  }
-  else if (strcmp(cmd, "canvas_effect") == 0) {
-    ok = KinoAPI::canvas_setEffect((a["effect"] | 0),commit);
-  }
-  else if (strcmp(cmd, "canvas_musicmode") == 0) {
-    ok = KinoAPI::canvas_setMusicEffect();
-  }
-  else if (strcmp(cmd, "canvas_brightness") == 0) {
-    ok = KinoAPI::canvas_setBrightness((a["bri"] | 0),commit);
-  }
-  else if (strcmp(cmd, "sound_musicmode") == 0) {
-    ok = KinoAPI::sound_setMusicEffect();
-  }
-  else if (strcmp(cmd, "huegroup_brightness") == 0) {
-    ok = KinoAPI::hueGroup_setBri((a["group"]|""),(a["bri"]|0),commit);
-  }
-  else if (strcmp(cmd, "huegroup_power") == 0) {
-    ok = KinoAPI::hueGroup_setPower((a["group"]|""),(a["on"]|false),commit);
-  }
-  else {
-    _addError(index, cmd, "Unknown command");
-    return false;
-  }
-
-  if (!ok) {
-    _addError(index, cmd, "Command execution failed");
-  }
-  yield();
-  return ok;
+  return true;
 }
-*/
 
 
 // Error handling
@@ -161,6 +109,7 @@ bool KinoMacroEngine::addOrUpdateMacro(const String& json) {
   DeserializationError err = deserializeJson(_macroDoc, json);
   if (err) {
     _addError(0,"JSON", err.c_str());
+    _addError(0,"",json);
     return false;
   }
 

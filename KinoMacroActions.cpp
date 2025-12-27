@@ -2,112 +2,141 @@
 #include "KinoAPI.h"
 
 // === Handler ===
-// Muster:
-/*
-static bool act_yamaha_power(JsonObject a) {
-    if (!a.containsKey("on")) return false;
-    return KinoAPI::yamahaPower(a["on"].as<bool>());
-}
-*/
-// "yamaha_power"             => KinoAPI::yamaha_setPower(a["on"] | false);
-static bool act_yamaha_power(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+
+static ActionResult act_yamaha_power(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  return KinoAPI::yamaha_setPower(onoff);
+  bool ok = KinoAPI::yamaha_setPower(onoff);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_yamaha_volume(JsonObject a) {
-  if (!a.containsKey("vol")) return false;
+static ActionResult act_yamaha_volume(JsonObject a) {
+  if (!a.containsKey("vol")) return { ActionError::MissingParam, "vol" };
   int vol = a["vol"]|(-800);
-  return KinoAPI::yamaha_setVolume(vol);
+  bool ok = KinoAPI::yamaha_setVolume(vol);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""}; 
 }
-static bool act_yamaha_volume_percent(JsonObject a) {
-  if (!a.containsKey("percent")) return false;
+static ActionResult act_yamaha_volume_percent(JsonObject a) {
+  if (!a.containsKey("percent")) return { ActionError::MissingParam, "percent" };
   int pct = a["percent"]|20;
-  return KinoAPI::yamaha_setVolumePercent(pct);
+  bool ok = KinoAPI::yamaha_setVolumePercent(pct);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_yamaha_input(JsonObject a) {
-  if (!a.containsKey("input")) return false;
+static ActionResult act_yamaha_input(JsonObject a) {
+  if (!a.containsKey("input")) return { ActionError::MissingParam, "input" };
   String input=a["input"]|"";
-  return KinoAPI::yamaha_setInput(input);
+  bool ok = KinoAPI::yamaha_setInput(input);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_yamaha_dsp(JsonObject a) {
-  if (!a.containsKey("dsp")) return false;
+static ActionResult act_yamaha_dsp(JsonObject a) {
+  if (!a.containsKey("dsp")) return { ActionError::MissingParam, "dsp" };
   String dsp = a["dsp"]|"";
-  return KinoAPI::yamaha_setDsp(dsp);
+  bool ok = KinoAPI::yamaha_setDsp(dsp);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_yamaha_straight(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_yamaha_straight(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  return KinoAPI::yamaha_setStraight(onoff);
+  bool ok = KinoAPI::yamaha_setStraight(onoff);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_yamaha_enhancer(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_yamaha_enhancer(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  return KinoAPI::yamaha_setEnhancer(onoff);
+  bool ok = KinoAPI::yamaha_setEnhancer(onoff);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_yamaha_mute(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_yamaha_mute(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  return KinoAPI::yamaha_setMute(onoff);
+  bool ok = KinoAPI::yamaha_setMute(onoff);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_yamaha_station(JsonObject a) {
-  if (!a.containsKey("station")) return false;
+static ActionResult act_yamaha_station(JsonObject a) {
+  if (!a.containsKey("station")) return { ActionError::MissingParam, "station" };
   String station = a["station"]|"";
-  return KinoAPI::yamaha_setStation(station);
+  bool ok = KinoAPI::yamaha_setStation(station);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_beamer_power(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_beamer_power(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  return KinoAPI::beamer_setPower(onoff);
+  bool ok = KinoAPI::beamer_setPower(onoff);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_beamer_input(JsonObject a) {
-  if (!a.containsKey("input")) return false;
+static ActionResult act_beamer_input(JsonObject a) {
+  if (!a.containsKey("input")) return { ActionError::MissingParam, "input" };
   String input = a["input"]|"";
-  return KinoAPI::beamer_setInput(input);
+  bool ok = KinoAPI::beamer_setInput(input);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_power(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_canvas_power(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setPower(onoff,commit);
+  bool ok = KinoAPI::canvas_setPower(onoff,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_brightness(JsonObject a) {
-  if (!a.containsKey("bri")) return false;
+static ActionResult act_canvas_brightness(JsonObject a) {
+  if (!a.containsKey("bri")) return { ActionError::MissingParam, "bri" };
   int bri = a["bri"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setBrightness(bri,commit);
+  bool ok = KinoAPI::canvas_setBrightness(bri,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_effect(JsonObject a) {
-  if (!a.containsKey("effect")) return false;
+static ActionResult act_canvas_effect(JsonObject a) {
+  if (!a.containsKey("effect")) return { ActionError::MissingParam, "effect" };
   int effect = a["effect"]|0;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setEffect(effect,commit);
+  bool ok = KinoAPI::canvas_setEffect(effect,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_speed(JsonObject a) {
-  if (!a.containsKey("speed")) return false;
+static ActionResult act_canvas_speed(JsonObject a) {
+  if (!a.containsKey("speed")) return { ActionError::MissingParam, "speed" };
   int sx = a["sx"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setSpeed(sx,commit);
+  bool ok = KinoAPI::canvas_setSpeed(sx,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_intensity(JsonObject a) {
-  if (!a.containsKey("intensity")) return false;
+static ActionResult act_canvas_intensity(JsonObject a) {
+  if (!a.containsKey("intensity")) return { ActionError::MissingParam, "intensity" };
   int si = a["intensity"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setIntensity(si,commit);
+  bool ok = KinoAPI::canvas_setIntensity(si,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_live(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_canvas_live(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setLive(onoff,commit);
+  bool ok = KinoAPI::canvas_setLive(onoff,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_tt(JsonObject a) {
-  if (!a.containsKey("tt")) return false;
+static ActionResult act_canvas_tt(JsonObject a) {
+  if (!a.containsKey("tt")) return { ActionError::MissingParam, "tt" };
   int tt = a["tt"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setTransitionTime(tt,commit);
+  bool ok = KinoAPI::canvas_setTransitionTime(tt,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_fgcol(JsonObject a) {
+static ActionResult act_canvas_fgcol(JsonObject a) {
   int r,g,b;
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
     r = a["col"][0]|0;
@@ -117,11 +146,13 @@ static bool act_canvas_fgcol(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setFgColor(r,g,b,commit);
+  bool ok = KinoAPI::canvas_setFgColor(r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_bgcol(JsonObject a) {
+static ActionResult act_canvas_bgcol(JsonObject a) {
   int r,g,b;
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
     r = a["col"][0]|0;
@@ -131,11 +162,13 @@ static bool act_canvas_bgcol(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setBgColor(r,g,b,commit);
+  bool ok = KinoAPI::canvas_setBgColor(r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_fxcol(JsonObject a) {
+static ActionResult act_canvas_fxcol(JsonObject a) {
   int r,g,b;
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
     r = a["col"][0]|0;
@@ -145,33 +178,42 @@ static bool act_canvas_fxcol(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setFxColor(r,g,b,commit);
+  bool ok = KinoAPI::canvas_setFxColor(r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_custom(JsonObject a) {
+static ActionResult act_canvas_custom(JsonObject a) {
   int c1x = a["c1x"] | 0;
   int c2x = a["c2x"] | 0;
   int c3x = a["c3x"] | 0;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setCustomParams(c1x,c2x,c3x,commit);
+  bool ok = KinoAPI::canvas_setCustomParams(c1x,c2x,c3x,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_palette(JsonObject a) {
-  if (!a.containsKey("pal")) return false;
+static ActionResult act_canvas_palette(JsonObject a) {
+  if (!a.containsKey("pal")) return { ActionError::MissingParam, "pal" };
   int pal = a["pal"]|0;
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setPalette(pal,commit);
+  bool ok = KinoAPI::canvas_setPalette(pal,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_fade(JsonObject a) {
-  if (!a.containsKey("bri")) return false;
-  if (!a.containsKey("ms")) return false;
+static ActionResult act_canvas_fade(JsonObject a) {
+  if (!a.containsKey("bri")) return { ActionError::MissingParam, "bri" };
+  if (!a.containsKey("ms")) return { ActionError::MissingParam, "ms" };
   int bri = a["bri"]|0;
   int ms = a["ms"]|0;
   bool sync = a["sync"]|false;
-  if (sync) return KinoAPI::canvas_fadeSync(bri,ms);
-  return KinoAPI::canvas_fadeAsync(bri,ms);
+  bool ok = false;
+  if (sync) ok = KinoAPI::canvas_fadeSync(bri,ms);
+  if(!sync) ok = KinoAPI::canvas_fadeAsync(bri,ms);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_solid(JsonObject a) {
+static ActionResult act_canvas_solid(JsonObject a) {
   int r,g,b;
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
     r = a["col"][0]|0;
@@ -181,73 +223,99 @@ static bool act_canvas_solid(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::canvas_setSolid(r,g,b,commit);
+  bool ok = KinoAPI::canvas_setSolid(r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_music(JsonObject a) {
-  return KinoAPI::canvas_setMusicEffect();
+static ActionResult act_canvas_music(JsonObject a) {
+  bool ok = KinoAPI::canvas_setMusicEffect();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_lightning(JsonObject a) {
-  return KinoAPI::canvas_setLightningEffect();
+static ActionResult act_canvas_lightning(JsonObject a) {
+  bool ok = KinoAPI::canvas_setLightningEffect();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_alarm(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_canvas_alarm(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  if (onoff) return KinoAPI::canvas_setAlarm();
-  return KinoAPI::canvas_stopAlarm();
+  bool ok = false;
+  if (onoff) ok = KinoAPI::canvas_setAlarm();
+  if(!onoff) ok = KinoAPI::canvas_stopAlarm();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_canvas_pause(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_canvas_pause(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  if (onoff) return KinoAPI::canvas_setPause();
-  return KinoAPI::canvas_setResume();
+  bool ok = false;
+  if (onoff) ok = KinoAPI::canvas_setPause();
+  if(!onoff) ok = KinoAPI::canvas_setResume();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
 
 
-static bool act_sound_power(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_sound_power(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setPower(onoff,commit);
+  bool ok = KinoAPI::sound_setPower(onoff,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_brightness(JsonObject a) {
-  if (!a.containsKey("bri")) return false;
+static ActionResult act_sound_brightness(JsonObject a) {
+  if (!a.containsKey("bri")) return { ActionError::MissingParam, "bri" };
   int bri = a["bri"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setBrightness(bri,commit);
+  bool ok = KinoAPI::sound_setBrightness(bri,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_effect(JsonObject a) {
-  if (!a.containsKey("effect")) return false;
+static ActionResult act_sound_effect(JsonObject a) {
+  if (!a.containsKey("effect")) return { ActionError::MissingParam, "effect" };
   int effect = a["effect"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setEffect(effect,commit);
+  bool ok = KinoAPI::sound_setEffect(effect,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_speed(JsonObject a) {
-  if (!a.containsKey("speed")) return false;
+static ActionResult act_sound_speed(JsonObject a) {
+  if (!a.containsKey("speed")) return { ActionError::MissingParam, "speed" };
   int sx = a["speed"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setSpeed(sx,commit);
+  bool ok = KinoAPI::sound_setSpeed(sx,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_intensity(JsonObject a) {
-  if (!a.containsKey("intensity")) return false;
+static ActionResult act_sound_intensity(JsonObject a) {
+  if (!a.containsKey("intensity")) return { ActionError::MissingParam, "intensity" };
   int intensity = a["intensity"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setIntensity(intensity,commit);
+  bool ok = KinoAPI::sound_setIntensity(intensity,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_live(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_sound_live(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setLive(onoff,commit);
+  bool ok = KinoAPI::sound_setLive(onoff,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_tt(JsonObject a) {
-  if (!a.containsKey("tt")) return false;
+static ActionResult act_sound_tt(JsonObject a) {
+  if (!a.containsKey("tt")) return { ActionError::MissingParam, "tt" };
   int tt = a["tt"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setTransitionTime(tt,commit);
+  bool ok = KinoAPI::sound_setTransitionTime(tt,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_fgcol(JsonObject a) {
+static ActionResult act_sound_fgcol(JsonObject a) {
   int r,g,b;
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
     r = a["col"][0]|0;
@@ -257,11 +325,13 @@ static bool act_sound_fgcol(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setFgColor(r,g,b,commit);
+  bool ok = KinoAPI::sound_setFgColor(r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_bgcol(JsonObject a) {
+static ActionResult act_sound_bgcol(JsonObject a) {
   int r,g,b;
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
     r = a["col"][0]|0;
@@ -271,11 +341,13 @@ static bool act_sound_bgcol(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setBgColor(r,g,b,commit);
+  bool ok = KinoAPI::sound_setBgColor(r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_fxcol(JsonObject a) {
+static ActionResult act_sound_fxcol(JsonObject a) {
   int r,g,b;
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
     r = a["col"][0]|0;
@@ -285,33 +357,43 @@ static bool act_sound_fxcol(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setFxColor(r,g,b,commit);
+  bool ok = KinoAPI::sound_setFxColor(r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_custom(JsonObject a) {
+static ActionResult act_sound_custom(JsonObject a) {
   int c1x = a["c1x"] | 0;
   int c2x = a["c2x"] | 0;
   int c3x = a["c3x"] | 0;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setCustomParams(c1x,c2x,c3x,commit);
+  bool ok = KinoAPI::sound_setCustomParams(c1x,c2x,c3x,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_palette(JsonObject a) {
-  if (!a.containsKey("pal")) return false;
+static ActionResult act_sound_palette(JsonObject a) {
+  if (!a.containsKey("pal")) return { ActionError::MissingParam, "pal" };
   int pal = a["pal"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setPalette(pal,commit);
+  bool ok = KinoAPI::sound_setPalette(pal,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_fade(JsonObject a) {
-  if (!a.containsKey("bri")) return false;
-  if (!a.containsKey("ms")) return false;
+static ActionResult act_sound_fade(JsonObject a) {
+  if (!a.containsKey("bri")) return { ActionError::MissingParam, "bri" };
+  if (!a.containsKey("ms")) return { ActionError::MissingParam, "ms" };
   int bri = a["bri"]|1;
   int ms = a["ms"]|1;
   bool sync = a["sync"]|false;
-  if (sync) return KinoAPI::sound_fadeSync(bri,ms);
-  return KinoAPI::sound_fadeAsync(bri,ms);
+  bool ok = false;
+  if (sync) ok = KinoAPI::sound_fadeSync(bri,ms);
+  if(!sync) ok = KinoAPI::sound_fadeAsync(bri,ms);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
+
 }
-static bool act_sound_solid(JsonObject a) {
+static ActionResult act_sound_solid(JsonObject a) {
   int r,g,b;
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
     r = a["col"][0]|0;
@@ -321,60 +403,81 @@ static bool act_sound_solid(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::sound_setSolid(r,g,b,commit);
+  bool ok = KinoAPI::sound_setSolid(r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_music(JsonObject a) {
-  return KinoAPI::sound_setMusicEffect();
+static ActionResult act_sound_music(JsonObject a) {
+  bool ok = KinoAPI::sound_setMusicEffect();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_lightning(JsonObject a) {
-  return KinoAPI::sound_setLightningEffect();
+static ActionResult act_sound_lightning(JsonObject a) {
+  bool ok = KinoAPI::sound_setLightningEffect();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_alarm(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_sound_alarm(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  if (onoff) return KinoAPI::sound_setAlarm();
-  return KinoAPI::sound_stopAlarm();
+  bool ok = false;
+  if (onoff) ok = KinoAPI::sound_setAlarm();
+  if(!onoff) ok = KinoAPI::sound_stopAlarm();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_sound_pause(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_sound_pause(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  if (onoff) return KinoAPI::sound_setPause();
-  return KinoAPI::sound_setResume();
+  bool ok = false;
+  if (onoff) ok = KinoAPI::sound_setPause();
+  if(!onoff) ok = KinoAPI::sound_setResume();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_hyperion_broadcast(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_hyperion_broadcast(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  if (onoff) return KinoAPI::hyperion_startBroadcast();
-  return KinoAPI::hyperion_stopBroadcast();
+  bool ok = false;
+  if (onoff) ok = KinoAPI::hyperion_startBroadcast();
+  if(!onoff) ok = KinoAPI::hyperion_stopBroadcast();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huelight_power(JsonObject a) {
-  if (!a.containsKey("on")) return false;
-  if (!a.containsKey("light")) return false;
+static ActionResult act_huelight_power(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
+  if (!a.containsKey("light")) return { ActionError::MissingParam, "light" };
   String light = a["light"]|"";
   bool onoff = a["on"]|false;
   bool commit = a["commit"]|false;
-  return KinoAPI::hueLight_setPower(light,onoff,commit);
+  bool ok = KinoAPI::hueLight_setPower(light,onoff,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huelight_brightness(JsonObject a) {
-  if (!a.containsKey("bri")) return false;
-  if (!a.containsKey("light")) return false;
+static ActionResult act_huelight_brightness(JsonObject a) {
+  if (!a.containsKey("bri")) return { ActionError::MissingParam, "bri" };
+  if (!a.containsKey("light")) return { ActionError::MissingParam, "light" };
   String light = a["light"]|"";
   int bri = a["bri"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::hueLight_setBri(light,bri,commit);
+  bool ok = KinoAPI::hueLight_setBri(light,bri,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huelight_temp(JsonObject a) {
-  if (!a.containsKey("ct")) return false;
-  if (!a.containsKey("light")) return false;
+static ActionResult act_huelight_temp(JsonObject a) {
+  if (!a.containsKey("ct")) return { ActionError::MissingParam, "ct" };
+  if (!a.containsKey("light")) return { ActionError::MissingParam, "light" };
   String light = a["light"]|"";
   int ct = a["ct"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::hueLight_setCT(light,ct,commit);
+  bool ok = KinoAPI::hueLight_setCT(light,ct,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huelight_color(JsonObject a) {
-  if (!a.containsKey("light")) return false;
+static ActionResult act_huelight_color(JsonObject a) {
+  if (!a.containsKey("light")) return { ActionError::MissingParam, "light" };
   int r,g,b;
   String light = a["light"]|"";
   if ((a.containsKey("col"))&&(a["col"].is<JsonArray>())) {
@@ -385,75 +488,103 @@ static bool act_huelight_color(JsonObject a) {
     r = a["r"]|0;
     g = a["g"]|0;
     b = a["b"]|0;
-  } else return false;
+  } else return { ActionError::MissingParam, "col or r,g,b" };
   bool commit = a["commit"]|false;
-  return KinoAPI::hueLight_setRGB(light,r,g,b,commit);
+  bool ok = KinoAPI::hueLight_setRGB(light,r,g,b,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huegroup_power(JsonObject a) {
-  if (!a.containsKey("on")) return false;
-  if (!a.containsKey("group")) return false;
+static ActionResult act_huegroup_power(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
+  if (!a.containsKey("group")) return { ActionError::MissingParam, "group" };
   String group = a["group"]|"";
   bool onoff = a["on"]|false;
   bool commit = a["commit"]|false;
-  return KinoAPI::hueGroup_setPower(group,onoff,commit);
+  bool ok = KinoAPI::hueGroup_setPower(group,onoff,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huegroup_brightness(JsonObject a) {
-  if (!a.containsKey("bri")) return false;
-  if (!a.containsKey("group")) return false;
+static ActionResult act_huegroup_brightness(JsonObject a) {
+  if (!a.containsKey("bri")) return { ActionError::MissingParam, "bri" };
+  if (!a.containsKey("group")) return { ActionError::MissingParam, "group" };
   String group = a["group"]|"";
   int bri = a["bri"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::hueGroup_setBri(group,bri,commit);
+  bool ok = KinoAPI::hueGroup_setBri(group,bri,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huegroup_temp(JsonObject a) {
-  if (!a.containsKey("ct")) return false;
-  if (!a.containsKey("group")) return false;
+static ActionResult act_huegroup_temp(JsonObject a) {
+  if (!a.containsKey("ct")) return { ActionError::MissingParam, "ct" };
+  if (!a.containsKey("group")) return { ActionError::MissingParam, "group" };
   String group = a["group"]|"";
   int ct = a["ct"]|1;
   bool commit = a["commit"]|false;
-  return KinoAPI::hueGroup_setCT(group,ct,commit);
+  bool ok = KinoAPI::hueGroup_setCT(group,ct,commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huescene_set(JsonObject a) {
-  if (!a.containsKey("scene")) return false;
+static ActionResult act_huescene_set(JsonObject a) {
+  if (!a.containsKey("scene")) return { ActionError::MissingParam, "scene" };
   String scene = a["scene"]|"";
-  return KinoAPI::hueScene_set(scene);
+  bool ok = KinoAPI::hueScene_set(scene);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huescene_save(JsonObject a) {
-  if (!a.containsKey("scene")) return false;
+static ActionResult act_huescene_save(JsonObject a) {
+  if (!a.containsKey("scene")) return { ActionError::MissingParam, "scene" };
   String scene = a["scene"]|"";
-  return KinoAPI::hueScene_save(scene);
+  bool ok = KinoAPI::hueScene_save(scene);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_huesensor_set(JsonObject a) {
-  if (!a.containsKey("sensor")) return false;
-  if (!a.containsKey("key")) return false;
-  if (!a.containsKey("val")) return false;
+static ActionResult act_huesensor_set(JsonObject a) {
+  if (!a.containsKey("sensor")) return { ActionError::MissingParam, "sensor" };
+  if (!a.containsKey("key")) return { ActionError::MissingParam, "key" };
+  if (!a.containsKey("val")) return { ActionError::MissingParam, "val" };
   String sensor = a["sensor"]|"";
   String key = a["key"]|"";
   int val = a["val"]|0;
   bool commit = a["commit"]|false;
-  return KinoAPI::hueSensor_setState(sensor, key, val, commit);
+  bool ok = KinoAPI::hueSensor_setState(sensor, key, val, commit);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_kino_radio(JsonObject a) {
-  return KinoAPI::radioMode();
+static ActionResult act_kino_radio(JsonObject a) {
+  bool ok = KinoAPI::radioMode();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_kino_bluray(JsonObject a) {
-  return KinoAPI::blurayMode();
+static ActionResult act_kino_bluray(JsonObject a) {
+  bool ok = KinoAPI::blurayMode();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_kino_streaming(JsonObject a) {
-  return KinoAPI::streamingMode();
+static ActionResult act_kino_streaming(JsonObject a) {
+  bool ok = KinoAPI::streamingMode();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_kino_gaming(JsonObject a) {
-  return KinoAPI::GamingMode();
+static ActionResult act_kino_gaming(JsonObject a) {
+  bool ok = KinoAPI::GamingMode();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_kino_pause(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_kino_pause(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  return ((onoff) ? KinoAPI::startPause() : KinoAPI::endPause());
+  bool ok = false;
+  if (onoff) ok = KinoAPI::startPause();
+  if(!onoff) ok = KinoAPI::endPause();
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
-static bool act_kino_power(JsonObject a) {
-  if (!a.containsKey("on")) return false;
+static ActionResult act_kino_power(JsonObject a) {
+  if (!a.containsKey("on")) return { ActionError::MissingParam, "on" };
   bool onoff = a["on"]|false;
-  return KinoAPI::Power(onoff);
+  bool ok = KinoAPI::Power(onoff);
+  if (!ok) return { ActionError::ExecutionFailed, "" };
+  return {ActionError::OK,""};
 }
 
 
@@ -524,6 +655,7 @@ static const MacroActions::ActionEntry actionTable[] = {
     {"kino_gaming"            ,act_kino_gaming             },
     {"kino_pause"             ,act_kino_pause              },
     {"kino_power"             ,act_kino_power              },
+    { nullptr, nullptr }
 };
 
 static constexpr size_t actionCount =
@@ -531,21 +663,18 @@ static constexpr size_t actionCount =
 
 // === Dispatcher ===
 
-bool MacroActions::execute(JsonObject action) {
-    if (!action.containsKey("cmd")) return false;
+ActionResult MacroActions::execute(const JsonObject& action) {
+  if (!action.containsKey("cmd")) {
+    return { ActionError::MissingCmd, "missing cmd" };
+  }
 
-    const char* cmd = action["cmd"];
+  const char* cmd = action["cmd"];
 
-    for (size_t i = 0; i < actionCount; ++i) {
-        if (strcmp(cmd, actionTable[i].cmd) == 0) {
-            return actionTable[i].handler(action);
-        }
+  for (size_t i = 0; actionTable[i].cmd; ++i) {
+    if (strcmp(cmd, actionTable[i].cmd) == 0) {
+      return actionTable[i].handler(action);
     }
-    Serial.print("unknown cmd: ");
-    Serial.println(cmd);
-    return _unknown(action);
-}
+  }
 
-bool MacroActions::_unknown(JsonObject action) {
-    return false;
+  return { ActionError::UnknownCommand, cmd };
 }

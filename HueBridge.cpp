@@ -24,6 +24,14 @@ bool HueBridge::begin() {
     return true;
 }
 
+bool HueBridge::init() {
+    if (!readLights()) return false;
+    if (!readGroups()) return false;
+    if (!readScenes()) return false;
+    readSensors();
+    return true;
+}
+
 bool HueBridge::tick() {
   if (_tickInterval == 0) return false;
   unsigned long now = millis();

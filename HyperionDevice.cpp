@@ -39,6 +39,10 @@ bool HyperionDevice::begin() {
   return getStatus();
 }
 
+bool HyperionDevice::init() {
+  return getStatus();
+}
+
 bool HyperionDevice::getStatus() {
   String payload;
   StaticJsonDocument<64> req;

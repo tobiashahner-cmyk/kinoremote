@@ -30,6 +30,7 @@ public:
     HueBridge(const String& ip, const String& user);
 
     bool begin();
+    bool init();    // wie begin, nur andere Semantik
     bool readLights();
 
     bool tick();

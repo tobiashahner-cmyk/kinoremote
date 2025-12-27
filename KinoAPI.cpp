@@ -258,7 +258,7 @@ namespace KinoAPI {
   }
   
   bool canvas_setLive(bool onoff, bool commit/*=false*/) {
-    if (canvas.isOverridingLiveData() == (!onoff)) return true;
+    //if (canvas.isOverridingLiveData() == (!onoff)) return true;
     bool ok = canvas.setLive(onoff);
     if (ok && commit) return canvas.applyChanges();
     return ok;

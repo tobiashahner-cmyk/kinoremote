@@ -45,6 +45,7 @@ bool kino_deleteCommandFromMacro(String* p, uint8_t n);
 bool kino_updateCommandInMacro(String* p, uint8_t n);
 bool kino_deleteMacro(String* p, uint8_t n);
 bool kino_help(String* p, uint8_t n);
+bool kino_init(String* p, uint8_t n);
 bool kino_RadioMode(String*p, uint8_t n);
 bool kino_BlurayMode(String* p, uint8_t n);
 bool kino_StreamingMode(String* p, uint8_t n);
@@ -116,6 +117,7 @@ static const CommandEntry commandTable[] = {
   {"macro",  "updateLine",3, kino_updateCommandInMacro, "ersetzt eine Zeile im angegebenen Makro. Param1: Makroname, Param2: Zeilennummer, Param3: neue action als json"},
   {"macro",  "delete",    1, kino_deleteMacro,          "löscht das Makro mit dem gegebenen Namen"},
   {"kino",   "help",      0, kino_help,                 "zeigt diese Hilfe"},
+  {"kino",   "init",      0, kino_init,                 "(re-)initialisiert alle Geräte"},
   {"kino",   "radioModus",0, kino_RadioMode,            "startet Radio Modus im Kino"},
   {"kino",   "blurayModus",0, kino_BlurayMode,          "startet Bluray Modus im Kino"},
   {"kino",   "streamingModus", 0, kino_StreamingMode,   "startet Streaming Modus im Kino"},
@@ -673,6 +675,24 @@ bool kino_executeMacro(String* p, uint8_t n) {
   return true;
 }
 
+bool kino_init(String* p, uint8_t n) {
+  Serial.println("Initialisiere Geräte:");
+  bool canvasOk   = canvas.init();
+  bool soundOk    = sound.init();
+  bool hueOk      = hue.init();
+  bool yamahaOk   = yamaha.init();
+  bool beamerOk   = beamer.init();
+  bool hyperionOk = hyperion.init();
+  Serial.print("\tWLEDDevice canvas      : "); Serial.println(canvasOk  ? F("✅ OK\n") : F("❌ Fehler\n"));
+  Serial.print("\tWLEDDevice sound       : "); Serial.println(soundOk   ? F("✅ OK\n") : F("❌ Fehler\n"));
+  Serial.print("\tHueBridge  hue         : "); Serial.println(hueOk     ? F("✅ OK\n") : F("❌ Fehler\n"));
+  Serial.print("\tYamahaReceiver yamaha  : "); Serial.println(yamahaOk  ? F("✅ OK\n") : F("❌ Fehler\n"));
+  Serial.print("\tOptomaBeamer beamer    : "); Serial.println(beamerOk  ? F("✅ OK\n") : F("❌ Fehler\n"));
+  Serial.print("\tHyperionDevice hyperion: "); Serial.println(hyperionOk? F("✅ OK\n") : F("❌ Fehler\n"));
+  return (canvasOk && soundOk && hueOk && yamahaOk && beamerOk && hyperionOk);
+}
+
+
 bool kino_setPower(String* p, uint8_t n) {
   return KinoAPI::Power(toBool(p[0]));
 }
@@ -750,27 +770,27 @@ bool canvas_setTicker(String*p, uint8_t n) {
 }
 
 bool canvas_setPower(String* p, uint8_t n) {
-  return KinoAPI::canvas_setPower(toBool(p[0]));
+  return KinoAPI::canvas_setPower(toBool(p[0]),true);
 }
 
 bool canvas_setBrightness(String*p, uint8_t n) {
-  return KinoAPI::canvas_setBrightness(p[0].toInt());
+  return KinoAPI::canvas_setBrightness(p[0].toInt(),true);
 }
 
 bool canvas_setEffect(String* p, uint8_t n) {
-  return KinoAPI::canvas_setEffect(p[0].toInt());
+  return KinoAPI::canvas_setEffect(p[0].toInt(),true);
 }
 
 bool canvas_setSpeed(String* p, uint8_t n) {
-  return KinoAPI::canvas_setSpeed(p[0].toInt());
+  return KinoAPI::canvas_setSpeed(p[0].toInt(),true);
 }
 
 bool canvas_setIntensity(String* p, uint8_t n) {
-  return KinoAPI::canvas_setIntensity(p[0].toInt());
+  return KinoAPI::canvas_setIntensity(p[0].toInt(),true);
 }
 
 bool canvas_setLive(String* p, uint8_t n) {
-  return KinoAPI::canvas_setLive(toBool(p[0]));
+  return KinoAPI::canvas_setLive(toBool(p[0]),true);
 }
 
 bool canvas_setSolid(String* p, uint8_t n) {
@@ -788,23 +808,23 @@ bool canvas_setColor(String* p, uint8_t n) {
   uint8_t b = p[3].toInt();
   switch (i) {
     case 1  :
-      if (!KinoAPI::canvas_setFgColor(r,g,b)) return false;
+      if (!KinoAPI::canvas_setFgColor(r,g,b),true) return false;
       break;
     case 2  :
-      if (!KinoAPI::canvas_setBgColor(r,g,b)) return false;
+      if (!KinoAPI::canvas_setBgColor(r,g,b),true) return false;
       break;
     case 3  : 
-      if (!KinoAPI::canvas_setFxColor(r,g,b)) return false;
+      if (!KinoAPI::canvas_setFxColor(r,g,b),true) return false;
       break;
     default :
       Serial.println("Der Index muss 1 (Vordergrund), 2 (Hintergrund) oder 3 (Effekt) sein");
       return false;
   }
-  return KinoAPI::canvas_commit();
+  return true;
 }
 
 bool canvas_setPalette(String* p, uint8_t n) {
-  return KinoAPI::canvas_setPalette(p[0].toInt());
+  return KinoAPI::canvas_setPalette(p[0].toInt(),true);
 }
 
 bool canvas_MusicMode(String* p, uint8_t n) {
@@ -825,17 +845,17 @@ bool sound_setTicker(String*p, uint8_t n) {
 }
 
 bool sound_setEffect(String* p, uint8_t n) {
-  if (!KinoAPI::sound_setEffect(p[0].toInt())) return false;
+  if (!KinoAPI::sound_setEffect(p[0].toInt(),true)) return false;
   return KinoAPI::sound_commit();
 }
 
 bool sound_setPower(String* p, uint8_t n) {
-  if (!KinoAPI::sound_setPower(toBool(p[0]))) return false;
+  if (!KinoAPI::sound_setPower(toBool(p[0]),true)) return false;
   return KinoAPI::sound_commit();
 }
 
 bool sound_setBrightness(String*p, uint8_t n) {
-  if (!KinoAPI::sound_setBrightness(p[0].toInt())) return false;
+  if (!KinoAPI::sound_setBrightness(p[0].toInt(),true)) return false;
   return KinoAPI::sound_commit();
 }
 
@@ -874,18 +894,18 @@ bool hue_setTicker(String*p, uint8_t n) {
 }
 
 bool hue_setPower(String* p, uint8_t n) {
-  if (!KinoAPI::hueLight_setPower(p[0],toBool(p[1]))) return false;
+  if (!KinoAPI::hueLight_setPower(p[0],toBool(p[1]),true)) return false;
   return KinoAPI::hueLight_commit(p[0]);
 }
 
 bool hue_setBri(String* p, uint8_t n) {
-  if (!KinoAPI::hueLight_setBri(p[0],p[1].toInt())) return false;
+  if (!KinoAPI::hueLight_setBri(p[0],p[1].toInt(),true)) return false;
   return KinoAPI::hueLight_commit(p[0]);
 }
 
 bool hue_setGroup(String* p, uint8_t n) {
   if (!KinoAPI::hueGroup_setPower(p[0],toBool(p[1]))) return false;
-  if (!KinoAPI::hueGroup_setBri(p[0],p[2].toInt())) return false;
+  if (!KinoAPI::hueGroup_setBri(p[0],p[2].toInt(),true)) return false;
   return KinoAPI::hueGroup_commit(p[0]);
 }
 

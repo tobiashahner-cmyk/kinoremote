@@ -35,6 +35,7 @@ public:
 
   // Lifecycle
   bool begin();
+  bool init();                                      // wie begin(), nur semantisch anders ;-)
   bool getStatus();
   bool tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
   bool setTickInterval(int ms);

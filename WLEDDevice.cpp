@@ -17,6 +17,11 @@ bool WLEDDevice::begin() {
   return true;
 }
 
+bool WLEDDevice::init() {
+  if (!readState()) return false;
+  return true;
+}
+
 bool WLEDDevice::getStatus() {
   if (!readState()) return false;
   return true;

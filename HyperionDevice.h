@@ -17,6 +17,7 @@ public:
 
   // ===== Public API =====
   bool begin();
+  bool init();  // wie begin, nur andere Semantik
   bool getStatus();
 
   bool isBroadcasting() const;
