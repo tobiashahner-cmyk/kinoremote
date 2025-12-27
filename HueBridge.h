@@ -4,6 +4,7 @@
 #include <map>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+#include "KinoDevice.h"
 #include "HueLight.h"
 #include "HueGroup.h"
 #include "HueScene.h"
@@ -24,8 +25,12 @@ using SceneLightStates = std::map<uint8_t, SceneLightState>;
 
 class HueLight;
 
-class HueBridge {
+class HueBridge : public KinoDevice {
 public:
+    const char* deviceType() const override {
+        return "huebridge";
+    }
+
     HueBridge(const IPAddress& ip, const String& user);
     HueBridge(const String& ip, const String& user);
 

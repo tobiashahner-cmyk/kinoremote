@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <vector>
+#include "KinoDevice.h"
 
 struct NetRadioTrackInfo {
     String elapsed;                                   // aktuelle Spielzeit des Streams
@@ -28,8 +29,11 @@ struct InputSource {
 
 
 
-class YamahaReceiver {
+class YamahaReceiver : public KinoDevice {
   public:
+    const char* deviceType() const override {
+        return "yamahareceiver";
+    }
     YamahaReceiver(IPAddress ip);                     // Konstruktor
     YamahaReceiver(const String& ip);                 // Konstruktor mit IP als String
     IPAddress getIp() const;

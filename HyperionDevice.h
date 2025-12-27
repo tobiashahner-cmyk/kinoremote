@@ -3,9 +3,14 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ArduinoJson.h>
+#include "KinoDevice.h"
 
-class HyperionDevice {
+class HyperionDevice : public KinoDevice {
 public:
+    const char* deviceType() const override {
+        return "hyperion";
+    }
+
   // ===== Konstruktoren =====
   HyperionDevice(const IPAddress& ip);
   HyperionDevice(const String& ip);

@@ -1,7 +1,6 @@
 #include "HueBridge.h"
 
 
-
 // ===== Konstruktoren =====
 
 HueBridge::HueBridge(const IPAddress& ip, const String& user)

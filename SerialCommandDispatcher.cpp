@@ -689,6 +689,15 @@ bool kino_init(String* p, uint8_t n) {
   Serial.print("\tYamahaReceiver yamaha  : "); Serial.println(yamahaOk  ? F("✅ OK\n") : F("❌ Fehler\n"));
   Serial.print("\tOptomaBeamer beamer    : "); Serial.println(beamerOk  ? F("✅ OK\n") : F("❌ Fehler\n"));
   Serial.print("\tHyperionDevice hyperion: "); Serial.println(hyperionOk? F("✅ OK\n") : F("❌ Fehler\n"));
+
+  Serial.println("DeviceType Test:");
+  if (canvasOk)   Serial.printf("\t canvas   ist ein %s \n",canvas.deviceType());
+  if (soundOk )   Serial.printf("\t sound    ist ein %s \n",sound.deviceType());
+  if (hueOk   )   Serial.printf("\t hue      ist ein %s \n",hue.deviceType());
+  if (yamahaOk )  Serial.printf("\t yamaha   ist ein %s \n",yamaha.deviceType());
+  if (beamerOk )  Serial.printf("\t beamer   ist ein %s \n",beamer.deviceType());
+  if (hyperionOk )Serial.printf("\t hyperion ist ein %s \n",hyperion.deviceType());
+  
   return (canvasOk && soundOk && hueOk && yamahaOk && beamerOk && hyperionOk);
 }
 
