@@ -51,7 +51,7 @@ void HueLight::forceBri(uint8_t value)          { if (_hasBri) _bri = value; }
 void HueLight::forceCT(uint16_t value)          { if (_hasCT)  _ct = value; }
 
 // --- applyChanges ---
-bool HueLight::applyChanges(HueBridge& bridge) {
+bool HueLight::applyChanges(HueBridge* bridge) {
     // Prüfen, ob überhaupt Änderungen vorliegen
     bool hasChanges = pending.on.has_value() || 
                       pending.bri.has_value() || 
@@ -73,7 +73,7 @@ bool HueLight::applyChanges(HueBridge& bridge) {
     String payload;
     serializeJson(doc, payload);
 
-    if(!bridge.sendLightState(_id, payload)) return false;
+    if(!bridge->sendLightState(_id, payload)) return false;
 
     // Lokale Werte aktualisieren
     if(pending.on.has_value()) _on = pending.on.value();

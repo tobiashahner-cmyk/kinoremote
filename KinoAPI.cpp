@@ -7,12 +7,12 @@
 #include "KinoMacroEngine.h"
 
 // Externe Geräte aus dem Sketch
-extern YamahaReceiver yamaha;
-extern WLEDDevice canvas;
-extern WLEDDevice sound;
-extern OptomaBeamer beamer;
-extern HyperionDevice hyperion;
-extern HueBridge hue;
+extern YamahaReceiver* _yamaha;
+extern WLEDDevice* _canvas;
+extern WLEDDevice* _sound;
+extern OptomaBeamer* _beamer;
+extern HyperionDevice* _hyperion;
+extern HueBridge* _hue;
 
 
 
@@ -85,200 +85,200 @@ namespace KinoAPI {
   //            YAMAHA
   // =================================================
   bool yamaha_init() {
-    return yamaha.init();
+    return _yamaha->init();
   }
 
   bool yamaha_setTicker(int ms) {
-    return yamaha.setTickInterval(ms);
+    return _yamaha->setTickInterval(ms);
   }
   
   bool yamaha_setPower(bool onoff) {
-    if (yamaha.getPowerStatus() == onoff) return true;
-    return yamaha.setPower(onoff);
+    if (_yamaha->getPowerStatus() == onoff) return true;
+    return _yamaha->setPower(onoff);
   }
   
   bool yamaha_powerOn() {
-    if (yamaha.getPowerStatus()) return true;
-    return yamaha.setPower(true);
+    if (_yamaha->getPowerStatus()) return true;
+    return _yamaha->setPower(true);
   }
   
   bool yamaha_powerOff() {
-    if (!yamaha.getPowerStatus()) return true;
-    return yamaha.setPower(false);
+    if (!_yamaha->getPowerStatus()) return true;
+    return _yamaha->setPower(false);
   }
   
   bool yamaha_setVolume(int vol) {
-    return yamaha.setVolume(vol);
+    return _yamaha->setVolume(vol);
   }
   
   bool yamaha_setVolumePercent(int percentage) {
-    return yamaha.setVolumePercent(percentage);
+    return _yamaha->setVolumePercent(percentage);
   }
   
   bool yamaha_setInput(const String& inputName) {
-    if (yamaha.getSource() == inputName) return true;
-    return yamaha.setSource(inputName);
+    if (_yamaha->getSource() == inputName) return true;
+    return _yamaha->setSource(inputName);
   }
   
   bool yamaha_setDsp(const String& dspName) {
-    if (yamaha.getSoundProgram() == dspName) return true;
-    return yamaha.setSoundProgram(dspName);  
+    if (_yamaha->getSoundProgram() == dspName) return true;
+    return _yamaha->setSoundProgram(dspName);  
   }
   
   bool yamaha_setStraight(bool onoff) {
-    if (yamaha.getStraight() == onoff) return true;
-    return yamaha.setStraight(onoff);
+    if (_yamaha->getStraight() == onoff) return true;
+    return _yamaha->setStraight(onoff);
   }
 
   bool yamaha_straightOn() {
-    if (yamaha.getStraight()) return true;
-    return yamaha.setStraight(true);
+    if (_yamaha->getStraight()) return true;
+    return _yamaha->setStraight(true);
   }
 
   bool yamaha_straightOff() {
-    if (!yamaha.getStraight()) return true;
-    return yamaha.setStraight(false);
+    if (!_yamaha->getStraight()) return true;
+    return _yamaha->setStraight(false);
   }
   
   bool yamaha_setEnhancer(bool onoff) {
-    if (yamaha.getEnhancer() == onoff) return true;
-    return yamaha.setEnhancer(onoff);
+    if (_yamaha->getEnhancer() == onoff) return true;
+    return _yamaha->setEnhancer(onoff);
   }
 
   bool yamaha_enhancerOn() {
-    if (yamaha.getEnhancer()) return true;
-    return yamaha.setEnhancer(true);
+    if (_yamaha->getEnhancer()) return true;
+    return _yamaha->setEnhancer(true);
   }
 
   bool yamaha_enhancerOff() {
-    if (!yamaha.getEnhancer()) return true;
-    return yamaha.setEnhancer(false);
+    if (!_yamaha->getEnhancer()) return true;
+    return _yamaha->setEnhancer(false);
   }
   
   bool yamaha_setMute(bool onoff) {
-    if (yamaha.getMute() == onoff) return true;
-    return yamaha.setMute(onoff);
+    if (_yamaha->getMute() == onoff) return true;
+    return _yamaha->setMute(onoff);
   }
 
   bool yamaha_muteOn() {
-    if (yamaha.getMute()) return true;
-    return yamaha.setMute(true);
+    if (_yamaha->getMute()) return true;
+    return _yamaha->setMute(true);
   }
 
   bool yamaha_muteOff() {
-    if (!yamaha.getMute()) return true;
-    return yamaha.setMute(false);
+    if (!_yamaha->getMute()) return true;
+    return _yamaha->setMute(false);
   }
 
   bool yamaha_setStation(const String& stationname) {
-    return yamaha.selectNetRadioFavorite(stationname);
+    return _yamaha->selectNetRadioFavorite(stationname);
   }
 
   // =================================================
   //            BEAMER
   // =================================================
   bool beamer_setTicker(int ms) {
-    return beamer.setTickInterval(ms);
+    return _beamer->setTickInterval(ms);
   }
   
   bool beamer_setPower(bool onoff) {
-    if (beamer.getPowerStatus() == onoff) return true;
-    return beamer.setPower(onoff);
+    if (_beamer->getPowerStatus() == onoff) return true;
+    return _beamer->setPower(onoff);
   }
   
   bool beamer_powerOn() {
-    if (beamer.getPowerStatus()) return true;
-    return beamer.setPower(true);
+    if (_beamer->getPowerStatus()) return true;
+    return _beamer->setPower(true);
   }
   
   bool beamer_powerOff() {
-    if (!beamer.getPowerStatus()) return true;
-    return beamer.setPower(false);
+    if (!_beamer->getPowerStatus()) return true;
+    return _beamer->setPower(false);
   }
 
   bool beamer_setInput(const String& inputname) {
-    if(!beamer.getPowerStatus()) beamer.setPower(true);
-    return beamer.setSource(inputname);
+    if(!_beamer->getPowerStatus()) _beamer->setPower(true);
+    return _beamer->setSource(inputname);
   }
 
   // =================================================
   //            LEINWAND
   // =================================================
   bool canvas_setTicker(int ms) {
-    return canvas.setTickInterval(ms);
+    return _canvas->setTickInterval(ms);
   }
   
   bool canvas_setPower(bool onoff, bool commit/*=false*/) {
-    if (canvas.getPowerStatus() == onoff) return true;
-    bool ok = canvas.setPowerStatus(onoff);
-    if (ok && commit) return canvas.applyChanges();
+    if (_canvas->getPowerStatus() == onoff) return true;
+    bool ok = _canvas->setPowerStatus(onoff);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_powerOn(bool commit/*=false*/) {
-    if (canvas.getPowerStatus()) return true;
-    bool ok = canvas.setPowerStatus(true);
-    if (ok && commit) return canvas.applyChanges();
+    if (_canvas->getPowerStatus()) return true;
+    bool ok = _canvas->setPowerStatus(true);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_powerOff(bool commit/*=false*/) {
-    if (!canvas.getPowerStatus()) return true;
-    bool ok = canvas.setPowerStatus(false);
-    if (ok && commit) return canvas.applyChanges();
+    if (!_canvas->getPowerStatus()) return true;
+    bool ok = _canvas->setPowerStatus(false);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setBrightness(uint8_t bri, bool commit/*=false*/) {
-    if (canvas.getBrightness() == bri) return true;
-    bool ok = canvas.setBrightness(bri);
-    if (ok && commit) return canvas.applyChanges();
+    if (_canvas->getBrightness() == bri) return true;
+    bool ok = _canvas->setBrightness(bri);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setEffect(uint16_t effectId, bool commit/*=false*/) {
-    if (canvas.getEffect() == effectId) return true;
-    bool ok = canvas.setEffect(effectId);
-    if (ok && commit) return canvas.applyChanges();
+    if (_canvas->getEffect() == effectId) return true;
+    bool ok = _canvas->setEffect(effectId);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setSpeed(uint8_t sx, bool commit/*=false*/) {
-    if (canvas.getSpeed() == sx) return true;
-    bool ok = canvas.setSpeed(sx);
-    if (ok && commit) return canvas.applyChanges();
+    if (_canvas->getSpeed() == sx) return true;
+    bool ok = _canvas->setSpeed(sx);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setIntensity(uint8_t ix, bool commit/*=false*/) {
-    if (canvas.getIntensity() == ix) return true;
-    bool ok = canvas.setIntensity(ix);
-    if (ok && commit) return canvas.applyChanges();
+    if (_canvas->getIntensity() == ix) return true;
+    bool ok = _canvas->setIntensity(ix);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setLive(bool onoff, bool commit/*=false*/) {
-    //if (canvas.isOverridingLiveData() == (!onoff)) return true;
-    bool ok = canvas.setLive(onoff);
-    if (ok && commit) return canvas.applyChanges();
+    //if (_canvas->isOverridingLiveData() == (!onoff)) return true;
+    bool ok = _canvas->setLive(onoff);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setSolid(uint8_t r, uint8_t g, uint8_t b, uint8_t bri) {
-    //return canvas.setColor(r,g,b,bri);    
-    canvas.setFgColor(r,g,b);
-    canvas.setBrightness(bri);
-    return canvas.applyChanges();
+    //return _canvas->setColor(r,g,b,bri);    
+    _canvas->setFgColor(r,g,b);
+    _canvas->setBrightness(bri);
+    return _canvas->applyChanges();
   }
   
   bool canvas_setTransitionTime(int tt, bool commit/*=false*/) {
-    bool ok = canvas.setTransitionTime(tt);
-    if (ok && commit) return canvas.applyChanges();
+    bool ok = _canvas->setTransitionTime(tt);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_fadeSync(uint8_t bri, int ms) {
-    if (!canvas.fade(bri, ms)) return false;
+    if (!_canvas->fade(bri, ms)) return false;
     unsigned long start = millis();
     unsigned long now = millis();
     while(now - start <= ms) {
@@ -288,125 +288,125 @@ namespace KinoAPI {
   }
 
   bool canvas_fadeAsync(uint8_t bri, int ms) {
-    if (!canvas.fade(bri, ms)) return false;
+    if (!_canvas->fade(bri, ms)) return false;
     return true;
   }
   
   bool canvas_setFgColor(uint8_t R, uint8_t G, uint8_t B, bool commit/*=false*/) {
-    bool ok = canvas.setFgColor(R,G,B);
-    if (ok && commit) return canvas.applyChanges();
+    bool ok = _canvas->setFgColor(R,G,B);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setBgColor(uint8_t R, uint8_t G, uint8_t B, bool commit/*=false*/) {
-    bool ok = canvas.setBgColor(R,G,B);
-    if (ok && commit) return canvas.applyChanges();
+    bool ok = _canvas->setBgColor(R,G,B);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setFxColor(uint8_t R, uint8_t G, uint8_t B, bool commit/*=false*/) {
-    bool ok = canvas.setFxColor(R,G,B);
-    if (ok && commit) return canvas.applyChanges();
+    bool ok = _canvas->setFxColor(R,G,B);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setCustomParams(uint8_t c1x, uint8_t c2x, uint8_t c3x, bool commit/*=false*/) {
-    bool ok = canvas.setCustom(c1x, c2x, c3x);
-    if (ok && commit) return canvas.applyChanges();
+    bool ok = _canvas->setCustom(c1x, c2x, c3x);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setPalette(uint8_t pal, bool commit/*=false*/) {
-    if (canvas.getPalette() == pal) return true;
-    bool ok = canvas.setPalette(pal);
-    if (ok && commit) return canvas.applyChanges();
+    if (_canvas->getPalette() == pal) return true;
+    bool ok = _canvas->setPalette(pal);
+    if (ok && commit) return _canvas->applyChanges();
     return ok;
   }
   
   bool canvas_setMusicEffect() {
-    //return canvas.setMusicMode();
-    if (canvas.fade(0,200)) delay(200);
-    canvas.setPowerStatus(true);
-    canvas.setLive(false);
-    canvas.setBrightness(128);
-    canvas.setEffect(9);
-    canvas.setSpeed(64);
-    canvas.setIntensity(128);
-    canvas.setFgColor(255,0,0);
-    canvas.setBgColor(0,255,0);
-    canvas.setFxColor(0,0,255);
-    canvas.setTransitionTime(100);
-    canvas.setPalette(0);
-    return canvas.applyChanges();
+    //return _canvas->setMusicMode();
+    if (_canvas->fade(0,200)) delay(200);
+    _canvas->setPowerStatus(true);
+    _canvas->setLive(false);
+    _canvas->setBrightness(128);
+    _canvas->setEffect(9);
+    _canvas->setSpeed(64);
+    _canvas->setIntensity(128);
+    _canvas->setFgColor(255,0,0);
+    _canvas->setBgColor(0,255,0);
+    _canvas->setFxColor(0,0,255);
+    _canvas->setTransitionTime(100);
+    _canvas->setPalette(0);
+    return _canvas->applyChanges();
   }
   
   bool canvas_setLightningEffect() {
-    //return canvas.setLightningMode();
-    if (canvas.fade(0,200)) delay(200);
-    canvas.setPowerStatus(true);
-    canvas.setLive(false);
-    canvas.setBrightness(200);
-    canvas.setEffect(57);
-    canvas.setSpeed(250);
-    canvas.setIntensity(128);
-    canvas.setFgColor(255,255,255);
-    canvas.setBgColor(0,0,0);
-    canvas.setFxColor(0,0,0);
-    canvas.setPalette(5);
-    return canvas.applyChanges();
+    //return _canvas->setLightningMode();
+    if (_canvas->fade(0,200)) delay(200);
+    _canvas->setPowerStatus(true);
+    _canvas->setLive(false);
+    _canvas->setBrightness(200);
+    _canvas->setEffect(57);
+    _canvas->setSpeed(250);
+    _canvas->setIntensity(128);
+    _canvas->setFgColor(255,255,255);
+    _canvas->setBgColor(0,0,0);
+    _canvas->setFxColor(0,0,0);
+    _canvas->setPalette(5);
+    return _canvas->applyChanges();
   }
   
   bool canvas_setAlarm() {
-    if (!canvas.setAlarm(true)) return false;
-    if (canvas.fade(0,200)) delay(200);
-    canvas.setPowerStatus(true);
-    canvas.setLive(false);
-    canvas.setBrightness(200);
-    canvas.setEffect(11);
-    canvas.setSpeed(255);
-    canvas.setIntensity(255);
-    canvas.setFgColor(255,0,0);
-    canvas.setBgColor(160,160,160);
-    canvas.setFxColor(0,0,255);
-    canvas.setPalette(5);
-    if (!canvas.applyChanges()) {
-      canvas.setAlarm(false); // hier wird im schlimmsten Fall das Backup wiederhergestellt, obwohl sich seitdem der Status nicht geändert hat
+    if (!_canvas->setAlarm(true)) return false;
+    if (_canvas->fade(0,200)) delay(200);
+    _canvas->setPowerStatus(true);
+    _canvas->setLive(false);
+    _canvas->setBrightness(200);
+    _canvas->setEffect(11);
+    _canvas->setSpeed(255);
+    _canvas->setIntensity(255);
+    _canvas->setFgColor(255,0,0);
+    _canvas->setBgColor(160,160,160);
+    _canvas->setFxColor(0,0,255);
+    _canvas->setPalette(5);
+    if (!_canvas->applyChanges()) {
+      _canvas->setAlarm(false); // hier wird im schlimmsten Fall das Backup wiederhergestellt, obwohl sich seitdem der Status nicht geändert hat
       return false;
     }
     return true;
   }
 
   bool canvas_stopAlarm() {
-    return canvas.setAlarm(false); // canvas.setAlarm kümmert sich um die interne Logik
+    return _canvas->setAlarm(false); // _canvas->setAlarm kümmert sich um die interne Logik
   }
 
   bool canvas_setPause() {
-    if (!canvas.setPause(true)) return false;   // canvas.setPause kümmert sich um das Backup, falls nötig
+    if (!_canvas->setPause(true)) return false;   // _canvas->setPause kümmert sich um das Backup, falls nötig
     
-    if (canvas.fade(0,200)) delay(200);
-    canvas.setPowerStatus(true);
-    canvas.setLive(false);
-    canvas.setBrightness(100);
-    canvas.setEffect(2);
-    canvas.setSpeed(100);
-    canvas.setIntensity(100);
-    canvas.setFgColor(255,0,0);
-    canvas.setBgColor(0,0,255);
-    canvas.setFxColor(0,0,0);
-    canvas.setPalette(5);
-    if (!canvas.applyChanges()) {
-      canvas.setPause(false);   // hier wird im schlimmsten Fall ein bereits wiederhergestelltes Backup nochmal wiederhergestellt
+    if (_canvas->fade(0,200)) delay(200);
+    _canvas->setPowerStatus(true);
+    _canvas->setLive(false);
+    _canvas->setBrightness(100);
+    _canvas->setEffect(2);
+    _canvas->setSpeed(100);
+    _canvas->setIntensity(100);
+    _canvas->setFgColor(255,0,0);
+    _canvas->setBgColor(0,0,255);
+    _canvas->setFxColor(0,0,0);
+    _canvas->setPalette(5);
+    if (!_canvas->applyChanges()) {
+      _canvas->setPause(false);   // hier wird im schlimmsten Fall ein bereits wiederhergestelltes Backup nochmal wiederhergestellt
       return false;
     }
     return true;
   }
 
   bool canvas_setResume() {
-    return canvas.setPause(false); // setPause kümmert sich um das Wiederherstellen des Backups
+    return _canvas->setPause(false); // setPause kümmert sich um das Wiederherstellen des Backups
   }
   
   bool canvas_commit() {
-    return canvas.applyChanges();
+    return _canvas->applyChanges();
   }
 
   // =================================================
@@ -414,51 +414,51 @@ namespace KinoAPI {
   // =================================================
 
   bool sound_setTicker(int ms) {
-    return sound.setTickInterval(ms);
+    return _sound->setTickInterval(ms);
   }
   
   bool sound_setPower(bool onoff, bool commit/*=false*/) {
-    if (sound.getPowerStatus() == onoff) return true;
-    bool ok = sound.setPowerStatus(onoff);
-    if (ok && commit) return sound.applyChanges();
+    if (_sound->getPowerStatus() == onoff) return true;
+    bool ok = _sound->setPowerStatus(onoff);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_powerOn(bool commit/*=false*/) {
-    if (sound.getPowerStatus()) return true;
-    bool ok = sound.setPowerStatus(true);
-    if (ok && commit) return sound.applyChanges();
+    if (_sound->getPowerStatus()) return true;
+    bool ok = _sound->setPowerStatus(true);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_powerOff(bool commit/*=false*/) {
-    if (!sound.getPowerStatus()) return true;
-    bool ok = sound.setPowerStatus(false);
-    if (ok && commit) return sound.applyChanges();
+    if (!_sound->getPowerStatus()) return true;
+    bool ok = _sound->setPowerStatus(false);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setBrightness(uint8_t bri, bool commit/*=false*/) {
-    bool ok = sound.setBrightness(bri);
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setBrightness(bri);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setEffect(uint16_t effectId, bool commit/*=false*/) {
-    bool ok = sound.setEffect(effectId);
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setEffect(effectId);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setSpeed(uint8_t sx, bool commit/*=false*/) {
-    bool ok = sound.setSpeed(sx);
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setSpeed(sx);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setIntensity(uint8_t ix, bool commit/*=false*/) {
-    bool ok = sound.setIntensity(ix);
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setIntensity(ix);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
 
@@ -467,21 +467,21 @@ namespace KinoAPI {
   }
   
   bool sound_setSolid(uint8_t r, uint8_t g, uint8_t b, uint8_t bri) {
-    //return sound.setColor(r,g,b,bri);
-    sound.setFgColor(r,g,b);
-    sound.setBrightness(bri);
-    sound.setEffect(0);
-    return sound.applyChanges();
+    //return _sound->setColor(r,g,b,bri);
+    _sound->setFgColor(r,g,b);
+    _sound->setBrightness(bri);
+    _sound->setEffect(0);
+    return _sound->applyChanges();
   }
   
   bool sound_setTransitionTime(int tt, bool commit/*=false*/) {
-    bool ok = sound.setTransitionTime((int)(tt/100));
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setTransitionTime((int)(tt/100));
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
 
   bool sound_fadeSync(uint8_t bri, int ms) {
-    if (!sound.fade(bri, ms)) return false;
+    if (!_sound->fade(bri, ms)) return false;
     unsigned long start = millis();
     unsigned long now = millis();
     while(now - start <= ms) {
@@ -491,125 +491,125 @@ namespace KinoAPI {
   }
 
   bool sound_fadeAsync(uint8_t bri, int ms) {
-    if (!sound.fade(bri, ms)) return false;
+    if (!_sound->fade(bri, ms)) return false;
     return true;
   }
   
   bool sound_setFgColor(uint8_t R, uint8_t G, uint8_t B, bool commit/*=false*/) {
-    bool ok = sound.setFgColor(R,G,B);
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setFgColor(R,G,B);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setBgColor(uint8_t R, uint8_t G, uint8_t B, bool commit/*=false*/) {
-    bool ok = sound.setBgColor(R,G,B);
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setBgColor(R,G,B);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setFxColor(uint8_t R, uint8_t G, uint8_t B, bool commit/*=false*/) {
-    bool ok = sound.setFxColor(R,G,B);
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setFxColor(R,G,B);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setCustomParams(uint8_t c1x, uint8_t c2x, uint8_t c3x, bool commit/*=false*/) {
-    bool ok = sound.setCustom(c1x, c2x, c3x);
-    if (ok && commit) return sound.applyChanges();
+    bool ok = _sound->setCustom(c1x, c2x, c3x);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setPalette(uint8_t pal, bool commit/*=false*/) {
-    if (sound.getPalette() == pal) return true;
-    bool ok = sound.setPalette(pal);
-    if (ok && commit) return sound.applyChanges();
+    if (_sound->getPalette() == pal) return true;
+    bool ok = _sound->setPalette(pal);
+    if (ok && commit) return _sound->applyChanges();
     return ok;
   }
   
   bool sound_setMusicEffect() {
-    if (sound.fade(0,200)) delay(200);
-    sound.setPowerStatus(true);
-    sound.setLive(false);
-    sound.setBrightness(128);
-    sound.setEffect(157);
-    sound.setSpeed(250);
-    sound.setIntensity(128);
-    sound.setCustom(93,94,130);
-    sound.setFgColor(255,160,0);
-    sound.setBgColor(0,0,0);
-    sound.setFxColor(0,0,0);
-    sound.setPalette(1);
-    sound.setTransitionTime(200);
-    return sound.applyChanges();
+    if (_sound->fade(0,200)) delay(200);
+    _sound->setPowerStatus(true);
+    _sound->setLive(false);
+    _sound->setBrightness(128);
+    _sound->setEffect(157);
+    _sound->setSpeed(250);
+    _sound->setIntensity(128);
+    _sound->setCustom(93,94,130);
+    _sound->setFgColor(255,160,0);
+    _sound->setBgColor(0,0,0);
+    _sound->setFxColor(0,0,0);
+    _sound->setPalette(1);
+    _sound->setTransitionTime(200);
+    return _sound->applyChanges();
   }
   
   bool sound_setLightningEffect() {
-    if (sound.fade(0,200)) delay(200);
-    sound.setPowerStatus(true);
-    sound.setLive(false);
-    sound.setBrightness(200);
-    sound.setEffect(74);
-    sound.setSpeed(44);
-    sound.setIntensity(13);
-    sound.setCustom(93,94,130);
-    sound.setFgColor(0,0,255);
-    sound.setBgColor(0,0,0);
-    sound.setFxColor(0,0,0);
-    sound.setPalette(7);
-    sound.setTransitionTime(200);
-    return sound.applyChanges();
+    if (_sound->fade(0,200)) delay(200);
+    _sound->setPowerStatus(true);
+    _sound->setLive(false);
+    _sound->setBrightness(200);
+    _sound->setEffect(74);
+    _sound->setSpeed(44);
+    _sound->setIntensity(13);
+    _sound->setCustom(93,94,130);
+    _sound->setFgColor(0,0,255);
+    _sound->setBgColor(0,0,0);
+    _sound->setFxColor(0,0,0);
+    _sound->setPalette(7);
+    _sound->setTransitionTime(200);
+    return _sound->applyChanges();
   }
 
   bool sound_setAlarm() {
-    if (!sound.setAlarm(true)) return false;
-    if (sound.fade(0,200)) delay(200);
-    sound.setPowerStatus(true);
-    sound.setLive(false);
-    sound.setBrightness(250);
-    sound.setEffect(110);
-    sound.setSpeed(255);
-    sound.setIntensity(96);
-    sound.setFgColor(255,0,0);
-    sound.setBgColor(255,255,255);
-    sound.setFxColor(0,0,255);
-    sound.setPalette(5);
-    if (!sound.applyChanges()) {
-      sound.setAlarm(false); // hier wird im schlimmsten Fall das Backup wiederhergestellt, obwohl sich seitdem der Status nicht geändert hat
+    if (!_sound->setAlarm(true)) return false;
+    if (_sound->fade(0,200)) delay(200);
+    _sound->setPowerStatus(true);
+    _sound->setLive(false);
+    _sound->setBrightness(250);
+    _sound->setEffect(110);
+    _sound->setSpeed(255);
+    _sound->setIntensity(96);
+    _sound->setFgColor(255,0,0);
+    _sound->setBgColor(255,255,255);
+    _sound->setFxColor(0,0,255);
+    _sound->setPalette(5);
+    if (!_sound->applyChanges()) {
+      _sound->setAlarm(false); // hier wird im schlimmsten Fall das Backup wiederhergestellt, obwohl sich seitdem der Status nicht geändert hat
       return false;
     }
     return true;
   }
 
   bool sound_stopAlarm() {
-    return sound.setAlarm(false); // sound.setAlarm kümmert sich um die interne Logik
+    return _sound->setAlarm(false); // _sound->setAlarm kümmert sich um die interne Logik
   }
 
   bool sound_setPause() {
-    if (!sound.setPause(true)) return false;   // sound.setPause kümmert sich um das Backup, falls nötig
-    if (sound.fade(0,200)) delay(200);
-    sound.setPowerStatus(true);
-    sound.setLive(false);
-    sound.setBrightness(100);
-    sound.setEffect(69);
-    sound.setSpeed(120);
-    sound.setIntensity(64);
-    sound.setFgColor(255,160,0);
-    sound.setBgColor(0,0,0);
-    sound.setFxColor(0,0,0);
-    sound.setPalette(35);
-    if (!sound.applyChanges()) {
-      sound.setPause(false);   // hier wird im schlimmsten Fall ein bereits wiederhergestelltes Backup nochmal wiederhergestellt
+    if (!_sound->setPause(true)) return false;   // _sound->setPause kümmert sich um das Backup, falls nötig
+    if (_sound->fade(0,200)) delay(200);
+    _sound->setPowerStatus(true);
+    _sound->setLive(false);
+    _sound->setBrightness(100);
+    _sound->setEffect(69);
+    _sound->setSpeed(120);
+    _sound->setIntensity(64);
+    _sound->setFgColor(255,160,0);
+    _sound->setBgColor(0,0,0);
+    _sound->setFxColor(0,0,0);
+    _sound->setPalette(35);
+    if (!_sound->applyChanges()) {
+      _sound->setPause(false);   // hier wird im schlimmsten Fall ein bereits wiederhergestelltes Backup nochmal wiederhergestellt
       return false;
     }
     return true;
   }
 
   bool sound_setResume() {
-    return sound.setPause(false); // setPause kümmert sich um das Wiederherstellen des Backups
+    return _sound->setPause(false); // setPause kümmert sich um das Wiederherstellen des Backups
   }
 
   bool sound_commit() {
-    return sound.applyChanges();
+    return _sound->applyChanges();
   }
 
   // =================================================
@@ -629,15 +629,15 @@ namespace KinoAPI {
   // =================================================
 
   bool hyperion_setTicker(int ms) {
-    return hyperion.setTickInterval(ms);
+    return _hyperion->setTickInterval(ms);
   }
 
   bool hyperion_startBroadcast() {
-    return hyperion.startBroadcast();
+    return _hyperion->startBroadcast();
   }
   
   bool hyperion_stopBroadcast() {
-    return hyperion.stopBroadcast();
+    return _hyperion->stopBroadcast();
   }
 
   
@@ -646,137 +646,137 @@ namespace KinoAPI {
   // =================================================
 
   bool hue_init() {
-    return hue.readLights();
+    return _hue->readLights();
   }
 
   bool hue_setTicker(int ms) {
-    return hue.setTickInterval(ms);
+    return _hue->setTickInterval(ms);
   }
   
   bool hueLight_setPower(const String& lampName, bool onoff, bool commit/*=false*/) {
-    HueLight* l = hue.getLightByName(lampName);
+    HueLight* l = _hue->getLightByName(lampName);
     if (!l) return false;
     bool ok = l->setOn(onoff);
-    if (ok && commit) return l->applyChanges(hue);
+    if (ok && commit) return l->applyChanges(_hue);
     return ok;
   }
   
   bool hueLight_powerOn(const String& lampName, bool commit/*=false*/) {
-    HueLight* l = hue.getLightByName(lampName);
+    HueLight* l = _hue->getLightByName(lampName);
     if (!l) return false;
     bool ok = l->setOn(true);
-    if (ok && commit) return l->applyChanges(hue);
+    if (ok && commit) return l->applyChanges(_hue);
     return ok;
   }
   
   bool hueLight_powerOff(const String& lampName, bool commit/*=false*/) {
-    HueLight* l = hue.getLightByName(lampName);
+    HueLight* l = _hue->getLightByName(lampName);
     if (!l) return false;
     bool ok = l->setOn(false);
-    if (ok && commit) return l->applyChanges(hue);
+    if (ok && commit) return l->applyChanges(_hue);
     return ok;
   }
   
   bool hueLight_setBri(const String& lampName, uint8_t bri, bool commit/*=false*/) {
-    HueLight* l = hue.getLightByName(lampName);
+    HueLight* l = _hue->getLightByName(lampName);
     if (!l) return false;
     bool ok = l->setBri(bri);
-    if (ok && commit) return l->applyChanges(hue);
+    if (ok && commit) return l->applyChanges(_hue);
     return ok;
   }
   
   bool hueLight_setCT(const String& lampName, uint16_t ct, bool commit/*=false*/) {
-    HueLight* l = hue.getLightByName(lampName);
+    HueLight* l = _hue->getLightByName(lampName);
     if (!l) return false;
     bool ok = l->setCT(ct);
-    if (ok && commit) return l->applyChanges(hue);
+    if (ok && commit) return l->applyChanges(_hue);
     return ok;
   }
   
   bool hueLight_setRGB(const String& lampName, uint8_t R, uint8_t G, uint8_t B, bool commit/*=false*/) {
-    HueLight* l = hue.getLightByName(lampName);
+    HueLight* l = _hue->getLightByName(lampName);
     if (!l) return false;
     bool ok = l->setRGB(R,G,B);
-    if (ok && commit) return l->applyChanges(hue);
+    if (ok && commit) return l->applyChanges(_hue);
     return ok;
   }
   
   bool hueLight_commit(const String& lampName) {
-    HueLight* l = hue.getLightByName(lampName);
+    HueLight* l = _hue->getLightByName(lampName);
     if (!l) return false;
-    return l->applyChanges(hue);
+    return l->applyChanges(_hue);
   }
   
   bool hueGroup_setPower(const String& groupname, bool onoff, bool commit/*=false*/) {
-    HueGroup* g = hue.getGroupByName(groupname);
+    HueGroup* g = _hue->getGroupByName(groupname);
     if (!g) return false;
     bool ok = g->setOn(onoff);
-    if (ok && commit) return g->applyChanges(hue);
+    if (ok && commit) return g->applyChanges(_hue);
     return ok;
   }
   
   bool hueGroup_powerOn(const String& groupname, bool commit/*=false*/) {
-    HueGroup* g = hue.getGroupByName(groupname);
+    HueGroup* g = _hue->getGroupByName(groupname);
     if (!g) return false;
     bool ok = g->setOn(true);
-    if (ok && commit) return g->applyChanges(hue);
+    if (ok && commit) return g->applyChanges(_hue);
     return ok;
   }
   
   bool hueGroup_powerOff(const String& groupname, bool commit/*=false*/) {
-    HueGroup* g = hue.getGroupByName(groupname);
+    HueGroup* g = _hue->getGroupByName(groupname);
     if (!g) return false;
     bool ok = g->setOn(false);
-    if (ok && commit) return g->applyChanges(hue);
+    if (ok && commit) return g->applyChanges(_hue);
     return ok;
   }
   
   bool hueGroup_setBri(const String& groupname, uint8_t bri, bool commit/*=false*/) {
-    HueGroup* g = hue.getGroupByName(groupname);
+    HueGroup* g = _hue->getGroupByName(groupname);
     if (!g) return false;
     bool ok = g->setBri(bri);
-    if (ok && commit) return g->applyChanges(hue);
+    if (ok && commit) return g->applyChanges(_hue);
     return ok;
   }
   
   bool hueGroup_setCT(const String& groupname, uint16_t ct, bool commit/*=false*/) {
-    HueGroup* g = hue.getGroupByName(groupname);
+    HueGroup* g = _hue->getGroupByName(groupname);
     if (!g) return false;
     bool ok = g->setCT(ct);
-    if (ok && commit) return g->applyChanges(hue);
+    if (ok && commit) return g->applyChanges(_hue);
     return ok;
   }
   
   bool hueGroup_commit(const String& groupname) {
-    HueGroup* g = hue.getGroupByName(groupname);
+    HueGroup* g = _hue->getGroupByName(groupname);
     if (!g) return false;
-    return g->applyChanges(hue);
+    return g->applyChanges(_hue);
   }
   
   bool hueScene_set(const String& sceneName) {
-    HueScene* s = hue.getSceneByName(sceneName);
+    HueScene* s = _hue->getSceneByName(sceneName);
     if (!s) return false;
-    return s->setActive(hue);
+    return s->setActive(_hue);
   }
   
   bool hueScene_save(const String& sceneName) {
-    HueScene* s = hue.getSceneByName(sceneName);
+    HueScene* s = _hue->getSceneByName(sceneName);
     if (!s) return false;
-    return s->captureLightStates(hue);
+    return s->captureLightStates(_hue);
   }
   
   bool hueSensor_setState(const String& sensorName, const String& statekey, int statevalue, bool commit/*=false*/) {
-    HueSensor* s = hue.getSensorByName(sensorName);
+    HueSensor* s = _hue->getSensorByName(sensorName);
     if (!s) return false;
     bool ok = s->setValue(statekey, statevalue);
-    if (ok && commit) return s->applyChanges(hue);
+    if (ok && commit) return s->applyChanges(_hue);
     return ok;
   }
 
   bool hueSensor_commit(const String& sensorName) {
-    HueSensor* s = hue.getSensorByName(sensorName);
+    HueSensor* s = _hue->getSensorByName(sensorName);
     if (!s) return false;
-    return s->applyChanges(hue);
+    return s->applyChanges(_hue);
   }
 
   // =================================================
@@ -784,67 +784,67 @@ namespace KinoAPI {
   // =================================================
   
   bool radioMode() {
-    if (!yamaha.getPowerStatus()) yamaha.setPower(true);
-    //if (beamer.getPowerStatus()) beamer.setPower(false);
+    if (!_yamaha->getPowerStatus()) _yamaha->setPower(true);
+    //if (_beamer->getPowerStatus()) _beamer->setPower(false);
     delay(100);
-    yamaha.setSource("NET RADIO");
+    _yamaha->setSource("NET RADIO");
     canvas_setMusicEffect();
-    yamaha.setVolume(-600);
+    _yamaha->setVolume(-600);
     sound_setMusicEffect();
-    yamaha.setStraight(false);
-    // hyperion.stopBroadcast();
+    _yamaha->setStraight(false);
+    // _hyperion->stopBroadcast();
     delay(100);
-    yamaha.setSoundProgram("7ch Stereo");
-    hue.setPower(true);
+    _yamaha->setSoundProgram("7ch Stereo");
+    _hue->setPower(true);
     return true;
   }
   
   bool blurayMode() {
-    if (!yamaha.getPowerStatus()) yamaha.setPower(true);
-    if (!beamer.getPowerStatus()) beamer.setPower(true);
-    yamaha.setSource("HDMI2");
-    canvas.setLive(true);
-    yamaha.setVolume(-350);
-    sound.setPowerStatus(false);
-    yamaha.setStraight(true);
-    hyperion.startBroadcast();
-    hue.setScene("Film");
+    if (!_yamaha->getPowerStatus()) _yamaha->setPower(true);
+    if (!_beamer->getPowerStatus()) _beamer->setPower(true);
+    _yamaha->setSource("HDMI2");
+    _canvas->setLive(true);
+    _yamaha->setVolume(-350);
+    _sound->setPowerStatus(false);
+    _yamaha->setStraight(true);
+    _hyperion->startBroadcast();
+    _hue->setScene("Film");
     return true;
   }
   
   bool streamingMode() {
-    if (!yamaha.getPowerStatus()) yamaha.setPower(true);
-    if (!beamer.getPowerStatus()) beamer.setPower(true);
-    yamaha.setSource("HDMI4");
-    canvas.setLive(true);
-    yamaha.setVolume(-400);
-    sound.setPowerStatus(false);
-    yamaha.setStraight(true);
-    hyperion.startBroadcast();
-    hue.setScene("Film");
+    if (!_yamaha->getPowerStatus()) _yamaha->setPower(true);
+    if (!_beamer->getPowerStatus()) _beamer->setPower(true);
+    _yamaha->setSource("HDMI4");
+    _canvas->setLive(true);
+    _yamaha->setVolume(-400);
+    _sound->setPowerStatus(false);
+    _yamaha->setStraight(true);
+    _hyperion->startBroadcast();
+    _hue->setScene("Film");
     return true;
   }
   
   bool GamingMode() {
-    if (!yamaha.getPowerStatus()) yamaha.setPower(true);
-    if (!beamer.getPowerStatus()) beamer.setPower(true);
-    yamaha.setSource("HDMI5");
-    canvas.setLive(true);
-    yamaha.setVolume(-500);
-    sound.setPowerStatus(false);
-    yamaha.setStraight(false);
-    hyperion.startBroadcast();
-    yamaha.setSoundProgram("Surround Decoder");
-    hue.setScene("Gaming");
+    if (!_yamaha->getPowerStatus()) _yamaha->setPower(true);
+    if (!_beamer->getPowerStatus()) _beamer->setPower(true);
+    _yamaha->setSource("HDMI5");
+    _canvas->setLive(true);
+    _yamaha->setVolume(-500);
+    _sound->setPowerStatus(false);
+    _yamaha->setStraight(false);
+    _hyperion->startBroadcast();
+    _yamaha->setSoundProgram("Surround Decoder");
+    _hue->setScene("Gaming");
     return true;
   }
   
   bool startPause() {
     isPause = true;
-    HueScene* pp = hue.getSceneByName("prePause");
-    if (pp) pp->captureLightStates(hue);
-    HueScene* p = hue.getSceneByName("Pause");
-    if (pp) pp->setActive(hue);
+    HueScene* pp = _hue->getSceneByName("prePause");
+    if (pp) pp->captureLightStates(_hue);
+    HueScene* p = _hue->getSceneByName("Pause");
+    if (pp) pp->setActive(_hue);
     // Canvas Pause
     canvas_setPause();
     // sound Pause
@@ -855,8 +855,9 @@ namespace KinoAPI {
   
   bool endPause() {
     isPause = false;
-    HueScene* pp = hue.getSceneByName("prePause");
-    if (pp) pp->setActive(hue);
+    //HueScene* pp = _hue->getSceneByName("prePause");
+    //if (pp) pp->setActive(_hue);
+    _hue->setScene("prePause");
     canvas_setResume();
     sound_setResume();
     return true;
@@ -874,10 +875,10 @@ namespace KinoAPI {
       canvas_powerOff();
       sound_powerOff();
       hyperion_stopBroadcast();
-      hue.setPower(false);
+      _hue->setPower(false);
       return true;
     }
-    hue.setPower(true); // ToDo: Logik hierher verschieben, hue soll nur ausführen!
+    _hue->setPower(true); // ToDo: Logik hierher verschieben, hue soll nur ausführen!
     yamaha_powerOn();
     delay(50);
     yamaha_setInput("NET RADIO");

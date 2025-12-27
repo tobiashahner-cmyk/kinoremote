@@ -25,7 +25,7 @@ public:
     // intern
     void updateState(const JsonObject& state);
     bool isWritable() const;
-    bool applyChanges(HueBridge& bridge);
+    bool applyChanges(HueBridge* bridge);
 
 private:
     uint16_t _id;

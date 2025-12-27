@@ -14,8 +14,8 @@ public:
     const String& getName() const;
     const std::vector<uint8_t>& getLightIds() const;
 
-    bool setActive(HueBridge& bridge);
-    bool captureLightStates(HueBridge& bridge);
+    bool setActive(HueBridge* bridge);
+    bool captureLightStates(HueBridge* bridge);
 
 private:
     String _id;

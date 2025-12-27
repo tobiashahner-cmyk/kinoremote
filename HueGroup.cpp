@@ -39,7 +39,7 @@ bool HueGroup::setBri(uint8_t value) { pending.bri = value; return true;}
 bool HueGroup::setCT(uint16_t value) { pending.ct = value; return true;}
 
 // --- applyChanges ---
-bool HueGroup::applyChanges(HueBridge& bridge) {
+bool HueGroup::applyChanges(HueBridge* bridge) {
     bool hasChanges =
         pending.on.has_value() ||
         pending.bri.has_value() ||
@@ -56,7 +56,7 @@ bool HueGroup::applyChanges(HueBridge& bridge) {
     String payload;
     serializeJson(doc, payload);
 
-    if (!bridge.sendGroupState(_id, payload))
+    if (!bridge->sendGroupState(_id, payload))
         return false;
 
     // --- lokale HueLights synchronisieren ---

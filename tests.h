@@ -1,13 +1,13 @@
 
 void showYamahaTicker() {
   Serial.println("\n\n========== YAMAHA TICKER ===========\n");
-  Serial.print("Intervall: alle "); Serial.print(yamaha.getTickInterval()); Serial.println("ms");
-  Serial.print("Power:  "); Serial.println((yamaha.getPowerStatus()) ? "An":"Aus");
-  Serial.print("Volume: "); Serial.print(yamaha.getVolume()/10); Serial.println("dB");
-  String src = yamaha.getSource();
+  Serial.print("Intervall: alle "); Serial.print(_yamaha->getTickInterval()); Serial.println("ms");
+  Serial.print("Power:  "); Serial.println((_yamaha->getPowerStatus()) ? "An":"Aus");
+  Serial.print("Volume: "); Serial.print(_yamaha->getVolume()/10); Serial.println("dB");
+  String src = _yamaha->getSource();
   Serial.print("Source: "); Serial.println(src);
   if (src == "NET RADIO") {
-    NetRadioTrackInfo nri = yamaha.readCurrentlyPlayingNetRadio();
+    NetRadioTrackInfo nri = _yamaha->readCurrentlyPlayingNetRadio();
     Serial.print("\tStation: "); Serial.println(nri.station);
     Serial.print("\tSong   : "); Serial.println(nri.song);
     Serial.print("\tElapsed: "); Serial.println(nri.elapsed);
@@ -16,52 +16,52 @@ void showYamahaTicker() {
 
 void showBeamerTicker() {
   Serial.println("\n\n========== BEAMER TICKER ===========\n");
-  Serial.print("Intervall: alle "); Serial.print(beamer.getTickInterval()); Serial.println("ms");
-  Serial.print("Power:  "); Serial.println((beamer.getPowerStatus()) ? "An" : "Aus");
-  Serial.print("Source: "); Serial.println(beamer.getSourceString());
-  Serial.print("Lampe:  "); Serial.println(beamer.getLampHours());
+  Serial.print("Intervall: alle "); Serial.print(_beamer->getTickInterval()); Serial.println("ms");
+  Serial.print("Power:  "); Serial.println((_beamer->getPowerStatus()) ? "An" : "Aus");
+  Serial.print("Source: "); Serial.println(_beamer->getSourceString());
+  Serial.print("Lampe:  "); Serial.println(_beamer->getLampHours());
   Serial.println("\n\n");
 }
 
 void showCanvasTicker() {
   Serial.println("\n\n========== LEINWAND TICKER ===========\n");
-  Serial.print("Intervall: alle "); Serial.print(canvas.getTickInterval()); Serial.println("ms");
-  Serial.print("Power:      "); Serial.println((canvas.getPowerStatus()) ? "An" : "Aus");
-  Serial.print("Brightness: "); Serial.println(canvas.getBrightness());
-  Serial.print("Live Data:  "); Serial.print((canvas.isReceivingLiveData()) ? "incoming, " : "none, "); Serial.println((canvas.isOverridingLiveData()) ? "ignoriert" : "bearbeitet");
-  Serial.print("LD Source:  "); Serial.println(canvas.getLiveSource());
-  Serial.print("Effekt:     "); Serial.println(canvas.getEffect());
-  Serial.print("  Speed:    "); Serial.println(canvas.getSpeed());
+  Serial.print("Intervall: alle "); Serial.print(_canvas->getTickInterval()); Serial.println("ms");
+  Serial.print("Power:      "); Serial.println((_canvas->getPowerStatus()) ? "An" : "Aus");
+  Serial.print("Brightness: "); Serial.println(_canvas->getBrightness());
+  Serial.print("Live Data:  "); Serial.print((_canvas->isReceivingLiveData()) ? "incoming, " : "none, "); Serial.println((_canvas->isOverridingLiveData()) ? "ignoriert" : "bearbeitet");
+  Serial.print("LD Source:  "); Serial.println(_canvas->getLiveSource());
+  Serial.print("Effekt:     "); Serial.println(_canvas->getEffect());
+  Serial.print("  Speed:    "); Serial.println(_canvas->getSpeed());
 }
 
 void showSoundTicker() {
   Serial.println("\n\n========== SOUND TICKER ===========\n");
-  Serial.print("Intervall: alle "); Serial.print(sound.getTickInterval()); Serial.println("ms");
-  Serial.print("Power:      "); Serial.println((sound.getPowerStatus()) ? "An" : "Aus");
-  Serial.print("Brightness: "); Serial.println(sound.getBrightness());
-  Serial.print("Effekt:     "); Serial.println(sound.getEffect());
-  Serial.print("  Speed:    "); Serial.println(canvas.getSpeed());
+  Serial.print("Intervall: alle "); Serial.print(_sound->getTickInterval()); Serial.println("ms");
+  Serial.print("Power:      "); Serial.println((_sound->getPowerStatus()) ? "An" : "Aus");
+  Serial.print("Brightness: "); Serial.println(_sound->getBrightness());
+  Serial.print("Effekt:     "); Serial.println(_sound->getEffect());
+  Serial.print("  Speed:    "); Serial.println(_canvas->getSpeed());
 }
 
 void showHyperionTicker() {
   Serial.println("\n\n========== HYPERION TICKER ===========\n");
-  Serial.print("Intervall: alle "); Serial.print(hyperion.getTickInterval()); Serial.println("ms");
+  Serial.print("Intervall: alle "); Serial.print(_hyperion->getTickInterval()); Serial.println("ms");
   Serial.print("Power      : ");
-  Serial.println(hyperion.getPowerStatus() ? "An":"Aus");
+  Serial.println(_hyperion->getPowerStatus() ? "An":"Aus");
   Serial.print("LED Instanz: ");
-  Serial.println(hyperion.getLedDeviceStatus() ? "An":"Aus");
+  Serial.println(_hyperion->getLedDeviceStatus() ? "An":"Aus");
   Serial.print("Broadcasting: ");
-  Serial.println(hyperion.isBroadcasting() ? "Ja":"Nein");
+  Serial.println(_hyperion->isBroadcasting() ? "Ja":"Nein");
 }
 
 void showHueTicker() {
   Serial.println("\n\n========== HUE TICKER ===========\n");
-  Serial.print("Intervall: alle "); Serial.print(hue.getTickInterval()); Serial.println("ms");
-  auto& scenes = hue.getScenes();
+  Serial.print("Intervall: alle "); Serial.print(_hue->getTickInterval()); Serial.println("ms");
+  auto& scenes = _hue->getScenes();
   Serial.print(scenes.size()); Serial.println(" Szenen");
-  auto& groups = hue.getGroups();
+  auto& groups = _hue->getGroups();
   Serial.print(groups.size()); Serial.println(" Gruppen");
-  auto& lights = hue.getLights();
+  auto& lights = _hue->getLights();
   Serial.print(lights.size()); Serial.println(" Lampen");
   for (auto& l : lights) {
     Serial.print("\t"); Serial.print(l->getName()); Serial.println(" : ");
@@ -74,7 +74,7 @@ void showHueTicker() {
     }
   }
   Serial.println("Sensoren (nur die Wichtigsten):");
-  HueSensor* sensor = hue.getSensorByName("Temp Sensor Theke");
+  HueSensor* sensor = _hue->getSensorByName("Temp Sensor Theke");
   if (sensor) {
     Serial.print(sensor->getName());
     if (sensor->hasValue("temperature")) {
@@ -86,7 +86,7 @@ void showHueTicker() {
   } else {
       Serial.println("Temp Sensor Theke nicht gefunden");
   }
-  sensor = hue.getSensorByName("Licht Sensor Theke");
+  sensor = _hue->getSensorByName("Licht Sensor Theke");
   if (sensor) {
     Serial.println(sensor->getName());
     Serial.print("\tdark: ");
@@ -111,35 +111,35 @@ void showHueTicker() {
 void testBasicStatus() {
     // Basic Status
     Serial.println("--- GET BASIC STATUS ---");
-    if (!yamaha.getStatus()) {
+    if (!_yamaha->getStatus()) {
       Serial.println("Konnte Basic Status nicht lesen!");
     } else {
-      bool power = yamaha.getPowerStatus();
+      bool power = _yamaha->getPowerStatus();
       Serial.print("Power:  "); Serial.println(power ? "An":"Aus");
       if (!power) {
         Serial.print("Schalte ein: ");
-        Serial.println(yamaha.setPower(true) ? "OK" : "Fehler");
+        Serial.println(_yamaha->setPower(true) ? "OK" : "Fehler");
         Serial.print("Setze Lautstärke -60: ");
-        Serial.println(yamaha.setVolume(-600) ? "OK" : "Fehler");
+        Serial.println(_yamaha->setVolume(-600) ? "OK" : "Fehler");
         Serial.print("starte NET RADIO: ");
-        Serial.println(yamaha.setSource("NET RADIO") ? "OK" : "Fehler");
+        Serial.println(_yamaha->setSource("NET RADIO") ? "OK" : "Fehler");
       }
       Serial.println("Lese Status:");
-      Serial.print("Volume: "); Serial.println(yamaha.getVolume());
-      Serial.print("Treble: "); Serial.println(yamaha.getTreble());
-      Serial.print("Bass: ");   Serial.println(yamaha.getBass());
-      Serial.print("Mute:   "); Serial.println(yamaha.getMute() ? "An":"Aus");
-      Serial.print("SW Trim:"); Serial.println(yamaha.getSubTrim());
-      Serial.print("Source: "); Serial.println(yamaha.getSource());
-      Serial.print("Straight:"); Serial.println(yamaha.getStraight() ? "An":"Aus");
-      Serial.print("Enhancer:"); Serial.println(yamaha.getEnhancer() ? "An":"Aus");
-      Serial.print("SoundPrg:"); Serial.println(yamaha.getSoundProgram());
+      Serial.print("Volume: "); Serial.println(_yamaha->getVolume());
+      Serial.print("Treble: "); Serial.println(_yamaha->getTreble());
+      Serial.print("Bass: ");   Serial.println(_yamaha->getBass());
+      Serial.print("Mute:   "); Serial.println(_yamaha->getMute() ? "An":"Aus");
+      Serial.print("SW Trim:"); Serial.println(_yamaha->getSubTrim());
+      Serial.print("Source: "); Serial.println(_yamaha->getSource());
+      Serial.print("Straight:"); Serial.println(_yamaha->getStraight() ? "An":"Aus");
+      Serial.print("Enhancer:"); Serial.println(_yamaha->getEnhancer() ? "An":"Aus");
+      Serial.print("SoundPrg:"); Serial.println(_yamaha->getSoundProgram());
     }
 }
 
 void testReadNetRadioFavorites() {
     Serial.println("\n\nLade NET RADIO Favoriten...");
-    std::vector<String> favs = yamaha.readNetRadioFavorites();
+    std::vector<String> favs = _yamaha->readNetRadioFavorites();
     Serial.println("NET RADIO Favoriten:");
     for(String s : favs) {
       Serial.println(s);
@@ -148,7 +148,7 @@ void testReadNetRadioFavorites() {
 
 void testSetNetRadioFavorite() {
     Serial.println("\n\nWähle BOB aus: ");
-    if (yamaha.selectNetRadioFavorite("bob")) {
+    if (_yamaha->selectNetRadioFavorite("bob")) {
         Serial.println("Sender ausgewählt!");
     } else {
         Serial.println("Sender nicht gefunden.");
@@ -156,7 +156,7 @@ void testSetNetRadioFavorite() {
 }
 
 void testReadNetRadioPlayInfo() {
-    auto info = yamaha.readCurrentlyPlayingNetRadio();
+    auto info = _yamaha->readCurrentlyPlayingNetRadio();
     Serial.println("Aktueller NET RADIO Track:");
     Serial.println("Station: " + info.station);
     Serial.println("Song:    " + info.song);
@@ -167,10 +167,10 @@ void testReadNetRadioPlayInfo() {
 
 void testReadDsps() {
     Serial.println("\n\nLese alle DSPs aus");
-    std::vector<String> dsps = yamaha.readDspNames();
+    std::vector<String> dsps = _yamaha->readDspNames();
     for (String d : dsps) {
       Serial.print(d);
-      if (d == yamaha.getSoundProgram()) {
+      if (d == _yamaha->getSoundProgram()) {
         Serial.println(" !!");
       } else {
         Serial.println();
@@ -180,9 +180,9 @@ void testReadDsps() {
 
 void testReadInputSources() {
     Serial.println("\n\nLese alle Sources aus");
-    yamaha.readInputSources();
-    String currentSource = yamaha.getSource();
-    for (const auto& src : yamaha.readInputSources()) {
+    _yamaha->readInputSources();
+    String currentSource = _yamaha->getSource();
+    for (const auto& src : _yamaha->readInputSources()) {
       if (src.skip) {
         Serial.print("... ");
       } else {
@@ -202,27 +202,27 @@ void testReadInputSources() {
 
 void testAlexaVolume(int tvol) {
   Serial.print("\n\nSetze Lautsärke im Alexa-Style: ");
-  Serial.println((yamaha.setVolumeAlexa(tvol)) ? " OK" : " Fehler");
+  Serial.println((_yamaha->setVolumeAlexa(tvol)) ? " OK" : " Fehler");
 }
 
 // BEAMER
 void BeamerTestStatus() {
-  beamer.begin();
+  _beamer->begin();
   Serial.println("Status:");
-  Serial.print("Power: "); Serial.println((beamer.getPowerStatus() ? "An" : "Aus"));
-  Serial.print("Source: "); Serial.println(beamer.getSourceString());
-  Serial.print("LampHours: "); Serial.println(beamer.getLampHours());
+  Serial.print("Power: "); Serial.println((_beamer->getPowerStatus() ? "An" : "Aus"));
+  Serial.print("Source: "); Serial.println(_beamer->getSourceString());
+  Serial.print("LampHours: "); Serial.println(_beamer->getLampHours());
   Serial.println();
 }
 
 
 // WLED
 void canvasTestStatus() {
-  canvas.begin();
+  _canvas->begin();
   Serial.println("Status:");
-  Serial.print("Power:      "); Serial.println((canvas.getPowerStatus()) ? "An" : "Aus");
-  Serial.print("Brightness: "); Serial.println(canvas.getBrightness());
-  Serial.print("Live Data:  "); Serial.print((canvas.isReceivingLiveData()) ? "incoming, " : "none, "); Serial.println((canvas.isOverridingLiveData()) ? "ignoriert" : "bearbeitet");
-  Serial.print("Effekt:     "); Serial.println(canvas.getEffect());
-  Serial.print("  Speed:    "); Serial.println(canvas.getSpeed());
+  Serial.print("Power:      "); Serial.println((_canvas->getPowerStatus()) ? "An" : "Aus");
+  Serial.print("Brightness: "); Serial.println(_canvas->getBrightness());
+  Serial.print("Live Data:  "); Serial.print((_canvas->isReceivingLiveData()) ? "incoming, " : "none, "); Serial.println((_canvas->isOverridingLiveData()) ? "ignoriert" : "bearbeitet");
+  Serial.print("Effekt:     "); Serial.println(_canvas->getEffect());
+  Serial.print("  Speed:    "); Serial.println(_canvas->getSpeed());
 }

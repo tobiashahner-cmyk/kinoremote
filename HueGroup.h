@@ -23,7 +23,7 @@ public:
     bool setBri(uint8_t value);
     bool setCT(uint16_t value);
 
-    bool applyChanges(HueBridge& bridge);
+    bool applyChanges(HueBridge* bridge);
 
 private:
     uint16_t _id;

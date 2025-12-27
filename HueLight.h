@@ -46,7 +46,7 @@ public:
     void forceCT(uint16_t value);
 
     // --- Änderungen anwenden ---
-    bool applyChanges(HueBridge& bridge);
+    bool applyChanges(HueBridge* bridge);
 
 private:
     uint8_t _id;

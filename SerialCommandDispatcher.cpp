@@ -8,12 +8,14 @@
 
 // ==== Externe Geräte (existieren im Sketch) ====
 
-extern YamahaReceiver yamaha;
-extern OptomaBeamer beamer;
-extern WLEDDevice canvas;
-extern WLEDDevice sound;
-extern HyperionDevice hyperion;
-extern HueBridge hue;
+// Externe Geräte aus dem Sketch
+extern YamahaReceiver* _yamaha;
+extern WLEDDevice* _canvas;
+extern WLEDDevice* _sound;
+extern OptomaBeamer* _beamer;
+extern HyperionDevice* _hyperion;
+extern HueBridge* _hue;
+
 
 // ==== Hilfsfunktionen ====
 
@@ -302,22 +304,22 @@ bool kino_help(String* p, uint8_t n) {
 }
 
 bool yamaha_info(String*p, uint8_t n) {
-  if (!yamaha.getStatus()) {
+  if (!_yamaha->getStatus()) {
     Serial.print("Yamaha Status konnte nicht ausgelesen werden!");
     return false;
   }
-  Serial.print("Power:  "); Serial.println((yamaha.getPowerStatus()) ? "An":"Aus");
-  Serial.print("Volume: "); Serial.print(yamaha.getVolume()/10); Serial.println("dB");
-  Serial.print("\tMute: "); Serial.println(yamaha.getMute()?"An":"Aus");
+  Serial.print("Power:  "); Serial.println((_yamaha->getPowerStatus()) ? "An":"Aus");
+  Serial.print("Volume: "); Serial.print(_yamaha->getVolume()/10); Serial.println("dB");
+  Serial.print("\tMute: "); Serial.println(_yamaha->getMute()?"An":"Aus");
   Serial.println("Tone:");
-  Serial.print("\tBass     : "); Serial.println(yamaha.getBass());
-  Serial.print("\tTreble   : "); Serial.println(yamaha.getTreble());
-  Serial.print("\tSW Trim  : "); Serial.println(yamaha.getSubTrim());
-  Serial.print("\tEnhancer : "); Serial.println(yamaha.getEnhancer()?"An":"Aus");
-  Serial.print("\tStraight : "); Serial.println(yamaha.getStraight() ? F("An, DSP inaktiv") : F("Aus, DSP aktiv"));
-  Serial.print("\tDSP      : "); Serial.println(yamaha.getSoundProgram());
+  Serial.print("\tBass     : "); Serial.println(_yamaha->getBass());
+  Serial.print("\tTreble   : "); Serial.println(_yamaha->getTreble());
+  Serial.print("\tSW Trim  : "); Serial.println(_yamaha->getSubTrim());
+  Serial.print("\tEnhancer : "); Serial.println(_yamaha->getEnhancer()?"An":"Aus");
+  Serial.print("\tStraight : "); Serial.println(_yamaha->getStraight() ? F("An, DSP inaktiv") : F("Aus, DSP aktiv"));
+  Serial.print("\tDSP      : "); Serial.println(_yamaha->getSoundProgram());
   
-  InputSource src = yamaha.getInputSource();
+  InputSource src = _yamaha->getInputSource();
   Serial.print("Source: "); Serial.print(src.internal);
   if (String(src.internal) != src.custom) {
     Serial.print(" ("); Serial.print(src.custom); Serial.println(" )");
@@ -325,7 +327,7 @@ bool yamaha_info(String*p, uint8_t n) {
     Serial.println();
   }
   if (String(src.internal) == F("NET RADIO")) {
-    NetRadioTrackInfo nri = yamaha.readCurrentlyPlayingNetRadio();
+    NetRadioTrackInfo nri = _yamaha->readCurrentlyPlayingNetRadio();
     Serial.print("\tStation: "); Serial.println(nri.station);
     Serial.print("\tSong   : "); Serial.println(nri.song);
     Serial.print("\tElapsed: "); Serial.println(nri.elapsed);
@@ -335,8 +337,8 @@ bool yamaha_info(String*p, uint8_t n) {
 }
 
 bool yamaha_listSources(String *p, uint8_t n) {
-  String currentSource = yamaha.getSource();
-  for (const auto& src : yamaha.readInputSources()) {
+  String currentSource = _yamaha->getSource();
+  for (const auto& src : _yamaha->readInputSources()) {
     if (src.skip) {
       Serial.print("... ");
     } else {
@@ -356,10 +358,10 @@ bool yamaha_listSources(String *p, uint8_t n) {
 
 bool yamaha_listDsps(String* p, uint8_t n) {
   Serial.println("\n\nLese alle DSPs aus");
-  std::vector<String> dsps = yamaha.readDspNames();
+  std::vector<String> dsps = _yamaha->readDspNames();
   for (String d : dsps) {
     Serial.print(d);
-    if (d == yamaha.getSoundProgram()) {
+    if (d == _yamaha->getSoundProgram()) {
       Serial.println(" !!");
     } else {
       Serial.println();
@@ -369,7 +371,7 @@ bool yamaha_listDsps(String* p, uint8_t n) {
 }
 
 bool yamaha_listStations(String* p, uint8_t n) {
-  std::vector<String> stations = yamaha.readNetRadioFavorites();
+  std::vector<String> stations = _yamaha->readNetRadioFavorites();
   for (auto& s : stations) {
     Serial.println(s);
   }
@@ -377,13 +379,13 @@ bool yamaha_listStations(String* p, uint8_t n) {
 }
 
 bool beamer_info(String* p, uint8_t n) {
-  if (!beamer.getStatus()) {
+  if (!_beamer->getStatus()) {
     Serial.print("Beamer Status konnte nicht gelesen werden!");
     return false;
   }
-  Serial.print("Power:  "); Serial.println((beamer.getPowerStatus()) ? "An" : "Aus");
-  Serial.print("Source: "); Serial.println(beamer.getSourceString());
-  Serial.print("Lampe:  "); Serial.println(beamer.getLampHours());
+  Serial.print("Power:  "); Serial.println((_beamer->getPowerStatus()) ? "An" : "Aus");
+  Serial.print("Source: "); Serial.println(_beamer->getSourceString());
+  Serial.print("Lampe:  "); Serial.println(_beamer->getLampHours());
   Serial.println("\n\n");
   return true;
 }
@@ -391,25 +393,25 @@ bool beamer_info(String* p, uint8_t n) {
 bool canvas_info(String* p, uint8_t n) {
   if (p[0] == "true") {
     Serial.print("Lese Status neu aus : ");
-    Serial.println(canvas.getStatus() ? "OK" : "FEHLER");
+    Serial.println(_canvas->getStatus() ? "OK" : "FEHLER");
     Serial.println();
   }
-  Serial.print("Power:      "); Serial.println((canvas.getPowerStatus()) ? "An" : "Aus");
-  Serial.print("Brightness: "); Serial.println(canvas.getBrightness());
-  Serial.print("Live Data:  "); Serial.print((canvas.isReceivingLiveData()) ? "incoming, " : "none, "); Serial.println((canvas.isOverridingLiveData()) ? "ignoriert" : "bearbeitet");
-  Serial.print("LD Source:  "); Serial.println(canvas.getLiveSource());
-  Serial.print("Effekt:     "); Serial.println(canvas.getEffect());
-  if (canvas.getEffect() != 0) {
-    Serial.print("  Speed:    "); Serial.println(canvas.getSpeed());
-    Serial.print("  Intensity:"); Serial.println(canvas.getIntensity());
+  Serial.print("Power:      "); Serial.println((_canvas->getPowerStatus()) ? "An" : "Aus");
+  Serial.print("Brightness: "); Serial.println(_canvas->getBrightness());
+  Serial.print("Live Data:  "); Serial.print((_canvas->isReceivingLiveData()) ? "incoming, " : "none, "); Serial.println((_canvas->isOverridingLiveData()) ? "ignoriert" : "bearbeitet");
+  Serial.print("LD Source:  "); Serial.println(_canvas->getLiveSource());
+  Serial.print("Effekt:     "); Serial.println(_canvas->getEffect());
+  if (_canvas->getEffect() != 0) {
+    Serial.print("  Speed:    "); Serial.println(_canvas->getSpeed());
+    Serial.print("  Intensity:"); Serial.println(_canvas->getIntensity());
   }
   Serial.println("Farben:");
-  Serial.print("\tPalette: "); Serial.println(canvas.getPalette());
-  WLEDColor c = canvas.getColFg();
+  Serial.print("\tPalette: "); Serial.println(_canvas->getPalette());
+  WLEDColor c = _canvas->getColFg();
   Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
-  c = canvas.getColFg();
+  c = _canvas->getColFg();
   Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
-  c = canvas.getColFg();
+  c = _canvas->getColFg();
   Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
   return true;
 }
@@ -417,50 +419,50 @@ bool canvas_info(String* p, uint8_t n) {
 bool sound_info(String* p, uint8_t n) {
   if (p[0] == "true") {
     Serial.print("Lese Status neu aus : ");
-    Serial.println(sound.getStatus() ? "OK" : "FEHLER");
+    Serial.println(_sound->getStatus() ? "OK" : "FEHLER");
     Serial.println();
   }
-  Serial.print("Power:      "); Serial.println((sound.getPowerStatus()) ? "An" : "Aus");
-  Serial.print("Brightness: "); Serial.println(sound.getBrightness());
-  Serial.print("Effekt:     "); Serial.println(sound.getEffect());
-  if (sound.getEffect() != 0) {
-    Serial.print("  Speed:    "); Serial.println(sound.getSpeed());
-    Serial.print("  Intensity:"); Serial.println(sound.getIntensity());
+  Serial.print("Power:      "); Serial.println((_sound->getPowerStatus()) ? "An" : "Aus");
+  Serial.print("Brightness: "); Serial.println(_sound->getBrightness());
+  Serial.print("Effekt:     "); Serial.println(_sound->getEffect());
+  if (_sound->getEffect() != 0) {
+    Serial.print("  Speed:    "); Serial.println(_sound->getSpeed());
+    Serial.print("  Intensity:"); Serial.println(_sound->getIntensity());
   }
   Serial.println("Farben:");
-  Serial.print("\tPalette: "); Serial.println(sound.getPalette());
-  WLEDColor c = sound.getColFg();
+  Serial.print("\tPalette: "); Serial.println(_sound->getPalette());
+  WLEDColor c = _sound->getColFg();
   Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
-  c = sound.getColBg();
+  c = _sound->getColBg();
   Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
-  c = sound.getColFx();
+  c = _sound->getColFx();
   Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
   return true;
 }
 
 bool hyperion_info(String* p, uint8_t n) {
-  if (!hyperion.getStatus()) {
+  if (!_hyperion->getStatus()) {
     Serial.print("Hyperion Status konnte nicht gelesen werden!");
     return false;
   }
   Serial.print("Hyperion:\n  Power: ");
-  Serial.println(hyperion.getPowerStatus() ? "An":"Aus");
+  Serial.println(_hyperion->getPowerStatus() ? "An":"Aus");
   Serial.print("LEDs: ");
-  Serial.println(hyperion.getLedDeviceStatus() ? "An":"Aus");
+  Serial.println(_hyperion->getLedDeviceStatus() ? "An":"Aus");
   Serial.print("Broadcasting: ");
-  Serial.println(hyperion.isBroadcasting() ? "Ja":"Nein");
+  Serial.println(_hyperion->isBroadcasting() ? "Ja":"Nein");
   return true;
 }
 
 bool hue_listLights(String* p, uint8_t n) {
-  for (auto& l : hue.getLights()) {
+  for (auto& l : _hue->getLights()) {
     Serial.println(l->getName());
   }
   return true;
 }
 
 bool hue_LightInfo(String* p, uint8_t n) {
-  HueLight* light = hue.getLightByName(p[0]);
+  HueLight* light = _hue->getLightByName(p[0]);
   if (!light) {
     Serial.println("Lampe mit diesem Namen wurde nicht gefunden.");
     return false;
@@ -479,18 +481,18 @@ bool hue_LightInfo(String* p, uint8_t n) {
 }
 
 bool hue_listScenes(String* p, uint8_t n) {
-  for (auto& s : hue.getScenes()) {
+  for (auto& s : _hue->getScenes()) {
     Serial.println(s->getName());
   }
   return true;
 }
 
 bool hue_showSensors(String* p, uint8_t n) {
-  if (!hue.readSensors()) {
+  if (!_hue->readSensors()) {
     Serial.println("Sensoren konnten nicht aktualisiert werden");
     return false;
   }
-  HueSensor* sensor = hue.getSensorByName("Presence Clip Theke");
+  HueSensor* sensor = _hue->getSensorByName("Presence Clip Theke");
   if (sensor) {
     Serial.print(sensor->getName()); Serial.print(" : ");
     if (sensor->hasValue("status")) {
@@ -501,7 +503,7 @@ bool hue_showSensors(String* p, uint8_t n) {
   } else {
     Serial.println("Presence Clip Theke nicht gefunden!");
   }
-  sensor = hue.getSensorByName("Temp Sensor Theke");
+  sensor = _hue->getSensorByName("Temp Sensor Theke");
   if (sensor) {
     Serial.print(sensor->getName()); Serial.print(" : ");
     int temp = 0;
@@ -511,7 +513,7 @@ bool hue_showSensors(String* p, uint8_t n) {
   } else {
     Serial.println("Temp Sensor Theke nicht gefunden!");
   }
-  sensor = hue.getSensorByName("Daylight");
+  sensor = _hue->getSensorByName("Daylight");
   if (sensor) {
     Serial.print(sensor->getName()); Serial.print(" : ");
     if (sensor->hasValue("daylight")) {
@@ -522,7 +524,7 @@ bool hue_showSensors(String* p, uint8_t n) {
   } else {
     Serial.println("Daylight nicht gefunden!");
   }
-  sensor = hue.getSensorByName("Licht Sensor Theke");
+  sensor = _hue->getSensorByName("Licht Sensor Theke");
   if (sensor) {
     Serial.print(sensor->getName()); Serial.println(" : ");
     Serial.print("\t\tlightlevel: ");
@@ -677,26 +679,26 @@ bool kino_executeMacro(String* p, uint8_t n) {
 
 bool kino_init(String* p, uint8_t n) {
   Serial.println("Initialisiere Geräte:");
-  bool canvasOk   = canvas.init();
-  bool soundOk    = sound.init();
-  bool hueOk      = hue.init();
-  bool yamahaOk   = yamaha.init();
-  bool beamerOk   = beamer.init();
-  bool hyperionOk = hyperion.init();
-  Serial.print("\tWLEDDevice canvas      : "); Serial.println(canvasOk  ? F("✅ OK\n") : F("❌ Fehler\n"));
-  Serial.print("\tWLEDDevice sound       : "); Serial.println(soundOk   ? F("✅ OK\n") : F("❌ Fehler\n"));
-  Serial.print("\tHueBridge  hue         : "); Serial.println(hueOk     ? F("✅ OK\n") : F("❌ Fehler\n"));
-  Serial.print("\tYamahaReceiver yamaha  : "); Serial.println(yamahaOk  ? F("✅ OK\n") : F("❌ Fehler\n"));
-  Serial.print("\tOptomaBeamer beamer    : "); Serial.println(beamerOk  ? F("✅ OK\n") : F("❌ Fehler\n"));
-  Serial.print("\tHyperionDevice hyperion: "); Serial.println(hyperionOk? F("✅ OK\n") : F("❌ Fehler\n"));
+  bool canvasOk   = _canvas->init();
+  bool soundOk    = _sound->init();
+  bool hueOk      = _hue->init();
+  bool yamahaOk   = _yamaha->init();
+  bool beamerOk   = _beamer->init();
+  bool hyperionOk = _hyperion->init();
+  Serial.print("\tWLEDDevice canvas      : "); Serial.println(canvasOk  ? F("✅ OK") : F("❌ Fehler"));
+  Serial.print("\tWLEDDevice sound       : "); Serial.println(soundOk   ? F("✅ OK") : F("❌ Fehler"));
+  Serial.print("\tHueBridge  hue         : "); Serial.println(hueOk     ? F("✅ OK") : F("❌ Fehler"));
+  Serial.print("\tYamahaReceiver yamaha  : "); Serial.println(yamahaOk  ? F("✅ OK") : F("❌ Fehler"));
+  Serial.print("\tOptomaBeamer beamer    : "); Serial.println(beamerOk  ? F("✅ OK") : F("❌ Fehler"));
+  Serial.print("\tHyperionDevice hyperion: "); Serial.println(hyperionOk? F("✅ OK") : F("❌ Fehler"));
 
   Serial.println("DeviceType Test:");
-  if (canvasOk)   Serial.printf("\t canvas   ist ein %s \n",canvas.deviceType());
-  if (soundOk )   Serial.printf("\t sound    ist ein %s \n",sound.deviceType());
-  if (hueOk   )   Serial.printf("\t hue      ist ein %s \n",hue.deviceType());
-  if (yamahaOk )  Serial.printf("\t yamaha   ist ein %s \n",yamaha.deviceType());
-  if (beamerOk )  Serial.printf("\t beamer   ist ein %s \n",beamer.deviceType());
-  if (hyperionOk )Serial.printf("\t hyperion ist ein %s \n",hyperion.deviceType());
+  if (canvasOk)   Serial.printf("\t canvas   ist ein %s \n",_canvas->deviceType());
+  if (soundOk )   Serial.printf("\t sound    ist ein %s \n",_sound->deviceType());
+  if (hueOk   )   Serial.printf("\t hue      ist ein %s \n",_hue->deviceType());
+  if (yamahaOk )  Serial.printf("\t yamaha   ist ein %s \n",_yamaha->deviceType());
+  if (beamerOk )  Serial.printf("\t beamer   ist ein %s \n",_beamer->deviceType());
+  if (hyperionOk )Serial.printf("\t hyperion ist ein %s \n",_hyperion->deviceType());
   
   return (canvasOk && soundOk && hueOk && yamahaOk && beamerOk && hyperionOk);
 }
@@ -890,7 +892,7 @@ bool hyperion_setTicker(String* p, uint8_t n) {
 
 bool hyperion_setBroadcast(String* p, uint8_t n) {
   bool onoff = toBool(p[0]);
-  //bool successWLED = canvas.setLive(onoff);
+  //bool successWLED = _canvas->setLive(onoff);
   return (onoff) ? KinoAPI::hyperion_startBroadcast() : KinoAPI::hyperion_stopBroadcast();
 }
 

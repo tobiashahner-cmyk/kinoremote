@@ -54,7 +54,7 @@ bool HueScene::setActive(HueBridge& bridge) {
 }
 */
 
-bool HueScene::setActive(HueBridge& bridge) {
+bool HueScene::setActive(HueBridge* bridge) {
 
     // 1️⃣ Szene aktivieren (Group 0)
     StaticJsonDocument<64> doc;
@@ -63,16 +63,16 @@ bool HueScene::setActive(HueBridge& bridge) {
     String payload;
     serializeJson(doc, payload);
 
-    if (!bridge.sendGroupState(0, payload))
+    if (!bridge->sendGroupState(0, payload))
         return false;
 
     // 2️⃣ Gewünschte Zustände aus der Szene lesen
     SceneLightStates states =
-        bridge.getSceneLightStates(_id);
+        bridge->getSceneLightStates(_id);
 
     // 3️⃣ Lokale HueLights synchronisieren
     for (uint8_t id : _lightIds) {
-        HueLight* l = bridge.getLightById(id);
+        HueLight* l = bridge->getLightById(id);
         if (!l) continue;
 
         auto it = states.find(id);
@@ -88,7 +88,7 @@ bool HueScene::setActive(HueBridge& bridge) {
             String lightPayload;
             serializeJson(lightDoc, lightPayload);
 
-            bridge.sendLightState(id, lightPayload);
+            bridge->sendLightState(id, lightPayload);
         }
 
         // Lokalen Cache synchronisieren
@@ -102,12 +102,12 @@ bool HueScene::setActive(HueBridge& bridge) {
 
 
 
-bool HueScene::captureLightStates(HueBridge& bridge) {
+bool HueScene::captureLightStates(HueBridge* bridge) {
     StaticJsonDocument<64> doc;
     doc["storelightstate"] = true;
 
     String payload;
     serializeJson(doc, payload);
 
-    return bridge.saveScene(_id, payload);
+    return bridge->saveScene(_id, payload);
 }

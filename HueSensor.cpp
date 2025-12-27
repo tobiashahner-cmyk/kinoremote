@@ -35,12 +35,12 @@ bool HueSensor::setValue(const String& key, int value) {
     return true;
 }
 
-bool HueSensor::applyChanges(HueBridge& bridge) {
+bool HueSensor::applyChanges(HueBridge* bridge) {
 
     if (_pending.isNull())
         return true;
 
-    if (!bridge.setSensorState(_id, _pending.as<JsonObject>()))
+    if (!bridge->setSensorState(_id, _pending.as<JsonObject>()))
         return false;
 
     // lokalen Cache synchronisieren

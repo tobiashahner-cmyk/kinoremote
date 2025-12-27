@@ -399,7 +399,7 @@ const std::vector<HueScene*>& HueBridge::getScenes() const {
 
 bool HueBridge::setScene(const String& sceneName) {
   HueScene* s = getSceneByName(sceneName);
-  if (s) return s->setActive(*this);
+  if (s) return s->setActive(this);
   return false;
 }
 
