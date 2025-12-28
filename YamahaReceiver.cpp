@@ -18,6 +18,184 @@ bool YamahaReceiver::init() {
 }
 
 // ----------------------------------------------------
+// für KinoAPI: overrides für set und get aus KinoDevice
+// ----------------------------------------------------
+
+KinoError YamahaReceiver::set(const char* property, const KinoVariant& value) {
+    if (!property) {
+        return KinoError::PropertyNotSupported;
+    }
+    if (strcmp(property, "power") == 0) {
+        if (value.type != KinoVariant::BOOL) {
+            return KinoError::InvalidType;
+        }
+        setPower(value.b);
+        return KinoError::OK;
+    }
+    if (strcmp(property, "volume") == 0) {
+        if (value.type != KinoVariant::INT) {
+            return KinoError::InvalidType;
+        }
+        setVolume(value.i);
+        return KinoError::OK;
+    }
+    if (strcmp(property, "mute") == 0) {
+        if (value.type != KinoVariant::BOOL) {
+            return KinoError::InvalidType;
+        }
+        setMute(value.b);
+        return KinoError::OK;
+    }
+    if (strcmp(property, "input") == 0) {
+        if (value.type != KinoVariant::STRING) {
+            return KinoError::InvalidType;
+        }
+        setSource(value.s);
+        return KinoError::OK;
+    }
+    if (strcmp(property,"station") == 0) {
+      if (value.type != KinoVariant::STRING) return KinoError::InvalidType;
+      if (!selectNetRadioFavorite(value.s)) return KinoError::InvalidValue;
+      return KinoError::OK;
+    }
+    if (strcmp(property, "inp_custom") == 0) {
+      if (value.type != KinoVariant::STRING) return KinoError::InvalidType;
+      for (auto &s : _InputSources) {
+        if (s.custom == value.s) {
+          bool success = setSource(s.internal);
+          if (!success) return KinoError::InternalError;
+          return KinoError::OK;
+        }
+      }
+      return KinoError::InvalidValue;
+    }
+    if (strcmp(property, "treble") == 0) {
+      if (value.type != KinoVariant::INT) return KinoError::InvalidType;
+      int v = value.i;
+      if ((v < -6)||(v > 6)) return KinoError::InvalidValue;
+      setTreble(v);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "bass") == 0) {
+      if (value.type != KinoVariant::INT) return KinoError::InvalidType;
+      int v = value.i;
+      if ((v<-6)||(v>6)) return KinoError::InvalidValue;
+      setBass(v);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "swtrim") == 0) {
+      if (value.type != KinoVariant::INT) return KinoError::InvalidType;
+      int v = value.i;
+      if ((v<-6)||(v>6)) return KinoError::InvalidValue;
+      setSubwooferTrim(v);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "straight") == 0) {
+      if (value.type != KinoVariant::BOOL) return KinoError::InvalidType;
+      setStraight(value.b);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "enhancer") == 0) {
+      if (value.type != KinoVariant::BOOL) return KinoError::InvalidType;
+      setEnhancer(value.b);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "dsp") == 0) {
+      if (value.type != KinoVariant::STRING) return KinoError::InvalidType;
+      String d = value.s;
+      setSoundProgram(d);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "tickInterval") == 0) {
+      if (value.type != KinoVariant::INT) return KinoError::InvalidType;
+      if (!setTickInterval(value.i)) return KinoError::InvalidValue;
+    }
+    return KinoError::PropertyNotSupported;
+}
+
+KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
+    if (!property) {
+        return KinoError::PropertyNotSupported;
+    }
+
+    if (strcmp(property, "power") == 0) {
+        out = KinoVariant::fromBool(_powerStatus);
+        return KinoError::OK;
+    }
+    if (strcmp(property, "volume") == 0) {
+        out = KinoVariant::fromInt(_volume);
+        return KinoError::OK;
+    }
+    if (strcmp(property, "mute") == 0) {
+        out = KinoVariant::fromBool(_mute);
+        return KinoError::OK;
+    }
+    if (strcmp(property, "input") == 0) {
+        out = KinoVariant::fromString(_source.c_str());
+        return KinoError::OK;
+    }
+    if (strcmp(property, "station") == 0) {
+      if (_source == "NET RADIO") {
+        NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
+        out = KinoVariant::fromString(nri.station.c_str());
+        return KinoError::OK;
+      } else {
+        out = KinoVariant::fromString("");
+        return KinoError::OK;
+      }
+    }
+    if (strcmp(property, "song") == 0) {
+      if (_source == "NET RADIO") {
+        NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
+        out = KinoVariant::fromString(nri.station.c_str());
+        return KinoError::OK;
+      } else {
+        out = KinoVariant::fromString("");
+        return KinoError::OK;
+      }
+    }
+    if (strcmp(property, "inp_custom") == 0) {
+      InputSource inp = getInputSource();
+      out = KinoVariant::fromString(inp.custom.c_str());
+    }
+    if (strcmp(property, "treble") == 0) {
+      out = KinoVariant::fromInt(_treble);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "bass") == 0) {
+      out = KinoVariant::fromInt(_bass);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "swtrim") == 0) {
+      out = KinoVariant::fromInt(_subwooferTrim);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "ip") == 0) {
+      out = KinoVariant::fromString(_ip.toString().c_str());
+      return KinoError::OK;
+    }
+    if (strcmp(property, "straight") == 0) {
+      out = KinoVariant::fromBool(_straight);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "enhancer") == 0) {
+      out = KinoVariant::fromBool(_enhancer);
+      return KinoError::OK;
+    }
+    if (strcmp(property, "dsp") == 0) {
+      out = KinoVariant::fromString(_soundProgram.c_str());
+      return KinoError::OK;
+    }
+    if (strcmp(property,"tickInterval")) {
+      out = KinoVariant::fromInt(_tickInterval);
+      return KinoError::OK;
+    }
+    return KinoError::PropertyNotSupported;
+}
+
+
+
+// ----------------------------------------------------
 // Public Getter
 // ----------------------------------------------------
 IPAddress YamahaReceiver::getIp()     const { return _ip; }

@@ -27,6 +27,9 @@ class OptomaBeamer : public KinoDevice {
     // Konstruktoren
     OptomaBeamer(const IPAddress& ip, uint8_t beamerId);
     OptomaBeamer(const String& ip, uint8_t beamerId);
+
+    KinoError get(const char* property, KinoVariant& out) override;
+    KinoError set(const char* property, const KinoVariant& value) override;
   
     // Lifecycle
     bool begin();

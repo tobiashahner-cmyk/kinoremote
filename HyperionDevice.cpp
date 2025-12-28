@@ -33,6 +33,45 @@ int HyperionDevice::getTickInterval() {
   return _tickInterval;
 }
 
+// ===== neue Public API, als Wrapper auf alte Public API ===
+KinoError HyperionDevice::get(const char* prop, KinoVariant& out) {
+  if (!prop) return KinoError::PropertyNotSupported;
+  if (strcmp(prop,"tickInterval")==0) {
+    out = KinoVariant::fromInt(_tickInterval);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"power")==0) {
+    out = KinoVariant::fromBool(_powerStatus);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"live")==0) {
+    out = KinoVariant::fromBool(_ledDeviceStatus && _powerStatus);
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+KinoError HyperionDevice::set(const char* prop, const KinoVariant& value) {
+  if (strcmp(prop,"tickInterval")==0) {
+    if(value.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setTickInterval(value.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"power")==0) {
+    if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"live")==0) {
+    if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    if (!setBroadcast(value.b)) return KinoError::InternalError;
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+
+
+
 // ===== Public API =====
 
 bool HyperionDevice::begin() {

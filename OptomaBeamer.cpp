@@ -10,6 +10,49 @@ OptomaBeamer::OptomaBeamer(const String& ip, uint8_t beamerId)
   _ip.fromString(ip);
 }
 
+// neue Public API, als Wrapper auf alte Public API
+KinoError OptomaBeamer::get(const char* prop, KinoVariant& out) {
+  if (!prop) return KinoError::PropertyNotSupported;
+  if (strcmp(prop,"tickInterval")==0) {
+    out = KinoVariant::fromInt(_tickInterval);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"power")==0) {
+    out = KinoVariant::fromBool(_powerState);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"input")==0) {
+    out = KinoVariant::fromString(OptomaSourceLookup::toString(_source));
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"uptime")==0) {
+    out = KinoVariant::fromInt(_lampHours);
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+KinoError OptomaBeamer::set(const char* prop, const KinoVariant& value) {
+  if (strcmp(prop,"tickInterval")==0) {
+    if(value.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setTickInterval(value.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"power")==0) {
+    if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    if (!setPower(value.b)) return KinoError::InternalError;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"input")==0) {
+    if(value.type != KinoVariant::STRING) return KinoError::InvalidType;
+    if (!setSource(String(value.s))) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+
+
 // ===== Public API =====
 
 bool OptomaBeamer::begin() {

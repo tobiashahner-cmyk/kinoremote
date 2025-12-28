@@ -20,6 +20,9 @@ public:
   bool setTickInterval(int ms);
   int getTickInterval();
 
+  KinoError get(const char* property, KinoVariant& out) override;
+  KinoError set(const char* property, const KinoVariant& value) override;
+
   // ===== Public API =====
   bool begin();
   bool init();  // wie begin, nur andere Semantik

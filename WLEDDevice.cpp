@@ -10,6 +10,111 @@ WLEDDevice::WLEDDevice(const String& ip) {
   _ip.fromString(ip);
 }
 
+// neue Public API: generischer setter/getter
+bool WLEDDevice::commit() {
+  return applyChanges();
+}
+
+
+KinoError WLEDDevice::get(const char* prop, KinoVariant& out) {
+  if (!prop) return KinoError::PropertyNotSupported;
+  if (strcmp(prop,"tickInterval")==0) {
+    out = KinoVariant::fromInt(_tickInterval);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"power")==0) {
+    out = KinoVariant::fromBool(_props["state"]["on"] | false);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"live")==0) {
+    out = KinoVariant::fromBool(_props["info"]["live"]|false);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"override")==0) {
+    out = KinoVariant::fromBool(_props["state"]["lor"]|false);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"brightness")==0) {
+    out = KinoVariant::fromInt(_props["state"]["bri"] | 0);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"speed")==0) {
+    out = KinoVariant::fromInt(_props["state"]["seg"][0]["sx"] | 0);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"intensity")==0) {
+    out = KinoVariant::fromInt(_props["state"]["seg"][0]["ix"] | 0);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"effect")==0) {
+    out = KinoVariant::fromInt(_props["state"]["seg"][0]["fx"] | 0);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"palette")==0) {
+    out = KinoVariant::fromInt(_props["state"]["seg"][0]["pal"] | 0);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"input")==0) {
+    out = KinoVariant::fromString(_props["info"]["lm"] | "");
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+KinoError WLEDDevice::set(const char* prop, const KinoVariant& val) {
+  if (strcmp(prop,"tickInterval")==0) {
+    if(val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setTickInterval(val.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"power")==0) {
+    if(val.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    if (!setPowerStatus(val.b)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"override")==0) {
+    if(val.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    if (!setLive(!val.b)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"live")==0) {
+    if(val.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    if (!setLive(val.b)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"brightness")==0) {
+    if(val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setBrightness(val.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"speed")==0) {
+    if(val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setSpeed(val.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"intensity")==0) {
+    if(val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setIntensity(val.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"transitiontime")==0) {
+    if(val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setTransitionTime(val.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"effect")==0) {
+    if(val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setEffect(val.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"palette")==0) {
+    if(val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setPalette(val.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
 // ===== Public API =====
 
 bool WLEDDevice::begin() {
@@ -78,7 +183,7 @@ bool WLEDDevice::isOverridingLiveData() const {
 }
 
 uint8_t WLEDDevice::getSpeed() const {
-  return _props["state"]["seg"][0]["fx"] | 0;
+  return _props["state"]["seg"][0]["sx"] | 0;
 }
 
 uint8_t WLEDDevice::getIntensity() const {

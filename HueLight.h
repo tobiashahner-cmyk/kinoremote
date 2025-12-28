@@ -3,6 +3,19 @@
 #include <optional>
 #include <utility>
 
+struct RgbColor {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+};
+
+// Struktur zum Halten der XY-Farbkoordinaten (0.0f - 1.0f)
+struct XyPoint {
+    float x;
+    float y;
+};
+
+
 class HueBridge;
 
 class HueLight {
@@ -39,6 +52,8 @@ public:
     bool setXY(float x, float y);
     bool setRGB(uint8_t r, uint8_t g, uint8_t b);
 
+    XyPoint rgbToXy(RgbColor color);
+
     // --- Setter für direkte Änderungen ohne Bridge-Kommunikation
     // NUR für Änderungen über GROUPS
     void forceOn(bool value);
@@ -61,6 +76,12 @@ private:
 
     bool _hasCT;
     uint16_t _ct;
+
+    void checkAndCorrectXY(XyPoint& p);
+    XyPoint getClosestPoint(XyPoint p, XyPoint a, XyPoint b);
+    float gammaCorrection(uint8_t color);
+
+    
 
     // Container für noch nicht übertragene Änderungen
     struct PendingChanges {

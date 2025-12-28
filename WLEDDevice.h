@@ -37,6 +37,10 @@ class WLEDDevice : public KinoDevice {
     // Konstruktoren
     explicit WLEDDevice(const IPAddress& ip);
     explicit WLEDDevice(const String& ip);
+
+    KinoError get(const char* property, KinoVariant& out) override;
+    KinoError set(const char* property, const KinoVariant& value) override;
+    bool commit() override;
   
     // Lifecycle
     bool begin();

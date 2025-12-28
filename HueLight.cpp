@@ -43,7 +43,11 @@ bool HueLight::setOn(bool value)      { pending.on = value; return true;}
 bool HueLight::setBri(uint8_t value)  { if(_hasBri) pending.bri = value; return true;}
 bool HueLight::setCT(uint16_t value)  { if(_hasCT) { pending.ct = value;  return true; } return false;}
 bool HueLight::setXY(float x, float y){ if(_hasXY) { pending.xy = std::make_pair(x, y);  return true;}  return false;}
-bool HueLight::setRGB(uint8_t r, uint8_t g, uint8_t b) { return true; /* TODO: umrechner zu XY, dann setXY() */}
+bool HueLight::setRGB(uint8_t r, uint8_t g, uint8_t b) { 
+  RgbColor col = {r,g,b};
+  XyPoint xyp = rgbToXy(col); 
+  return setXY(xyp.x, xyp.y);
+  }
 
 // --- spezielle Setter für direkten Zugriff ohne "pending"
 void HueLight::forceOn(bool value)              { _on = value; }
@@ -86,4 +90,97 @@ bool HueLight::applyChanges(HueBridge* bridge) {
 
     clearPending();
     return true;
+}
+
+
+// Umrechnung von RGB nach XY
+// Struktur zum Halten der RGB-Werte (0-255)
+
+
+// --- Hilfsfunktionen ---
+
+// 1. Gamma-Korrektur
+float HueLight::gammaCorrection(uint8_t color) {
+    float component = color / 255.0f;
+    if (component > 0.04045f) {
+        return pow(component + 0.055f, 2.4f) / 1.055f;
+    } else {
+        return component / 12.92f;
+    }
+}
+
+// 2. Farbraum-Begrenzung (Color Gamut Mapping für Farbraum B)
+XyPoint HueLight::getClosestPoint(XyPoint p, XyPoint a, XyPoint b) {
+    XyPoint ap = {p.x - a.x, p.y - a.y};
+    XyPoint ab = {b.x - a.x, b.y - a.y};
+    float ab2 = ab.x * ab.x + ab.y * ab.y;
+    float ap_ab = ap.x * ab.x + ap.y * ab.y;
+    float t = ap_ab / ab2;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    XyPoint newPoint = {a.x + ab.x * t, a.y + ab.y * t};
+    return newPoint;
+}
+
+void HueLight::checkAndCorrectXY(XyPoint& p) {
+    // Definierte Eckpunkte für den Hue Farbraum B (Standard)
+    const XyPoint red = {0.675f, 0.322f};
+    const XyPoint green = {0.4091f, 0.518f};
+    const XyPoint blue = {0.167f, 0.04f};
+
+    // Prüfen, ob der Punkt innerhalb des Dreiecks liegt (Cross Product Method)
+    float v1[] = {green.x - red.x, green.y - red.y};
+    float v2[] = {blue.x - red.x, blue.y - red.y};
+    float q[] = {p.x - red.x, p.y - red.y};
+    float s = v1[1] * v2[0] - v2[1] * v1[0];
+    float t1 = (q[0] * v2[1] - q[1] * v2[0]) / s;
+    float t2 = (v1[0] * q[1] - v1[1] * q[0]) / s;
+
+    if (t1 < 0.0f || t2 < 0.0f || (t1 + t2) > 1.0f) {
+        // Punkt liegt außerhalb, muss korrigiert werden
+        XyPoint pAB = getClosestPoint(p, red, green);
+        XyPoint pAC = getClosestPoint(p, blue, red);
+        XyPoint pBC = getClosestPoint(p, green, blue);
+
+        // Prüfen, welcher Punkt am nächsten am Original liegt
+        float dAB = pow(pAB.x - p.x, 2) + pow(pAB.y - p.y, 2);
+        float dAC = pow(pAC.x - p.x, 2) + pow(pAC.y - p.y, 2);
+        float dBC = pow(pBC.x - p.x, 2) + pow(pBC.y - p.y, 2);
+
+        if (dAB < dAC && dAB < dBC) {
+            p = pAB;
+        } else if (dAC < dBC) {
+            p = pAC;
+        } else {
+            p = pBC;
+        }
+    }
+}
+
+
+// --- Hauptfunktion ---
+
+XyPoint HueLight::rgbToXy(RgbColor color) {
+    // 1. Gamma-Korrektur (De-Gammaisierung)
+    float r = gammaCorrection(color.r);
+    float g = gammaCorrection(color.g);
+    float b = gammaCorrection(color.b);
+
+    // 2. RGB zu CIE XYZ Transformation (Standardmatrix)
+    float X = r * 0.4124f + g * 0.3576f + b * 0.1805f;
+    float Y = r * 0.2126f + g * 0.7152f + b * 0.0722f; // Y ist Luminanz
+    float Z = r * 0.0193f + g * 0.1192f + b * 0.9505f;
+
+    XyPoint xy = {0.0f, 0.0f};
+
+    // 3. XYZ zu XY Normalisierung
+    if (X + Y + Z > 0) {
+        xy.x = X / (X + Y + Z);
+        xy.y = Y / (X + Y + Z);
+    }
+    
+    // 4. Farbraum-Filterung (begrenzt auf Hue-Gamut)
+    checkAndCorrectXY(xy);
+
+    return xy;
 }

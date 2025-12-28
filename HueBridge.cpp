@@ -1,4 +1,5 @@
 #include "HueBridge.h"
+#include <ArduinoJson.h>
 
 
 // ===== Konstruktoren =====
@@ -11,9 +12,166 @@ HueBridge::HueBridge(const String& ip, const String& user)
   _ip.fromString(ip);
 }
 
-// ===== Public API =====
+// ===== neue public API, als Wrapper für die alte API
+KinoError HueBridge::get(const char* prop, KinoVariant& out) {
+  if (prop == nullptr) return KinoError::InvalidProperty;
 
-#include <ArduinoJson.h> // Stelle sicher, dass die Bibliothek installiert ist
+    // 1. Lokale Kopie erstellen, da wir den String zum Splitten modifizieren müssen
+    char buf[64]; // Puffergröße ggf. anpassen (längster möglicher prop-String)
+    strncpy(buf, prop, sizeof(buf));
+    buf[sizeof(buf) - 1] = '\0'; // Sicherheits-Terminierung
+
+    // 2. String zerlegen (Schema "dev:name:act")
+    char* dev = buf;
+    char* name = nullptr;
+    char* act = nullptr;
+
+    char* firstColon = strchr(dev, ':');
+    if (!firstColon) return KinoError::InvalidProperty;
+    *firstColon = '\0';
+    name = firstColon + 1;
+
+    char* secondColon = strchr(name, ':');
+    if (!secondColon) return KinoError::InvalidProperty;
+    *secondColon = '\0';
+    act = secondColon + 1;
+
+    // Falls ein Teil leer ist (z.B. "light::power")
+    if (*dev == '\0' || *name == '\0' || *act == '\0') {
+      return KinoError::InvalidProperty;
+    }
+
+    // --- AB HIER DIE LOGIK ---
+
+    // LIGHT
+    if (strcmp(dev, "light") == 0) {
+      auto* l = getLightByName(name);
+      if (!l) return KinoError::DeviceNotReady;
+
+      if (strcmp(act, "power") == 0) {
+        out = KinoVariant::fromBool(l->isOn());
+        return KinoError::OK;
+      } 
+      if (strcmp(act, "brightness") == 0) {
+        out = KinoVariant::fromInt(l->getBrightness());
+        return KinoError::OK;
+      }
+      if (strcmp(act, "ct") == 0) {
+        out = KinoVariant::fromInt(l->getCT());
+        return KinoError::OK;
+      }
+    }
+
+    // GROUP
+    else if (strcmp(dev, "group") == 0) {
+        auto* g = getGroupByName(name);
+        if (!g) return KinoError::DeviceNotReady;
+
+        if (strcmp(act, "power") == 0) {
+            out = KinoVariant::fromBool(g->anyOn());
+            return KinoError::OK;
+        }
+    }
+
+    // Wenn dev unbekannt oder act in den Untergruppen nicht gefunden wurde
+    return KinoError::PropertyNotSupported;
+}
+
+KinoError HueBridge::set(const char* prop, const KinoVariant& val) {
+  if (prop == nullptr) return KinoError::InvalidProperty;
+
+    // 1. Lokale Kopie erstellen, da wir den String zum Splitten modifizieren müssen
+    char buf[64]; // Puffergröße ggf. anpassen (längster möglicher prop-String)
+    strncpy(buf, prop, sizeof(buf));
+    buf[sizeof(buf) - 1] = '\0'; // Sicherheits-Terminierung
+
+    // 2. String zerlegen (Schema "dev:name:act")
+    char* dev = buf;
+    char* name = nullptr;
+    char* act = nullptr;
+
+    char* firstColon = strchr(dev, ':');
+    if (!firstColon) return KinoError::InvalidProperty;
+    *firstColon = '\0';
+    name = firstColon + 1;
+
+    char* secondColon = strchr(name, ':');
+    if (!secondColon) return KinoError::InvalidProperty;
+    *secondColon = '\0';
+    act = secondColon + 1;
+
+    // Falls ein Teil leer ist (z.B. "light::power")
+    if (*dev == '\0' || *name == '\0' || *act == '\0') {
+        return KinoError::InvalidProperty;
+    }
+
+    // --- AB HIER DIE LOGIK ---
+
+    // LIGHT
+    if (strcmp(dev, "light") == 0) {
+        auto* l = getLightByName(name);
+        if (!l) return KinoError::PropertyNotSupported;
+
+        if (strcmp(act, "power") == 0) {
+            if (val.type != KinoVariant::BOOL) return KinoError::InvalidType;
+            l->setOn(val.b);
+            return KinoError::OK;
+        } 
+        if (strcmp(act, "brightness") == 0) {
+            if (val.type != KinoVariant::INT) return KinoError::InvalidType;
+            l->setBri(val.i);
+            return KinoError::OK;
+        }
+    }
+
+    // GROUP
+    else if (strcmp(dev, "group") == 0) {
+        auto* g = getGroupByName(name);
+        if (!g) return KinoError::PropertyNotSupported;
+
+        if (strcmp(act, "power") == 0) {
+            if (val.type != KinoVariant::BOOL) return KinoError::InvalidType;
+            g->setOn(val.b);
+            return KinoError::OK;
+        }
+        if (strcmp(act, "brightness") == 0) {
+            if (val.type != KinoVariant::INT) return KinoError::InvalidType;
+            g->setBri(val.i);
+            return KinoError::OK;
+        }
+    }
+
+    // SCENE
+    else if (strcmp(dev, "scene") == 0) {
+        auto* s = getSceneByName(name);
+        if (!s) return KinoError::PropertyNotSupported;
+
+        if (strcmp(act, "set") == 0) {
+            s->setActive(this);
+            return KinoError::OK;
+        }
+        if (strcmp(act, "save") == 0) {
+            s->captureLightStates(this);
+            return KinoError::OK;
+        }
+    }
+
+    // Wenn dev unbekannt oder act in den Untergruppen nicht gefunden wurde
+    return KinoError::PropertyNotSupported;
+}
+
+bool HueBridge::commit() {
+  for (auto& g : _groups) {
+    g->applyChanges(this);
+  }
+  for (auto& l : _lights) {
+    l->applyChanges(this);
+  }
+  return true;
+}
+
+
+// ===== Public API =====
 
 bool HueBridge::begin() {
     if (!readLights()) return false;
@@ -688,22 +846,29 @@ bool HueBridge::saveScene(const String& sceneId, const String& jsonPayload) {
 
 
 bool HueBridge::sendState(const String& path, const String& jsonPayload) {
-    if (!_client.connect(_ip, 80)) return false;
+  static unsigned long lastSend = millis();
+  unsigned long now = millis();
+  if (now - lastSend < 100) {
+    delay(100);
+    lastSend = now;
+  }
+  Serial.println("Hue: sending state");
+  if (!_client.connect(_ip, 80)) return false;
 
-    _client.printf(
-        "PUT %s HTTP/1.1\r\n"
-        "Host: %s\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %d\r\n"
-        "Connection: close\r\n\r\n"
-        "%s",
-        path.c_str(),
-        _ip.toString().c_str(),
-        jsonPayload.length(),
-        jsonPayload.c_str()
-    );
+  _client.printf(
+      "PUT %s HTTP/1.1\r\n"
+      "Host: %s\r\n"
+      "Content-Type: application/json\r\n"
+      "Content-Length: %d\r\n"
+      "Connection: close\r\n\r\n"
+      "%s",
+      path.c_str(),
+      _ip.toString().c_str(),
+      jsonPayload.length(),
+      jsonPayload.c_str()
+  );
 
-    return waitForData();
+  return waitForData();
 }
 
 bool HueBridge::waitForData(uint32_t timeout) {

@@ -30,6 +30,9 @@ public:
     const char* deviceType() const override {
         return "huebridge";
     }
+    KinoError get(const char* property, KinoVariant& out) override;
+    KinoError set(const char* property, const KinoVariant& value) override;
+    bool commit() override;
 
     HueBridge(const IPAddress& ip, const String& user);
     HueBridge(const String& ip, const String& user);

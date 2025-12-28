@@ -36,6 +36,9 @@ class YamahaReceiver : public KinoDevice {
     }
     YamahaReceiver(IPAddress ip);                     // Konstruktor
     YamahaReceiver(const String& ip);                 // Konstruktor mit IP als String
+    KinoError get(const char* property, KinoVariant& out) override;
+    KinoError set(const char* property, const KinoVariant& value) override;
+    
     IPAddress getIp() const;
     bool begin();
     bool init();

@@ -90,25 +90,44 @@ namespace KinoAPI {
 
   bool yamaha_setTicker(int ms) {
     return _yamaha->setTickInterval(ms);
+   /*KinoError e = _yamaha->set("tickInterval",KinoVariant::fromInt(ms));
+   return (e == KinoError::OK);*/
   }
   
   bool yamaha_setPower(bool onoff) {
     if (_yamaha->getPowerStatus() == onoff) return true;
     return _yamaha->setPower(onoff);
+    /*KinoVariant p;
+    KinoError e = _yamaha->get("power",p);
+    if (p == onoff) return true;
+    e = _yamaha->set("power",KinoVariant::fromBool(onoff));
+    return (e == KinoError::OK);*/
   }
   
   bool yamaha_powerOn() {
     if (_yamaha->getPowerStatus()) return true;
     return _yamaha->setPower(true);
+    /*bool p;
+    KinoError e = _yamaha->get("power",p);
+    if (p) return true;
+    e = _yamaha->set("power",KinoVariant::fromBool(true));
+    return (e == KinoError::OK);*/
   }
   
   bool yamaha_powerOff() {
     if (!_yamaha->getPowerStatus()) return true;
     return _yamaha->setPower(false);
+    /*bool p;
+    KinoError e = _yamaha->get("power",p);
+    if (!p) return true;
+    e = _yamaha->set("power",KinoVariant::fromBool(false));
+    return (e == KinoError::OK);*/
   }
   
   bool yamaha_setVolume(int vol) {
     return _yamaha->setVolume(vol);
+    /*KinoError e = _yamaha->set("volume",KinoVariant::fromInt(vol));
+    return (e == KinoError::OK);*/
   }
   
   bool yamaha_setVolumePercent(int percentage) {
@@ -855,9 +874,9 @@ namespace KinoAPI {
   
   bool endPause() {
     isPause = false;
-    //HueScene* pp = _hue->getSceneByName("prePause");
-    //if (pp) pp->setActive(_hue);
-    _hue->setScene("prePause");
+    HueScene* pp = _hue->getSceneByName("prePause");
+    if (pp) pp->setActive(_hue);
+    //_hue->setScene("prePause");
     canvas_setResume();
     sound_setResume();
     return true;
