@@ -30,10 +30,10 @@ class OptomaBeamer : public KinoDevice {
 
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
+    KinoError init() override;    // wie begin, nur andere Semantik
   
     // Lifecycle
     bool begin();
-    bool init();    // wie begin, nur andere Semantik
     bool getStatus();
     bool tick();
   
@@ -69,6 +69,7 @@ class OptomaBeamer : public KinoDevice {
     int _lampHours = 0;
   
     // Helper
+    void EnsureTimeoutBeforeRequest(unsigned long timeout);
     bool sendCommand(const String& command,
                      const String& parameter,
                      String& response);

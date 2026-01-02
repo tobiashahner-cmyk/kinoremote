@@ -1,4 +1,5 @@
 #include "OptomaBeamer.h"
+#include "NetworkHelper.h"
 
 // ===== Konstruktoren =====
 
@@ -17,7 +18,7 @@ KinoError OptomaBeamer::get(const char* prop, KinoVariant& out) {
     out = KinoVariant::fromInt(_tickInterval);
     return KinoError::OK;
   }
-  if (strcmp(prop,"power")==0) {
+  if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     out = KinoVariant::fromBool(_powerState);
     return KinoError::OK;
   }
@@ -38,7 +39,7 @@ KinoError OptomaBeamer::set(const char* prop, const KinoVariant& value) {
     if (!setTickInterval(value.i)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"power")==0) {
+  if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
     if (!setPower(value.b)) return KinoError::InternalError;
     return KinoError::OK;
@@ -59,8 +60,9 @@ bool OptomaBeamer::begin() {
   return getStatus();
 }
 
-bool OptomaBeamer::init() {
-  return getStatus();
+KinoError OptomaBeamer::init() {
+  if(getStatus()) return KinoError::OK;
+  return KinoError::DeviceNotReady;
 }
 
 bool OptomaBeamer::getStatus() {
@@ -71,16 +73,21 @@ bool OptomaBeamer::getStatus() {
   return parseStatusResponse(response);
 }
 
+
+
 bool OptomaBeamer::tick() {
   if (_tickInterval == 0) return false;
   int now = millis();
   if (now - _lastTick >= _tickInterval) {
+    _lastTick = now;
     return getStatus();
   }
   return false;
 }
 
 bool OptomaBeamer::setPower(bool onoff) {
+  if (!init()) return false;
+  if (_powerState == onoff) return true;
   String response;
   if (!sendCommand("00", onoff ? "1" : "0", response)) {
     return false;
@@ -165,9 +172,22 @@ int OptomaBeamer::getTickInterval() {
 
 // ===== Helper =====
 
+void OptomaBeamer::EnsureTimeoutBeforeRequest(unsigned long timeout) {
+  static unsigned long LastRequest = 0;
+  unsigned long now = millis();
+  while (now - LastRequest < timeout) {
+    delay(10);
+    now = millis();
+  }
+  return;
+}
+
 bool OptomaBeamer::sendCommand(const String& command,
                               const String& parameter,
                               String& response) {
+  NetworkHelper::resetClient(_client);
+  EnsureTimeoutBeforeRequest(200);
+  
   if (!_client.connect(_ip, 23)) {
     return false;
   }
@@ -199,7 +219,6 @@ bool OptomaBeamer::sendCommand(const String& command,
 
   response = _client.readStringUntil('\r');
   _client.stop();
-
   return isOkResponse(response);
 }
 

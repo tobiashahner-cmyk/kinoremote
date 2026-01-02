@@ -25,6 +25,14 @@ JsonVariantConst HueSensor::getValue(const String& key) const {
     return _state[key];
 }
 
+int HueSensor::getStateSize() const {
+  return _state.size();
+}
+
+JsonObjectConst HueSensor::getState() const {
+  return _state.as<JsonObjectConst>();
+}
+
 bool HueSensor::isWritable() const {
     return _type == "CLIPGenericStatus";
 }

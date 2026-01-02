@@ -23,6 +23,103 @@ static bool toBool(const String& s) {
   return (s == "1" || s == "true" || s == "on");
 }
 
+// Hilfsfunktion, um den Typ eines Parameters zu bestimmen:
+bool isValidRgbFormat(const char* input) {
+    if (!input) return false;
+
+    // Hilfsvariable, um zu prüfen, ob nach der schließenden Klammer noch Text kommt
+    char tail[2]; 
+    int r,g,b;
+    // sscanf versucht, das Muster "[ r , g , b ]" zu finden.
+    // %d überspringt führende Leerzeichen automatisch.
+    // %1s am Ende versucht, ein Zeichen nach dem ']' zu lesen.
+    int found = sscanf(input, " [ %d , %d , %d ] %1s", &r, &g, &b, tail);
+
+    // Der Rückgabewert muss exakt 3 sein (die drei Zahlen).
+    // Wäre die schließende Klammer falsch oder käme danach noch Text, 
+    // würde 'found' entweder kleiner 3 sein oder tail wäre gefüllt.
+    return (found == 3);
+}
+
+int determineType(const char* chk) {
+  if (chk == nullptr || chk[0] == '\0') return 0;
+
+  // 1. Check Bool (Vergleich ohne Groß/Kleinschreibung)
+  if (strcasecmp(chk, "true") == 0 || strcasecmp(chk, "false") == 0 ) {
+    return 1; // 1 = "bool"
+  }
+
+  // 2. Check Numerisch (Int oder Float)
+  bool hasDecimal = false;
+  bool isNumeric = true;
+  int i = 0;
+
+  // Optionales Vorzeichen prüfen
+  if (chk[0] == '-' || chk[0] == '+') i++;
+
+  // Wenn nach dem Vorzeichen nichts kommt, ist es kein Typ
+  if (chk[i] == '\0') isNumeric = false;
+
+  for (; chk[i] != '\0'; i++) {
+    if (chk[i] == '.') {
+      if (hasDecimal) { // Zweiter Punkt gefunden -> Ungültig für Zahlen
+        isNumeric = false;
+        break;
+      }
+      hasDecimal = true;
+    } 
+    else if (!isdigit(chk[i])) {
+      isNumeric = false;
+      break;
+    }
+  }
+
+  if (isNumeric) {
+    return hasDecimal ? 3 : 2;  // 2 = int, 3 = float
+  }
+
+  // Sring until here. Check for color:
+  if (isValidRgbFormat(chk)) return 5; // RGB Color
+  
+  return 4; // 4 = string
+}
+
+static KinoVariant prepareForJson(const String p) {
+  int typeNr = determineType(p.c_str());
+  KinoVariant val;
+  switch (typeNr) {
+    case 1  : // bool
+      val = KinoVariant::fromBool(toBool(p));
+      break;
+    case 2  : // int
+      val = KinoVariant::fromInt(p.toInt());
+      break;
+    case 3  : // float
+      val = KinoVariant::fromFloat(p.toFloat());
+      break;
+    case 4  : // string
+      val = KinoVariant::fromString(p.c_str());
+      break;
+    case 5  : {// rgbcolor
+      uint8_t r,g,b;
+      int found = sscanf(p.c_str()," [ %d , %d , %d ] ", &r, &g, &b);
+      if (found != 3) {
+        Serial.println("error converting color to RGB, use json encoded command instead");
+        return val;
+      }
+      val = KinoVariant::fromColor(r,g,b);
+      break; }
+    default :
+      Serial.println("could not determine type of value, use json encoded command instead");
+      return val;
+      break;
+  }
+  return val;
+}
+
+
+
+
 // ==== Handler-Signaturen ====
 
 typedef bool (*CommandHandler)(String* params, uint8_t paramCount);
@@ -40,73 +137,30 @@ struct CommandEntry {
 // ==== Handler-Prototypen ====
 bool kino_addOrUpdateMacro(String* p, uint8_t n);
 bool kino_executeMacro(String* p, uint8_t n);
+bool kino_testMacro(String* p, uint8_t n);
 bool kino_listMacros(String* p, uint8_t n);
 bool kino_showMacro(String* p, uint8_t n);
 bool kino_addCommandToMacro(String* p, uint8_t n);
 bool kino_deleteCommandFromMacro(String* p, uint8_t n);
 bool kino_updateCommandInMacro(String* p, uint8_t n);
 bool kino_deleteMacro(String* p, uint8_t n);
+
 bool kino_help(String* p, uint8_t n);
 bool kino_init(String* p, uint8_t n);
+
 bool kinoGet(String* p, uint8_t n);
 bool kinoSet(String* p, uint8_t n);
-bool kino_RadioMode(String*p, uint8_t n);
-bool kino_BlurayMode(String* p, uint8_t n);
-bool kino_StreamingMode(String* p, uint8_t n);
-bool kino_GamingMode(String* p, uint8_t n);
-bool yamaha_setTicker(String* p, uint8_t n);
+bool kino_list(String*p, uint8_t n);
+
 bool yamaha_info(String*p, uint8_t n);
-bool yamaha_setPower(String* p, uint8_t n);
-bool yamaha_setVolume(String* p, uint8_t n);
-bool yamaha_setMute(String* p, uint8_t n);
-bool yamaha_listSources(String *p, uint8_t n);
-bool yamaha_setSource(String* p, uint8_t n);
-bool yamaha_listDsps(String* p, uint8_t n);
-bool yamaha_setDsp(String* p, uint8_t n);
-bool yamaha_setAlexa(String* p, uint8_t n);
-bool yamaha_setPercent(String* p, uint8_t n);
-bool yamaha_setStraight(String* p, uint8_t n);
-bool yamaha_setEnhancer(String* p, uint8_t n);
-bool yamaha_listStations(String* p, uint8_t n);
-bool yamaha_setStation(String* p, uint8_t n);
-bool beamer_setTicker(String* p, uint8_t n);
 bool beamer_info(String* p, uint8_t n);
-bool beamer_setPower(String* p, uint8_t n);
-bool canvas_setTicker(String*p, uint8_t n);
 bool canvas_info(String* p, uint8_t n);
-bool canvas_setPower(String* p, uint8_t n);
-bool canvas_setBrightness(String*p, uint8_t n);
-bool canvas_setEffect(String* p, uint8_t n);
-bool canvas_setSpeed(String* p, uint8_t n);
-bool canvas_setIntensity(String* p, uint8_t n);
-bool canvas_setLive(String* p, uint8_t n);
-bool canvas_setSolid(String* p, uint8_t n);
-bool canvas_setColor(String* p, uint8_t n);
-bool canvas_setPalette(String* p, uint8_t n);
-bool canvas_MusicMode(String* p, uint8_t n);
-bool canvas_Lightning(String* p, uint8_t n);
-bool canvas_Alarm(String* p, uint8_t n);
-bool sound_setTicker(String*p, uint8_t n);
 bool sound_info(String* p, uint8_t n);
-bool sound_setPower(String* p, uint8_t n);
-bool sound_setBrightness(String* p, uint8_t n);
-bool sound_setEffect(String* p, uint8_t n);
-bool sound_setSoundMode(String* p, uint8_t n);
-bool sound_setLightningMode(String* p, uint8_t n);
-bool wled_setSoundMode(String* p, uint8_t n);
-bool wled_setLightningMode(String* p, uint8_t n);
 bool hyperion_info(String* p, uint8_t n);
-bool hyperion_setTicker(String* p, uint8_t n);
-bool hyperion_setBroadcast(String* p, uint8_t n);
+
 bool hue_LightInfo(String* p, uint8_t n);
 bool hue_listLights(String* p, uint8_t n);
-bool hue_init(String* p, uint8_t n); 
-bool hue_setTicker(String* p, uint8_t n);
-bool hue_setPower(String* p, uint8_t n);
-bool hue_setBri(String* p, uint8_t n);
-bool hue_setColor(String* p, uint8_t n);
-bool hue_setGroup(String* p, uint8_t n);
-bool hue_setScene(String* p, uint8_t n);
+bool hue_listGroups(String* p, uint8_t n);
 bool hue_listScenes(String* p, uint8_t n);
 bool hue_showSensors(String *p, uint8_t n);
 
@@ -114,6 +168,7 @@ bool hue_showSensors(String *p, uint8_t n);
 // ==== Tabelle ====
 static const CommandEntry commandTable[] = {
   {"macro",  "run",       1, kino_executeMacro,         "lädt Makro und führt es aus"},
+  {"macro",  "test",      1, kino_testMacro,            "lädt Makro und führt Tests aus"},
   {"macro",  "list",      0, kino_listMacros,           "zeigt eine Liste aller gespeicherten Makros"},
   {"macro",  "show",      1, kino_showMacro,            "zeigt den Inhalt des angegebenen Makros"},
   {"macro",  "add",       1, kino_addOrUpdateMacro,     "speichert das gegebene JSON als Makro"},
@@ -125,63 +180,15 @@ static const CommandEntry commandTable[] = {
   {"kino",   "init",      0, kino_init,                 "(re-)initialisiert alle Geräte"},
   {"kino",   "get",       2, kinoGet,                   "gibt die Eigenschaft P2 vom Gerät P1 aus"},
   {"kino",   "set",       3, kinoSet,                   "set Eigenschaft P2 von Gerät P1 auf P3 vom Typ P4"},
-  {"kino",   "radioModus",0, kino_RadioMode,            "startet Radio Modus im Kino"},
-  {"kino",   "blurayModus",0, kino_BlurayMode,          "startet Bluray Modus im Kino"},
-  {"kino",   "streamingModus", 0, kino_StreamingMode,   "startet Streaming Modus im Kino"},
-  {"kino",   "gamingModus",0, kino_GamingMode,          "startet Gaming Modus im Kino"},
+  {"kino",   "list",      2, kino_list,                 "liest angegebene Liste P2 aus Gerät P1 und gibt die Einträge aus"},
   {"yamaha", "info",      0, yamaha_info,               "Status Yamaha"},
-  {"yamaha", "setTicker", 1, yamaha_setTicker,          "setzt Info-Ticker, Param in Millisekunden"},
-  {"yamaha", "setPower",  1, yamaha_setPower,           "schaltet Yamaha ein oder aus"},
-  {"yamaha", "setVolume", 1, yamaha_setVolume,          "setzt Lautstärke, Param -800 (leise) bis -200 (laut)"},
-  {"yamaha", "setMute",   1, yamaha_setMute,            "schaltet Mute ein oder aus"},
-  {"yamaha", "listSources",0,yamaha_listSources,        "Listet alle Quellen auf"},
-  {"yamaha", "setSource", 1, yamaha_setSource,          "setzt Quelle"},
-  {"yamaha", "listDsps",  0, yamaha_listDsps,           "Listet alle verfügbaren DSPs auf"},
-  {"yamaha", "setDsp",    1, yamaha_setDsp,             "setzt DSP"},
-  {"yamaha", "setAlexa",  1, yamaha_setAlexa,           "setzt Lautstärke, Param 0-255"},
-  {"yamaha", "setPercent",1, yamaha_setPercent,         "setzt Lautstärke in %, Param 0-100"},
-  {"yamaha", "setStraight",1,yamaha_setStraight,        "schaltet Straight ein oder aus"},
-  {"yamaha", "setEnhancer",1,yamaha_setEnhancer,        "schaltet Enhancer ein oder aus"},
-  {"yamaha", "listStations",0,yamaha_listStations,      "listet die NET RADIO Favoriten auf"},
-  {"yamaha", "setStation",1, yamaha_setStation,         "schaltet NET RADIO auf angegebenen Sender"},
   {"beamer", "info",      0, beamer_info,               "Status Beamer"},
-  {"beamer", "setTicker", 1, beamer_setTicker,          "setzt Info-Ticker, Param in Millisekunden"},
-  {"beamer", "setPower",  1, beamer_setPower,           "schaltet Beamer ein oder aus"},
   {"canvas", "info",      0, canvas_info,               "Status Leinwand"},
-  {"canvas", "setTicker", 1, canvas_setTicker,          "setzt Info-Ticker, Param in Millisekunden"},
-  {"canvas", "setPower",  1, canvas_setPower,           "schaltet Leinwand LEDs ein oder aus"},
-  {"canvas", "setBrightness", 1, canvas_setBrightness,  "setzt Helligkeit, Param 0-255"},
-  {"canvas", "setEffect", 1, canvas_setEffect,          "setzt Effekt, Param ist Nr des Effekts"},
-  {"canvas", "setSolid",  4, canvas_setSolid,           "setzt feste Farbe: R, G, B, Helligkeit"},
-  {"canvas", "setColor",  4, canvas_setColor,           "setzt Effektfarbe: Index (1-3), R, G, B"},
-  {"canvas", "setPalette",1, canvas_setPalette,         "setzt Effektpalette Param"},
-  {"canvas", "setSpeed",  1, canvas_setSpeed,           "setzt Effekt Speed, Param 0-255"},
-  {"canvas", "setIntensity",1, canvas_setIntensity,     "setzt Effekt Intensity, Param 0-255"},
-  {"canvas", "setLive",   1, canvas_setLive,            "schaltet Live-Modus ein oder aus"},
-  {"canvas", "MusicMode", 0, canvas_MusicMode,          "schaltet MusicMode Effekt ein"},
-  {"canvas", "Lightning", 0, canvas_Lightning,          "schaltet Gewitter-Effekt ein"},
-  {"canvas", "Alarm",     1, canvas_Alarm,              "schaltet Alarm-Effekt ein oder aus"},
   {"sound",  "info",      0, sound_info,                "Status Sound-LEDs"},
-  {"sound",  "setTicker", 1, sound_setTicker,           "setzt Info-Ticker, Param in Millisekunden"},
-  {"sound",  "setPower",  1, sound_setPower,            "schaltet Sound-LEDs ein oder aus"},
-  {"sound",  "setBrightness",1, sound_setBrightness,    "setzt Helligkeit, Param 0-255"},
-  {"sound",  "setEffect", 1, sound_setEffect,           "setzt Effekt, Param ist Nr des Effekts"},
-  {"sound",  "MusicMode", 0, sound_setSoundMode,        "schaltet SoundReactive Effekt ein"},
-  {"sound",  "Lightning", 0, sound_setLightningMode,    "schaltet Gewitter-Effekt ein"},
-  {"wled",  "MusicMode", 0,  wled_setSoundMode,         "schaltet Musik Effekt auf allen WLEDs ein"},
-  {"wled",  "Lightning", 0,  wled_setLightningMode,     "schaltet Gewitter-Effekt auf allen WLEDs ein"},
   {"hyperion","info",     0, hyperion_info,             "Status Hyperion"},
-  {"hyperion","setTicker",1, hyperion_setTicker,        "setzt Info-Ticker, Param in Millisekunden"},
-  {"hyperion","setBroadcast",1,hyperion_setBroadcast,   "schaltet den LiveModus in Hyperion ein oder aus"},
-  {"hue",     "init",     0, hue_init,                  "liest den Status aller Lampen neu ein"},
-  {"hue",     "setTicker",1, hue_setTicker,             "setzt Info-Ticker, Param in Millisekunden"},
   {"hue",     "LightInfo",1, hue_LightInfo,             "Status der angegebenen Lampe. Param=Lampenname"},
   {"hue",     "listLights",0,hue_listLights,            "listet alle Hue Lampen auf"},
-  {"hue",     "setPower", 2, hue_setPower,              "Schaltet Lampe ein oder aus. Param1=Name, Param2=bool onoff"},
-  {"hue",     "setBri",   2, hue_setBri,                "Setzt Brightness für Param1 auf Param2"},
-  {"hue",     "setColor", 4, hue_setColor,              "Setzt Lampe Param1 auf RGB Param2-4"},
-  {"hue",     "setGroup", 3, hue_setGroup,              "Schaltet Lampengruppe Param1 ein oder aus (Param2) und auf Helligkeit Param3"},
-  {"hue",     "setScene", 1, hue_setScene,              "Aktiviert Szene Param1"},
+  {"hue",     "listGroups",0,hue_listGroups,            "listet alle Hue Gruppen auf"},
   {"hue",     "listScenes",0,hue_listScenes,            "listet alle Szenen auf"},
   {"hue",     "showSensors",0,hue_showSensors,          "listet die wichtigsten Hue Sensoren auf"},
 };
@@ -218,8 +225,8 @@ void handleSerialCommands() {
   paramStr.trim();
 
   // === Parameter splitten (klammer-sensitiv) ===
-  uint8_t maxParamCount = 5;
-  String params[maxParamCount];          // Max. 5 Parameter
+  uint8_t maxParamCount = 8;
+  String params[maxParamCount];          // Max. 8 Parameter
   uint8_t paramCount = 0;
   
   if (!paramStr.isEmpty()) {
@@ -287,6 +294,14 @@ void handleSerialCommands() {
 //          HANDLER FUNKTIONEN
 // ====================================================
 
+// helper function for showing errors if neccessary.
+// returns true, so calling handler can return true, if no error occured
+bool showError(KinoError e) {
+  if (e == KinoError::OK) return true;
+  Serial.println(kinoErrorToString(e));
+  return false;
+}
+
 // SERIAL ONLY, for Debugging:
 
 bool kino_help(String* p, uint8_t n) {
@@ -310,108 +325,58 @@ bool kino_help(String* p, uint8_t n) {
 }
 
 bool yamaha_info(String*p, uint8_t n) {
-  if (!_yamaha->getStatus()) {
-    Serial.print("Yamaha Status konnte nicht ausgelesen werden!");
-    return false;
-  }
   KinoVariant v;
-  KinoError e = _yamaha->get("power",v);
-  Serial.print("Power:  "); Serial.println((/*_yamaha->getPowerStatus()*/v.b) ? "An":"Aus");
-  e = _yamaha->get("volume",v);
-  Serial.print("Volume: "); Serial.print(/*_yamaha->getVolume()/10*/(v.i)/10); Serial.println("dB");
-  e = _yamaha->get("mute",v);
-  Serial.print("\tMute: "); Serial.println(/*_yamaha->getMute()*/v.b ?"An":"Aus");
+  KinoError e = KinoAPI::getProperty("yamaha","power",v);
+  bool isOn = v.b;
+  Serial.print("Power:  "); Serial.println((isOn) ? "An":"Aus");
+  e = KinoAPI::getProperty("yamaha","volume",v);
+  Serial.print("Volume: "); Serial.print((v.i)/10); Serial.println("dB");
+  e = KinoAPI::getProperty("yamaha","mute",v);
+  Serial.print("\tMute: "); Serial.println(v.b ?"An":"Aus");
   Serial.println("Tone:");
-  e = _yamaha->get("bass",v);
-  Serial.print("\tBass     : "); Serial.println(/*_yamaha->getBass()*/v.i);
-  e = _yamaha->get("treble",v);
-  Serial.print("\tTreble   : "); Serial.println(/*_yamaha->getTreble()*/v.i);
-  e = _yamaha->get("swtrim",v);
-  Serial.print("\tSW Trim  : "); Serial.println(/*_yamaha->getSubTrim()*/v.i);
-  e = _yamaha->get("enhancer",v);
-  Serial.print("\tEnhancer : "); Serial.println(/*_yamaha->getEnhancer()*/v.b ?"An":"Aus");
-  e = _yamaha->get("straight",v);
-  Serial.print("\tStraight : "); Serial.println(/*_yamaha->getStraight()*/v.b ? F("An, DSP inaktiv") : F("Aus, DSP aktiv"));
-  e = _yamaha->get("dsp",v);
-  Serial.print("\tDSP      : "); Serial.println(/*_yamaha->getSoundProgram()*/v.s);
+  e = KinoAPI::getProperty("yamaha","bass",v);
+  Serial.print("\tBass     : "); Serial.println(v.i);
+  e = KinoAPI::getProperty("yamaha","treble",v);
+  Serial.print("\tTreble   : "); Serial.println(v.i);
+  e = KinoAPI::getProperty("yamaha","swtrim",v);
+  Serial.print("\tSW Trim  : "); Serial.println(v.i);
+  e = KinoAPI::getProperty("yamaha","enhancer",v);
+  Serial.print("\tEnhancer : "); Serial.println(v.b ?"An":"Aus");
+  e = KinoAPI::getProperty("yamaha","straight",v);
+  Serial.print("\tStraight : "); Serial.println(v.b ? F("An, DSP inaktiv") : F("Aus, DSP aktiv"));
+  e = KinoAPI::getProperty("yamaha","dsp",v);
+  Serial.print("\tDSP      : "); Serial.println(v.s);
   
-  InputSource src = _yamaha->getInputSource();
-  Serial.print("Source: "); Serial.print(src.internal);
-  if (String(src.internal) != src.custom) {
-    Serial.print(" ("); Serial.print(src.custom); Serial.println(" )");
+  KinoVariant src;
+  KinoVariant src_custom;
+  e = KinoAPI::getProperty("yamaha","input",src);
+  Serial.print("Source: "); Serial.print(src.s);
+  e = KinoAPI::getProperty("yamaha","inputname",src_custom);
+  if (strcmp(src.s,src_custom.s)!=0) {
+    Serial.print(" ("); Serial.print(src_custom.s); Serial.println(" )");
   } else {
     Serial.println();
   }
-  if (String(src.internal) == F("NET RADIO")) {
-    NetRadioTrackInfo nri = _yamaha->readCurrentlyPlayingNetRadio();
-    Serial.print("\tStation: "); Serial.println(nri.station);
-    Serial.print("\tSong   : "); Serial.println(nri.song);
-    Serial.print("\tElapsed: "); Serial.println(nri.elapsed);
-  }
-
-  Serial.println("\nNeue Getter:");
-  Serial.print("\t Source: ");
-  _yamaha->get("input",v); Serial.println(v.s);
-  Serial.print("\t Volume: ");
-  _yamaha->get("volume",v); Serial.println(v.i);
-  return true;
-}
-
-bool yamaha_listSources(String *p, uint8_t n) {
-  String currentSource = _yamaha->getSource();
-  for (const auto& src : _yamaha->readInputSources()) {
-    if (src.skip) {
-      Serial.print("... ");
-    } else {
-      //if (src.internal == currentSource) {
-      if (String(src.internal) == currentSource) {
-        Serial.print("[X] ");
-      } else {
-        Serial.print("[ ] ");
-      }
-    }
-    Serial.print(src.internal);
-    Serial.print(" ");
-    Serial.println(src.custom);
-  }
-  return true;
-}
-
-bool yamaha_listDsps(String* p, uint8_t n) {
-  Serial.println("\n\nLese alle DSPs aus");
-  std::vector<String> dsps = _yamaha->readDspNames();
-  for (String d : dsps) {
-    Serial.print(d);
-    if (d == _yamaha->getSoundProgram()) {
-      Serial.println(" !!");
-    } else {
-      Serial.println();
-    }
-  }
-  return true;
-}
-
-bool yamaha_listStations(String* p, uint8_t n) {
-  std::vector<String> stations = _yamaha->readNetRadioFavorites();
-  for (auto& s : stations) {
-    Serial.println(s);
+  if ((isOn)&&(strcmp(src.s,"NET RADIO")==0)) {
+    e = KinoAPI::getProperty("yamaha","station",v);
+    Serial.print("\tStation: "); Serial.println(v.s);
+    e = KinoAPI::getProperty("yamaha","song",v);
+    Serial.print("\tSong   : "); Serial.println(v.s);
+    e = KinoAPI::getProperty("yamaha","elapsed",v);
+    Serial.print("\tElapsed: "); Serial.println(v.s);
   }
   return true;
 }
 
 bool beamer_info(String* p, uint8_t n) {
-  if (!_beamer->getStatus()) {
-    Serial.print("Beamer Status konnte nicht gelesen werden!");
-    return false;
-  }
   KinoVariant v;
   KinoError e;
   e = _beamer->get("power",v);
-  Serial.print("Power:  "); Serial.println(/*(_beamer->getPowerStatus())*/v.b ? "An" : "Aus");
+  Serial.print("Power:  "); Serial.println(v.b ? "An" : "Aus");
   e = _beamer->get("input",v);
-  Serial.print("Source: "); Serial.println(/*_beamer->getSourceString()*/v.s);
+  Serial.print("Source: "); Serial.println(v.s);
   e = _beamer->get("uptime",v);
-  Serial.print("Lampe:  "); Serial.println(/*_beamer->getLampHours()*/v.i);
+  Serial.print("Lampe:  "); Serial.println(v.i);
   Serial.println("\n\n");
   return true;
 }
@@ -419,179 +384,221 @@ bool beamer_info(String* p, uint8_t n) {
 bool canvas_info(String* p, uint8_t n) {
   KinoError e;
   KinoVariant v;
-  if (p[0] == "true") {
-    Serial.print("Lese Status neu aus : ");
-    Serial.println(_canvas->getStatus() ? "OK" : "FEHLER");
-    Serial.println();
-  }
-  e = _canvas->get("power",v);
-  Serial.print("Power:      "); Serial.println(/*(_canvas->getPowerStatus())*/v.b ? "An" : "Aus");
-  e = _canvas->get("brightness",v);
-  Serial.print("Brightness: "); Serial.println(/*_canvas->getBrightness()*/v.i);
-  e = _canvas->get("live",v);
-  Serial.print("Live Data:  "); Serial.print(/*(_canvas->isReceivingLiveData())*/v.b ? "incoming, " : "none, "); 
-  e = _canvas->get("override",v);
-  Serial.println(/*(_canvas->isOverridingLiveData())*/v.b ? "ignoriert" : "bearbeitet");
-  e = _canvas->get("input",v);
-  Serial.print("LD Source:  "); Serial.println(/*_canvas->getLiveSource()*/v.s);
-  e = _canvas->get("effect",v);
-  Serial.print("Effekt:     "); Serial.println(/*_canvas->getEffect()*/v.i);
-  if (/*_canvas->getEffect()*/v.i != 0) {
-    e = _canvas->get("speed",v);
-    Serial.print("  Speed:    "); Serial.println(/*_canvas->getSpeed()*/v.i);
-    e = _canvas->get("intensity",v);
-    Serial.print("  Intensity:"); Serial.println(/*_canvas->getIntensity()*/v.i);
+  e = KinoAPI::getProperty("canvas","power",v);
+  Serial.print("Power:      "); Serial.println(v.b ? "An" : "Aus");
+  e = KinoAPI::getProperty("canvas","brightness",v);
+  Serial.print("Brightness: "); Serial.println(v.i);
+  e = KinoAPI::getProperty("canvas","live",v);
+  Serial.print("Live Data:  "); Serial.print(v.b ? "incoming, " : "none, "); 
+  e = KinoAPI::getProperty("canvas","override",v);
+  Serial.println(v.b ? "ignoriert" : "bearbeitet");
+  e = KinoAPI::getProperty("canvas","input",v);
+  Serial.print("LD Source:  "); Serial.println(v.s);
+  e = KinoAPI::getProperty("canvas","effect",v);
+  Serial.print("Effekt:     "); Serial.println(v.i);
+  if (v.i != 0) {
+    e = KinoAPI::getProperty("canvas","speed",v);
+    Serial.print("  Speed:    "); Serial.println(v.i);
+    e = KinoAPI::getProperty("canvas","intensity",v);
+    Serial.print("  Intensity:"); Serial.println(v.i);
   }
   Serial.println("Farben:");
-  Serial.print("\tPalette: "); Serial.println(_canvas->getPalette());
-  WLEDColor c = _canvas->getColFg();
-  Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
-  c = _canvas->getColFg();
-  Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
-  c = _canvas->getColFg();
-  Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
+  e = KinoAPI::getProperty("canvas","palette",v);
+  Serial.print("\tPalette: "); Serial.println(v.i);
+  e = KinoAPI::getProperty("canvas","FgColor",v);
+  Serial.print("\tFg: "); Serial.print(v.color.r); Serial.print(" , "); Serial.print(v.color.g); Serial.print(" , "); Serial.println(v.color.b);
+  e = KinoAPI::getProperty("canvas","BgColor",v);
+  Serial.print("\tFg: "); Serial.print(v.color.r); Serial.print(" , "); Serial.print(v.color.g); Serial.print(" , "); Serial.println(v.color.b);
+  e = KinoAPI::getProperty("canvas","FxColor",v);
+  Serial.print("\tFg: "); Serial.print(v.color.r); Serial.print(" , "); Serial.print(v.color.g); Serial.print(" , "); Serial.println(v.color.b);
   return true;
 }
 
 bool sound_info(String* p, uint8_t n) {
-  if (p[0] == "true") {
-    Serial.print("Lese Status neu aus : ");
-    Serial.println(_sound->getStatus() ? "OK" : "FEHLER");
-    Serial.println();
-  }
-  Serial.print("Power:      "); Serial.println((_sound->getPowerStatus()) ? "An" : "Aus");
-  Serial.print("Brightness: "); Serial.println(_sound->getBrightness());
-  Serial.print("Effekt:     "); Serial.println(_sound->getEffect());
-  if (_sound->getEffect() != 0) {
-    Serial.print("  Speed:    "); Serial.println(_sound->getSpeed());
-    Serial.print("  Intensity:"); Serial.println(_sound->getIntensity());
+  KinoVariant v;
+  KinoError e;
+  e = KinoAPI::getProperty("sound","power",v);
+  Serial.print("Power:      "); Serial.println((v.b) ? "An" : "Aus");
+  e = KinoAPI::getProperty("sound","brightness",v);
+  Serial.print("Brightness: "); Serial.println(v.i);
+  e = KinoAPI::getProperty("sound","effect",v);
+  Serial.print("Effekt:     "); Serial.println(v.i);
+  if (v.i != 0) {
+    e = KinoAPI::getProperty("sound","speed",v);
+    Serial.print("  Speed:    "); Serial.println(v.i);
+    e = KinoAPI::getProperty("sound","intensity",v);
+    Serial.print("  Intensity:"); Serial.println(v.i);
   }
   Serial.println("Farben:");
-  Serial.print("\tPalette: "); Serial.println(_sound->getPalette());
-  WLEDColor c = _sound->getColFg();
-  Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
-  c = _sound->getColBg();
-  Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
-  c = _sound->getColFx();
-  Serial.print("\tFg: "); Serial.print(c.r); Serial.print(" , "); Serial.print(c.g); Serial.print(" , "); Serial.println(c.b);
+  e = KinoAPI::getProperty("sound","palette",v);
+  Serial.print("\tPalette: "); Serial.println(v.i);
+  e = KinoAPI::getProperty("sound","color1",v);
+  Serial.print("\tFg: "); Serial.print(v.color.r); Serial.print(" , "); Serial.print(v.color.g); Serial.print(" , "); Serial.println(v.color.b);
+  e = KinoAPI::getProperty("sound","color2",v);
+  Serial.print("\tFg: "); Serial.print(v.color.r); Serial.print(" , "); Serial.print(v.color.g); Serial.print(" , "); Serial.println(v.color.b);
+  e = KinoAPI::getProperty("sound","color3",v);
+  Serial.print("\tFg: "); Serial.print(v.color.r); Serial.print(" , "); Serial.print(v.color.g); Serial.print(" , "); Serial.println(v.color.b);
   return true;
 }
 
 bool hyperion_info(String* p, uint8_t n) {
-  if (!_hyperion->getStatus()) {
-    Serial.print("Hyperion Status konnte nicht gelesen werden!");
-    return false;
-  }
   KinoVariant v;
   KinoError e;
   Serial.print("Hyperion:\n  Power: ");
-  e = _hyperion->get("power",v);
+  e = KinoAPI::getProperty("hyperion","power",v);
+  if (!showError(e)) return false;
   bool power = v.b;
-  Serial.println(/*_hyperion->getPowerStatus()*/v.b ? "An":"Aus");
-  e = _hyperion->get("live",v);
+  Serial.println(v.b ? "An":"Aus");
+  e = KinoAPI::getProperty("hyperion","live",v);
+  if (!showError(e)) return false;
   bool live = v.b;
   Serial.print("LEDs: ");
-  Serial.println(/*_hyperion->getLedDeviceStatus()*/v.b ? "An":"Aus");
+  Serial.println(live ? "An":"Aus");
   Serial.print("Broadcasting: ");
-  Serial.println(/*_hyperion->isBroadcasting()*/(power && live) ? "Ja":"Nein");
+  Serial.println((power && live) ? "Ja":"Nein");
   return true;
 }
 
 bool hue_listLights(String* p, uint8_t n) {
-  for (auto& l : _hue->getLights()) {
-    Serial.println(l->getName());
+  uint16_t lightCount;
+  KinoVariant v;
+  KinoError e = KinoAPI::getQueryCount("hue","lights",lightCount);
+  showError(e);
+  for (int i=0; i<lightCount; i++) {
+    e = KinoAPI::getQuery("hue","lights",i,v);
+    if (showError(e)) Serial.println(v.s);
   }
   return true;
 }
 
 bool hue_LightInfo(String* p, uint8_t n) {
-  HueLight* light = _hue->getLightByName(p[0]);
-  if (!light) {
-    Serial.println("Lampe mit diesem Namen wurde nicht gefunden.");
-    return false;
+  KinoError e;
+  KinoVariant v;
+  char tmp[32];
+  snprintf(tmp,32,"lights/%s/power",p[0].c_str());
+  Serial.println(p[0]);
+  e = KinoAPI::getProperty("hue",tmp,v);
+  if (!showError(e)) return false;
+  Serial.print("\tPower: "); Serial.println(v.b ? "An":"Aus");
+  snprintf(tmp,32,"lights/%s/brightness",p[0].c_str());
+  e = KinoAPI::getProperty("hue",tmp,v);
+  if (!showError(e)) return false;
+  Serial.print("\tBri  : "); Serial.println(v.i);
+  snprintf(tmp,32,"lights/%s/color",p[0].c_str());
+  e = KinoAPI::getProperty("hue",tmp,v);
+  if (e == KinoError::OutOfRange) {
+    Serial.print("\tFarbe: nicht unterstützt\n");
+  } else {
+    Serial.print("\tFarbe: "); Serial.print(v.color.r); Serial.print(" , "); Serial.print(v.color.g); Serial.print(" , "); Serial.println(v.color.b);
   }
-  Serial.println(light->getName());
-  Serial.print("ID     : "); Serial.println(light->getId());
-  Serial.print("\tPower: "); Serial.println(light->isOn() ? "An":"Aus");
-  Serial.print("\tBri  : "); Serial.println(light->getBrightness());
-  if (light->hasXYColor()) {
-    Serial.print("\tXY   : "); Serial.print(light->getX()); Serial.print(" "); Serial.println(light->getY());
+  snprintf(tmp,32,"lights/%s/ct",p[0].c_str());
+  e = KinoAPI::getProperty("hue",tmp,v);
+  if (e == KinoError::OutOfRange) {
+    Serial.print("\tCT   : nicht unterstützt\n");
+  } else {
+    Serial.print("\tCT   : "); Serial.println(v.i);
   }
-  if (light->hasCTColor()) {
-    Serial.print("\tCT   : "); Serial.println(light->getCT());
+  return true;
+}
+
+bool hue_listGroups(String*p, uint8_t n) {
+  Serial.println("Hue Groups:");
+  KinoVariant v;
+  KinoError e;
+  uint16_t sceneCount;
+  //Serial.println("getQueryCount hue groups");
+  e = KinoAPI::getQueryCount("hue","groups",sceneCount);
+  if (!showError(e)) return false;
+  for (int i=0; i<sceneCount; i++) {
+    //Serial.print("getQuery hue groups "); Serial.println(i);
+    e = KinoAPI::getQuery("hue","groups",i,v);
+    if (!showError(e)) return false;
+    Serial.print("\t"); Serial.println(v.s);
   }
   return true;
 }
 
 bool hue_listScenes(String* p, uint8_t n) {
-  for (auto& s : _hue->getScenes()) {
-    Serial.println(s->getName());
+  Serial.println("Hue Scenes:");
+  KinoVariant v;
+  KinoError e;
+  uint16_t sceneCount;
+  e = KinoAPI::getQueryCount("hue","scenes",sceneCount);
+  if (!showError(e)) return false;
+  for (int i=0; i<sceneCount; i++) {
+    e = KinoAPI::getQuery("hue","scenes",i,v);
+    if (!showError(e)) return false;
+    Serial.print("\t"); Serial.println(v.s);
   }
   return true;
 }
 
-bool hue_showSensors(String* p, uint8_t n) {
-  if (!_hue->readSensors()) {
-    Serial.println("Sensoren konnten nicht aktualisiert werden");
+// helper function to show a single sensor
+bool huehelper_showSensor(const char* sensorName) {
+  KinoError e;
+  KinoVariant v;
+  uint16_t propCount = 0;
+  char queryName[64];
+  snprintf(queryName, 64, "sensors/%s/states", sensorName);
+  e = KinoAPI::getQueryCount("hue",queryName, propCount);
+  Serial.printf("\tSensor: %s , %i Werte\n", sensorName, propCount);
+  if (!showError(e)) {
+    Serial.print("occured in getQueryCount("); Serial.print(queryName); Serial.println(")");
     return false;
   }
-  HueSensor* sensor = _hue->getSensorByName("Presence Clip Theke");
-  if (sensor) {
-    Serial.print(sensor->getName()); Serial.print(" : ");
-    if (sensor->hasValue("status")) {
-      Serial.println(sensor->getValue("status").as<const char*>());
-    } else {
-      Serial.println("Status nicht gefunden");
+  for (int i=0; i<propCount; i++) {
+    char keyquery[64];
+    KinoVariant kv;
+    // Key herausfinden aus query "sensors/{SensorName}/states" und index i
+    e = KinoAPI::getQuery("hue",queryName,i,v);
+    if (!showError(e)) {
+      Serial.print("occured in getQuery("); Serial.print(queryName); Serial.println(")");
+      return false;
     }
-  } else {
-    Serial.println("Presence Clip Theke nicht gefunden!");
+    snprintf(keyquery,64,"sensors/%s/%s",sensorName,v.s);
+    e = KinoAPI::getProperty("hue",keyquery,kv);
+    if (!showError(e)) {
+      Serial.print("occured in getQuery("); Serial.print(keyquery); Serial.println(")");
+      return false;
+    }
+    Serial.printf("\t %s : ", v.s);
+    Serial.println(kv.toString());
   }
-  sensor = _hue->getSensorByName("Temp Sensor Theke");
-  if (sensor) {
-    Serial.print(sensor->getName()); Serial.print(" : ");
-    int temp = 0;
-    if (sensor->hasValue("temperature")) temp = sensor->getValue("temperature").as<int>();
-    float celsius = temp / 100.0f;
-    Serial.print(celsius); Serial.println("°C");
-  } else {
-    Serial.println("Temp Sensor Theke nicht gefunden!");
-  }
-  sensor = _hue->getSensorByName("Daylight");
-  if (sensor) {
-    Serial.print(sensor->getName()); Serial.print(" : ");
-    if (sensor->hasValue("daylight")) {
-      Serial.println((sensor->getValue("daylight").as<bool>()) ? "true" : "false");
-    } else {
-      Serial.println("daylight nicht gefunden");
-    }
-  } else {
-    Serial.println("Daylight nicht gefunden!");
-  }
-  sensor = _hue->getSensorByName("Licht Sensor Theke");
-  if (sensor) {
-    Serial.print(sensor->getName()); Serial.println(" : ");
-    Serial.print("\t\tlightlevel: ");
-    if (sensor->hasValue("lightlevel")) {
-      Serial.println(sensor->getValue("lightlevel").as<int>());
-    } else {
-      Serial.println("nicht gefunden");
-    }
-    Serial.print("\t\tdark: ");
-    if (sensor->hasValue("dark")) {
-      Serial.println((sensor->getValue("dark").as<bool>()) ? "true" : "false");
-    } else {
-      Serial.println("nicht gefunden");
-    }
-    Serial.print("\t\tdaylight: ");
-    if (sensor->hasValue("daylight")) {
-      Serial.println((sensor->getValue("daylight").as<bool>()) ? "true" : "false");
-    } else {
-      Serial.println("nicht gefunden");
-    }
-  } else {
-    Serial.println("Licht Sensor Theke nicht gefunden!");
-  }
+  char isWritable[64];
+  KinoVariant isit;
+  snprintf(isWritable,64,"sensors/%s/writable",sensorName);
+  e = KinoAPI::getProperty("hue",isWritable,isit);
+  Serial.print("Dieser Sensor ist ");
+  if (showError(e)) Serial.println((isit.b) ? "schreibbar" : "read-only");  // fiese Logik: showError ist true, wenn KEIN Fehler aufgetreten ist!
+  Serial.println();
   return true;
+}
+
+bool hue_showSensors(String* p, uint8_t n) {
+  KinoError e;
+  KinoVariant v;
+  char sensorName[32];
+  if (n > 0) {
+    bool ok = true;
+    for (int i=0; i<n; i++) {
+      if (!huehelper_showSensor(p[i].c_str())) {
+        ok = false;
+      }
+    }
+    return ok;
+  }
+  // kein spezieller Sensor angefordert: Zeige eine Auswahl
+  bool ok = true;
+  Serial.println("Standard Hue Sensoren :");
+  snprintf(sensorName, 32, "Presence Clip Theke");
+  if (!huehelper_showSensor(sensorName)) ok = false;
+  snprintf(sensorName, 32, "Temp Sensor Theke");
+  if (!huehelper_showSensor(sensorName)) ok = false;
+  snprintf(sensorName, 32, "Daylight");
+  if (!huehelper_showSensor(sensorName)) ok = false;
+  snprintf(sensorName, 32, "Licht Sensor Theke");
+  if (!huehelper_showSensor(sensorName)) ok = false;
+  return ok;
 }
 
 // MAKROS
@@ -628,7 +635,6 @@ bool showMacroListing(const String& macroName) {
   return true;
 }
 
-
 bool kino_listMacros(String* p, uint8_t n) {
   Serial.println("Gespeicherte Makros:");
   size_t i=0;
@@ -645,18 +651,20 @@ bool kino_showMacro(String* p, uint8_t n) {
   return showMacroListing(p[0]);
 }
 
+
+
 bool kino_addCommandToMacro(String* p, uint8_t n) {
-  Serial.print("\tHänge neue Action\n\t");
-  Serial.print(p[2]);
-  Serial.print("\n\tin Zeile ");
-  Serial.print(p[1]);
-  Serial.print(" von Makro ");
-  Serial.print(p[0]);
-  Serial.print(" ein");
-  bool ok = KinoAPI::addMacroCommand(p[0], p[1].toInt(), p[2]);
+  bool ok = false;
+  if (n==3) {
+    ok = KinoAPI::addMacroCommand(p[0], p[1].toInt(), p[2]);
+  } else if (n == 6) {
+    KinoVariant val = prepareForJson(p[5]);
+    ok = KinoAPI::addMacroCommand(p[0], p[1].toInt(), p[2], p[3], p[4], val);
+  }
   if (!ok) {
+    Serial.print("got "); Serial.print(n); Serial.println("parameters");
     showMacroErrors();
-    return false;
+    //return false;
   }
   return showMacroListing(p[0]);
 }
@@ -675,16 +683,16 @@ bool kino_deleteCommandFromMacro(String* p, uint8_t n) {
 }
 
 bool kino_updateCommandInMacro(String* p, uint8_t n) {
-  Serial.print("\tErsetze Zeile ");
-  Serial.print(p[1].toInt());
-  Serial.print(" in Makro ");
-  Serial.print(p[0]);
-  Serial.print(" durch\n\t");
-  Serial.println(p[2]);
-  bool ok = KinoAPI::updateMacroCommand(p[0], p[1].toInt(), p[2]);
+  bool ok = false;
+  if (n == 3) {
+    bool ok = KinoAPI::updateMacroCommand(p[0], p[1].toInt(), p[2]);
+  } else if (n == 6) {
+    KinoVariant val = prepareForJson(p[5]);
+    ok = KinoAPI::updateMacroCommand(p[0], p[1].toInt(), p[2], p[3], p[4], val);
+  }
   if (!ok) {
     showMacroErrors();
-    return false;
+    //return false;
   }
   return showMacroListing(p[0]);
 }
@@ -720,73 +728,48 @@ bool kino_executeMacro(String* p, uint8_t n) {
   return true;
 }
 
+bool kino_testMacro(String* p, uint8_t n) {
+  if (!KinoAPI::testMacro(p[0], serial_macroFinished)) {
+    // Diese Fehler werden direkt beim Starten gefangen:
+    showMacroErrors();
+  }
+  return true;
+}
+
 bool kino_init(String* p, uint8_t n) {
   Serial.println("Initialisiere Geräte:");
-  bool canvasOk   = _canvas->init();
-  bool soundOk    = _sound->init();
-  bool hueOk      = _hue->init();
-  bool yamahaOk   = _yamaha->init();
-  bool beamerOk   = _beamer->init();
-  bool hyperionOk = _hyperion->init();
-  Serial.print("\tWLEDDevice canvas      : "); Serial.println(canvasOk  ? F("✅ OK") : F("❌ Fehler"));
-  Serial.print("\tWLEDDevice sound       : "); Serial.println(soundOk   ? F("✅ OK") : F("❌ Fehler"));
-  Serial.print("\tHueBridge  hue         : "); Serial.println(hueOk     ? F("✅ OK") : F("❌ Fehler"));
-  Serial.print("\tYamahaReceiver yamaha  : "); Serial.println(yamahaOk  ? F("✅ OK") : F("❌ Fehler"));
-  Serial.print("\tOptomaBeamer beamer    : "); Serial.println(beamerOk  ? F("✅ OK") : F("❌ Fehler"));
-  Serial.print("\tHyperionDevice hyperion: "); Serial.println(hyperionOk? F("✅ OK") : F("❌ Fehler"));
-
-  Serial.println("DeviceType Test:");
-  if (canvasOk)   Serial.printf("\t canvas   ist ein %s \n",_canvas->deviceType());
-  if (soundOk )   Serial.printf("\t sound    ist ein %s \n",_sound->deviceType());
-  if (hueOk   )   Serial.printf("\t hue      ist ein %s \n",_hue->deviceType());
-  if (yamahaOk )  Serial.printf("\t yamaha   ist ein %s \n",_yamaha->deviceType());
-  if (beamerOk )  Serial.printf("\t beamer   ist ein %s \n",_beamer->deviceType());
-  if (hyperionOk )Serial.printf("\t hyperion ist ein %s \n",_hyperion->deviceType());
-  
-  return (canvasOk && soundOk && hueOk && yamahaOk && beamerOk && hyperionOk);
-}
-
-// Hilfsfunktion, um den Typ eines Parameters zu bestimmen:
-int determineType(const char* chk) {
-  if (chk == nullptr || chk[0] == '\0') return 0;
-
-  // 1. Check Bool (Vergleich ohne Groß/Kleinschreibung)
-  if (strcasecmp(chk, "true") == 0 || strcasecmp(chk, "false") == 0 ||
-      strcmp(chk, "1") == 0 || strcmp(chk, "0") == 0) {
-    return 1; // 1 = "bool"
-  }
-
-  // 2. Check Numerisch (Int oder Float)
-  bool hasDecimal = false;
-  bool isNumeric = true;
-  int i = 0;
-
-  // Optionales Vorzeichen prüfen
-  if (chk[0] == '-' || chk[0] == '+') i++;
-
-  // Wenn nach dem Vorzeichen nichts kommt, ist es kein Typ
-  if (chk[i] == '\0') isNumeric = false;
-
-  for (; chk[i] != '\0'; i++) {
-    if (chk[i] == '.') {
-      if (hasDecimal) { // Zweiter Punkt gefunden -> Ungültig für Zahlen
-        isNumeric = false;
-        break;
+  bool ok = true;
+  if (n==0) {
+    for (auto& devName : KinoAPI::getDeviceNames()) {
+      KinoError err = KinoAPI::initDevice(devName.c_str());
+      if (err == KinoError::OK) {
+        KinoVariant v;
+        KinoAPI::getDeviceType(devName.c_str(),v);
+        Serial.printf("\t%s wurde initialisiert als %s \n",devName.c_str(),v.s);
+      } else {
+        Serial.printf("\t%s konnte nicht initialisiert werden:\n",devName.c_str());
+        showError(err);
+        ok = false;
       }
-      hasDecimal = true;
-    } 
-    else if (!isdigit(chk[i])) {
-      isNumeric = false;
-      break;
+    }
+    return ok;
+  }
+  // mindestens ein Gerät wurde namentlich genannt
+  for (int i=0; i<n; i++) {
+    KinoError err = KinoAPI::initDevice(p[i].c_str());
+    if (err == KinoError::OK) {
+      KinoVariant v;
+      KinoAPI::getDeviceType(p[i].c_str(),v);
+      Serial.printf("\t%s wurde initialisiert als %s \n",p[i].c_str(),v.s);
+    } else {
+      Serial.printf("\t%s konnte nicht initialisiert werden:\n",p[i].c_str());
+      showError(err);
+      ok = false;
     }
   }
-
-  if (isNumeric) {
-    return hasDecimal ? 3 : 2;  // 2 = int, 3 = float
-  }
-
-  return 4; // 4 = string
+  return ok;
 }
+
 
 
 bool kinoSet(String *p, uint8_t n) {
@@ -794,76 +777,33 @@ bool kinoSet(String *p, uint8_t n) {
   // p[1] = property
   // p[2] = value
   // p[3] = value type
-  KinoDevice* d = nullptr;
-  String prop = p[1];
-  KinoVariant val;
-  if (p[0] == "yamaha") d = _yamaha;
-  if (p[0] == "canvas") d = _canvas;
-  if (p[0] == "sound" ) d = _sound;
-  if (p[0] == "hyperion") d = _hyperion;
-  if (p[0] == "beamer") d = _beamer;
-  if (p[0] == "hue") d = _hue;
-  if (!d) {
-    Serial.println("Unknown device");
-    return false;
-  }
-  int varType = determineType(p[2].c_str());  // 1 = bool, 2 = int, 3 = float, 4 = string
   
+  KinoVariant val;
+  int varType = determineType(p[2].c_str());  // 1 = bool, 2 = int, 3 = float, 4 = string, 5 = RGBColor
   if (varType == 1)   val = KinoVariant::fromBool(toBool(p[2]));
   if (varType == 2)   val = KinoVariant::fromInt(p[2].toInt());
   if (varType == 3)   val = KinoVariant::fromFloat(p[2].toFloat());
   if (varType == 4)   val = KinoVariant::fromString(p[2].c_str());
+  if (varType == 5) {
+    int r,g,b;
+    int found = sscanf(p[2].c_str(), " [ %d , %d , %d ] ", &r, &g, &b);
+    val = KinoVariant::fromColor(r,g,b);
+  }
   if (val.type == KinoVariant::NONE) {  // val wurde nicht gesetzt
     Serial.println("Unknown value type");
     return false;
   }
-  bool iswled = false;
-  const char* type = d->deviceType();
-  KinoError e = d->set(prop.c_str(),val);
-  if (strcmp(type,"wled")==0) d->commit();
-  if (strcmp(type,"huebridge")==0) d->commit();
-  return (e == KinoError::OK);
+  KinoError e = KinoAPI::setProperty(p[0].c_str(), p[1].c_str(), val);
+  showError(e);
+  e = KinoAPI::commit(p[0].c_str());
+  return showError(e);
 }
 
 bool kinoGet(String* p, uint8_t n) {
-  KinoDevice* d = nullptr;
-  if (p[0] == "yamaha") d = _yamaha;
-  if (p[0] == "canvas") d = _canvas;
-  if (p[0] == "sound" ) d = _sound;
-  if (p[0] == "hyperion") d = _hyperion;
-  if (p[0] == "beamer") d = _beamer;
-  if (p[0] == "hue") d = _hue;
-  if (!d) {
-    Serial.println("Unknown device");
-    return false;
-  }
+  const char* deviceName = p[0].c_str();
   const char* prop = p[1].c_str();
   KinoVariant val;
-  KinoError e = d->get(prop, val);
-  if (e != KinoError::OK) {
-    Serial.print("\nFehler ");
-
-    switch (e) {
-      case KinoError::DeviceNotReady : 
-        Serial.println("Device Not Ready");
-        break;
-      case KinoError::PropertyNotSupported : 
-        Serial.println("Property Not Supported");
-        break;
-      case KinoError::InvalidType : 
-        Serial.println("Invalid Type");
-        break;
-      case KinoError::InvalidValue : 
-        Serial.println("Invalid Value");
-        break;
-      case KinoError::InternalError : 
-        Serial.println("Internal Error");
-        break;
-      default:
-        Serial.println("unknown error");
-        break;
-    }
-  }
+  KinoError e = KinoAPI::getProperty(deviceName, prop, val);
   Serial.print(p[0]); Serial.print("."); Serial.print(p[1]);
   Serial.print(" = ");
   switch (val.type) {
@@ -882,240 +822,48 @@ bool kinoGet(String* p, uint8_t n) {
     case KinoVariant::STRING :
       Serial.print("(string) \""); Serial.print(val.s); Serial.println("\"");
       break;
+    case KinoVariant::RGB_COLOR :
+      Serial.printf("(RGBColor) %i , %i , %i", val.color.r, val.color.g, val.color.b);
+      Serial.println();
+      break;
     default :
       Serial.println("unknown KinoVariant type");
       break;
   }
-  return true;
+  return showError(e);;
 }
 
-bool kino_setPower(String* p, uint8_t n) {
-  return KinoAPI::Power(toBool(p[0]));
-}
-
-bool kino_RadioMode(String*p, uint8_t n) {
-  return KinoAPI::radioMode();
-}
-
-bool kino_BlurayMode(String* p, uint8_t n) {
-  return KinoAPI::blurayMode();
-}
-
-bool kino_StreamingMode(String* p, uint8_t n) {
-  return KinoAPI::streamingMode();
-}
-
-bool kino_GamingMode(String* p, uint8_t n) {
-  return KinoAPI::GamingMode();
-}
-
-bool yamaha_setTicker(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setTicker(p[0].toInt());
-}
-
-bool yamaha_setPower(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setPower(toBool(p[0]));
-}
-
-bool yamaha_setVolume(String* p, uint8_t n) {
-  //return KinoAPI::yamaha_setVolume(p[0].toInt());
-  KinoVariant vol = KinoVariant::fromInt(p[0].toInt());
-  KinoError e = _yamaha->set("volume",vol);
-  return (e == KinoError::OK);
-}
-
-bool yamaha_setMute(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setMute(toBool(p[0]));
-}
-
-bool yamaha_setSource(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setInput(p[0]);
-}
-
-bool yamaha_setDsp(String* p, uint8_t n){
-  return KinoAPI::yamaha_setDsp(p[0]);
-}
-
-bool yamaha_setAlexa(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setVolumePercent(p[0].toInt());
-}
-
-bool yamaha_setPercent(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setVolumePercent(p[0].toInt());
-}
-
-bool yamaha_setStraight(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setStraight(toBool(p[0]));
-}
-
-bool yamaha_setEnhancer(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setEnhancer(toBool(p[0]));
-}
-
-bool yamaha_setStation(String* p, uint8_t n) {
-  return KinoAPI::yamaha_setStation(p[0]);
-}
-
-bool beamer_setTicker(String* p, uint8_t n) {
-  return KinoAPI::beamer_setTicker(p[0].toInt());
-}
-
-bool beamer_setPower(String* p, uint8_t n) {
-  return KinoAPI::beamer_setPower(toBool(p[0]));
-}
-
-bool canvas_setTicker(String*p, uint8_t n) {
-  return KinoAPI::canvas_setTicker(p[0].toInt());
-}
-
-bool canvas_setPower(String* p, uint8_t n) {
-  return KinoAPI::canvas_setPower(toBool(p[0]),true);
-}
-
-bool canvas_setBrightness(String*p, uint8_t n) {
-  return KinoAPI::canvas_setBrightness(p[0].toInt(),true);
-}
-
-bool canvas_setEffect(String* p, uint8_t n) {
-  return KinoAPI::canvas_setEffect(p[0].toInt(),true);
-}
-
-bool canvas_setSpeed(String* p, uint8_t n) {
-  return KinoAPI::canvas_setSpeed(p[0].toInt(),true);
-}
-
-bool canvas_setIntensity(String* p, uint8_t n) {
-  return KinoAPI::canvas_setIntensity(p[0].toInt(),true);
-}
-
-bool canvas_setLive(String* p, uint8_t n) {
-  return KinoAPI::canvas_setLive(toBool(p[0]),true);
-}
-
-bool canvas_setSolid(String* p, uint8_t n) {
-  uint8_t r = p[0].toInt();
-  uint8_t g = p[1].toInt();
-  uint8_t b = p[2].toInt();
-  uint8_t bri = p[3].toInt();
-  return KinoAPI::canvas_setSolid(r, g, b, bri);
-}
-
-bool canvas_setColor(String* p, uint8_t n) {
-  uint8_t i = p[0].toInt();
-  uint8_t r = p[1].toInt();
-  uint8_t g = p[2].toInt();
-  uint8_t b = p[3].toInt();
-  switch (i) {
-    case 1  :
-      if (!KinoAPI::canvas_setFgColor(r,g,b),true) return false;
-      break;
-    case 2  :
-      if (!KinoAPI::canvas_setBgColor(r,g,b),true) return false;
-      break;
-    case 3  : 
-      if (!KinoAPI::canvas_setFxColor(r,g,b),true) return false;
-      break;
-    default :
-      Serial.println("Der Index muss 1 (Vordergrund), 2 (Hintergrund) oder 3 (Effekt) sein");
-      return false;
+bool kino_list(String*p, uint8_t n) {
+  const char* devicename = p[0].c_str();
+  const char* listname = p[1].c_str();
+  uint16_t count;
+  KinoVariant v;
+  KinoError e;
+  e = KinoAPI::getQueryCount(devicename, listname, count);
+  if (!showError(e)) return false;
+  Serial.printf("%d Einträge gefunden:\n",count);
+  for (int i=0; i<count; i++) {
+    e = KinoAPI::getQuery(devicename, listname, i,v);
+    switch(v.type) {
+      case KinoVariant::BOOL :
+        Serial.println(v.b ? "(bool) true" : "(bool) false");
+        break;
+      case KinoVariant::INT :
+        Serial.printf("(int) %i\n", v.i);
+        break;
+      case KinoVariant::FLOAT :
+        Serial.printf("(float) %f\n", v.f);
+        break;
+      case KinoVariant::STRING :
+        Serial.printf("(string) \"%s\"\n", v.s);
+        break;
+      case KinoVariant::RGB_COLOR :
+        Serial.printf("(RGB) [%i , %i , %i]\n", v.color.r, v.color.g, v.color.b);
+        break;
+      default :
+        Serial.println("unbekannter Datentyp");
+        break;
+    }
   }
   return true;
-}
-
-bool canvas_setPalette(String* p, uint8_t n) {
-  return KinoAPI::canvas_setPalette(p[0].toInt(),true);
-}
-
-bool canvas_MusicMode(String* p, uint8_t n) {
-  return KinoAPI::canvas_setMusicEffect();
-}
-
-bool canvas_Lightning(String* p, uint8_t n) {
-  return KinoAPI::canvas_setLightningEffect();
-}
-
-bool canvas_Alarm(String* p, uint8_t n) {
-  bool onoff = toBool(p[0]);
-  return (onoff) ? KinoAPI::canvas_setAlarm() : KinoAPI::canvas_stopAlarm();
-}
-
-bool sound_setTicker(String*p, uint8_t n) {
-  return KinoAPI::sound_setTicker(p[0].toInt());
-}
-
-bool sound_setEffect(String* p, uint8_t n) {
-  if (!KinoAPI::sound_setEffect(p[0].toInt(),true)) return false;
-  return KinoAPI::sound_commit();
-}
-
-bool sound_setPower(String* p, uint8_t n) {
-  if (!KinoAPI::sound_setPower(toBool(p[0]),true)) return false;
-  return KinoAPI::sound_commit();
-}
-
-bool sound_setBrightness(String*p, uint8_t n) {
-  if (!KinoAPI::sound_setBrightness(p[0].toInt(),true)) return false;
-  return KinoAPI::sound_commit();
-}
-
-bool sound_setSoundMode(String* p, uint8_t n) {
-  return KinoAPI::sound_setMusicEffect();
-}
-
-bool sound_setLightningMode(String* p, uint8_t n) {
-  return KinoAPI::sound_setLightningEffect();
-}
-
-bool wled_setSoundMode(String* p, uint8_t n) {
-  return KinoAPI::wled_setMusicEffect();
-}
-
-bool wled_setLightningMode(String* p, uint8_t n) {
-  return KinoAPI::wled_setLightningEffect();
-}
-
-bool hyperion_setTicker(String* p, uint8_t n) {
-  return KinoAPI::hyperion_setTicker(p[0].toInt());
-}
-
-bool hyperion_setBroadcast(String* p, uint8_t n) {
-  bool onoff = toBool(p[0]);
-  //bool successWLED = _canvas->setLive(onoff);
-  return (onoff) ? KinoAPI::hyperion_startBroadcast() : KinoAPI::hyperion_stopBroadcast();
-}
-
-bool hue_init(String* p, uint8_t n) {
-  return KinoAPI::hue_init();
-}
-
-bool hue_setTicker(String*p, uint8_t n) {
-  return KinoAPI::hue_setTicker(p[0].toInt());
-}
-
-bool hue_setPower(String* p, uint8_t n) {
-  if (!KinoAPI::hueLight_setPower(p[0],toBool(p[1]),true)) return false;
-  return KinoAPI::hueLight_commit(p[0]);
-}
-
-bool hue_setColor(String* p, uint8_t n) {
-  int R = p[1].toInt();
-  int G = p[2].toInt();
-  int B = p[3].toInt();
-  if (!KinoAPI::hueLight_setRGB(p[0], R, G, B, true)) return false;
-  return true;
-}
-
-bool hue_setBri(String* p, uint8_t n) {
-  if (!KinoAPI::hueLight_setBri(p[0],p[1].toInt(),true)) return false;
-  return KinoAPI::hueLight_commit(p[0]);
-}
-
-bool hue_setGroup(String* p, uint8_t n) {
-  if (!KinoAPI::hueGroup_setPower(p[0],toBool(p[1]))) return false;
-  if (!KinoAPI::hueGroup_setBri(p[0],p[2].toInt(),true)) return false;
-  return KinoAPI::hueGroup_commit(p[0]);
-}
-
-bool hue_setScene(String* p, uint8_t n) {
-  return KinoAPI::hueScene_set(p[0]);
 }

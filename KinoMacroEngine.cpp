@@ -34,7 +34,23 @@ bool KinoMacroEngine::startMacro(const String& name, MacroFinishedCallback cb/*=
   runtime.actions = _macroDoc["actions"].as<JsonArray>();
   runtime.index = 0;
   runtime.running = true;
+  runtime.testing = false;
+  return true;
+}
 
+bool KinoMacroEngine::testMacro(const String& name, MacroFinishedCallback cb/*=nullptr*/) {
+  if (runtime.running) {
+    _addError(0,"runtime", "macro already running");
+    return false;
+  }
+  // always (re-)load the macro, to fill the runtime with correct data
+  if (!_loadMacro(name)) return false;
+  _onFinished = cb;
+  _errors.clear();
+  runtime.actions = _macroDoc["actions"].as<JsonArray>();
+  runtime.index = 0;
+  runtime.running = true;
+  runtime.testing = true;
   return true;
 }
 
@@ -44,7 +60,14 @@ String KinoMacroEngine::getName() const {
 
 void KinoMacroEngine::tick() {
   if (!runtime.running) return;
-
+  if (_pausing) {
+    unsigned long now = millis();
+    if (now - _pauseStart < _pauseDuration) {
+      return;
+    }
+    _pausing = false; // time is over, continue the macro
+    if (runtime.testing) Serial.printf("pause of %i milliseconds is over, resuming now\n",_pauseDuration);
+  }
   if (runtime.index >= runtime.actions.size()) {
     runtime.running = false;
     bool success = _errors.empty();
@@ -66,15 +89,26 @@ bool KinoMacroEngine::isRunning() const {
   return runtime.running;
 }
 
-bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
 
-  ActionResult res = MacroActions::execute(a);
+
+
+bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
+  if (a["cmd"] == "delay") {
+    _pausing = true;
+    _pauseDuration = a["seconds"] | 1;
+    _pauseDuration *= 1000;   // convert seconds to milliseconds
+    _pauseStart = millis();
+    if (runtime.testing) Serial.printf("will pause for %i milliseconds\n",_pauseDuration);
+    return true;    // tick() will be calling again with the next action after the delay is done
+  }
+  
+  ActionResult res = MacroActions::execute(a,runtime.testing);
 
   if (!res.ok()) {
     _addError(
       index,
-      "ACTION",
-      String((int)res.error) + ": " + res.message
+      (a["cmd"] | "ACTION"),
+      MacroActions::translateErrorCode(res.error) + ": " + res.message
     );
     return false;
   }
@@ -196,6 +230,8 @@ bool KinoMacroEngine::addCommand(const String& macroName, size_t index, const St
 
     return _saveMacro();
 }
+
+
 
 bool KinoMacroEngine::deleteCommand(const String& macroName, size_t index) {
   if (index < 1) {

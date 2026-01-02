@@ -22,10 +22,10 @@ public:
 
   KinoError get(const char* property, KinoVariant& out) override;
   KinoError set(const char* property, const KinoVariant& value) override;
+  KinoError init() override;  // wie begin, nur andere Semantik
 
   // ===== Public API =====
   bool begin();
-  bool init();  // wie begin, nur andere Semantik
   bool getStatus();
 
   bool isBroadcasting() const;
@@ -50,6 +50,7 @@ private:
   unsigned long _lastTick = 0;
 
   // ===== JSON-RPC / HTTP Helper =====
+  void EnsureTimeoutBeforeRequest(unsigned long timeout);
   bool sendJsonRpc(const JsonDocument& request, String& response);
   bool parseServerInfo(const String& json);
 

@@ -6,15 +6,15 @@ YamahaReceiver::YamahaReceiver(IPAddress ip) : _ip(ip) {}
 YamahaReceiver::YamahaReceiver(const String& ip) { _ip.fromString(ip); }
 
 bool YamahaReceiver::begin() {
-  return init();
+  return (init() == KinoError::OK);
 }
 
-bool YamahaReceiver::init() {
-  if (!getStatus()) return false;
+KinoError YamahaReceiver::init() {
+  if (!getStatus()) return KinoError::DeviceNotReady;
   if (_powerStatus) {
     readInputSources();
   }
-  return true;
+  return KinoError::OK;
 }
 
 // ----------------------------------------------------
@@ -25,18 +25,30 @@ KinoError YamahaReceiver::set(const char* property, const KinoVariant& value) {
     if (!property) {
         return KinoError::PropertyNotSupported;
     }
-    if (strcmp(property, "power") == 0) {
+    if (strcmp(property,"tickInterval")==0) {
+      if(value.type != KinoVariant::INT) return KinoError::InvalidType;
+      if (!setTickInterval(value.i)) return KinoError::InvalidValue;
+      return KinoError::OK;
+    }
+    if ((strcmp(property,"power")==0)||(strcmp(property,"on")==0)) {
         if (value.type != KinoVariant::BOOL) {
             return KinoError::InvalidType;
         }
         setPower(value.b);
         return KinoError::OK;
     }
-    if (strcmp(property, "volume") == 0) {
+    if ((strcmp(property,"volume")==0)||(strcmp(property,"vol")==0)) {
         if (value.type != KinoVariant::INT) {
             return KinoError::InvalidType;
         }
         setVolume(value.i);
+        return KinoError::OK;
+    }
+    if ((strcmp(property,"percent")==0)||(strcmp(property,"pct")==0)) {
+        if (value.type != KinoVariant::INT) {
+            return KinoError::InvalidType;
+        }
+        setVolumePercent(value.i);
         return KinoError::OK;
     }
     if (strcmp(property, "mute") == 0) {
@@ -46,7 +58,7 @@ KinoError YamahaReceiver::set(const char* property, const KinoVariant& value) {
         setMute(value.b);
         return KinoError::OK;
     }
-    if (strcmp(property, "input") == 0) {
+    if ((strcmp(property,"input")==0)||(strcmp(property,"source")==0)) {
         if (value.type != KinoVariant::STRING) {
             return KinoError::InvalidType;
         }
@@ -58,7 +70,7 @@ KinoError YamahaReceiver::set(const char* property, const KinoVariant& value) {
       if (!selectNetRadioFavorite(value.s)) return KinoError::InvalidValue;
       return KinoError::OK;
     }
-    if (strcmp(property, "inp_custom") == 0) {
+    if (strcmp(property, "inputname") == 0) {
       if (value.type != KinoVariant::STRING) return KinoError::InvalidType;
       for (auto &s : _InputSources) {
         if (s.custom == value.s) {
@@ -117,12 +129,15 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
     if (!property) {
         return KinoError::PropertyNotSupported;
     }
-
-    if (strcmp(property, "power") == 0) {
+    if (strcmp(property,"tickInterval")==0) {
+      out = KinoVariant::fromInt(_tickInterval);
+      return KinoError::OK;
+    }
+    if ((strcmp(property,"power")==0)||(strcmp(property,"on")==0)) {
         out = KinoVariant::fromBool(_powerStatus);
         return KinoError::OK;
     }
-    if (strcmp(property, "volume") == 0) {
+    if ((strcmp(property,"volume")==0)||(strcmp(property,"vol")==0)) {
         out = KinoVariant::fromInt(_volume);
         return KinoError::OK;
     }
@@ -130,14 +145,15 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
         out = KinoVariant::fromBool(_mute);
         return KinoError::OK;
     }
-    if (strcmp(property, "input") == 0) {
+    if ((strcmp(property,"input")==0)||(strcmp(property,"source")==0)) {
         out = KinoVariant::fromString(_source.c_str());
         return KinoError::OK;
     }
     if (strcmp(property, "station") == 0) {
       if (_source == "NET RADIO") {
         NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
-        out = KinoVariant::fromString(nri.station.c_str());
+        String s = nri.station;
+        out = KinoVariant::fromString(s.c_str());
         return KinoError::OK;
       } else {
         out = KinoVariant::fromString("");
@@ -147,16 +163,30 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
     if (strcmp(property, "song") == 0) {
       if (_source == "NET RADIO") {
         NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
-        out = KinoVariant::fromString(nri.station.c_str());
+        String s = nri.song;
+        out = KinoVariant::fromString(s.c_str());
         return KinoError::OK;
       } else {
         out = KinoVariant::fromString("");
         return KinoError::OK;
       }
     }
-    if (strcmp(property, "inp_custom") == 0) {
+    if (strcmp(property, "elapsed") == 0) {
+      if (_source == "NET RADIO") {
+        NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
+        String s = nri.elapsed;
+        out = KinoVariant::fromString(s.c_str());
+        return KinoError::OK;
+      } else {
+        out = KinoVariant::fromString("");
+        return KinoError::OK;
+      }
+    }
+    if (strcmp(property, "inputname") == 0) {
       InputSource inp = getInputSource();
-      out = KinoVariant::fromString(inp.custom.c_str());
+      String s = inp.custom;
+      out = KinoVariant::fromString(s.c_str());
+      return KinoError::OK;
     }
     if (strcmp(property, "treble") == 0) {
       out = KinoVariant::fromInt(_treble);
@@ -186,13 +216,74 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
       out = KinoVariant::fromString(_soundProgram.c_str());
       return KinoError::OK;
     }
-    if (strcmp(property,"tickInterval")) {
+    if (strcmp(property,"tickInterval") == 0) {
       out = KinoVariant::fromInt(_tickInterval);
       return KinoError::OK;
     }
     return KinoError::PropertyNotSupported;
 }
 
+KinoError YamahaReceiver::queryCount(const char* property, uint16_t &out) {
+  if ((strcmp(property, "favorites") == 0) || (strcmp(property,"stations") == 0)) {
+    std::vector<String> stations = readNetRadioFavorites(true);
+    out = stations.size();
+    return KinoError::OK;
+  }
+  if (strcmp(property, "input") == 0) {
+    initInputSources();
+    out = _InputSources.size();
+    return KinoError::OK;
+  }
+  if (strcmp(property, "inputname") == 0) {
+    initInputSources();
+    out = _InputSources.size();
+    return KinoError::OK;
+  }
+  if (strcmp(property, "dsp") == 0) {
+    std::vector<String> dsps = readDspNames(true);
+    out = dsps.size();
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+KinoError YamahaReceiver::query(const char* property, uint16_t index, KinoVariant& out) {
+  if ((strcmp(property, "favorites") == 0) || (strcmp(property,"stations") == 0)) {
+    std::vector<String> favorites = readNetRadioFavorites();
+    if (index > favorites.size()) return KinoError::OutOfRange;
+    out = KinoVariant::fromString(favorites[index].c_str());
+    return KinoError::OK;
+  }
+  if (strcmp(property, "input") == 0) {
+    initInputSources();
+    if (index > _InputSources.size()) return KinoError::OutOfRange;
+    String tmp = FPSTR(_InputSources[index].internal);
+    out = KinoVariant::fromString(tmp.c_str());
+    return KinoError::OK;
+  }
+  if (strcmp(property, "inputname") == 0) {
+    initInputSources();
+    if (index > _InputSources.size()) return KinoError::OutOfRange;
+    String tmpInternal = FPSTR(_InputSources[index].internal);
+    String tmpCustom   = _InputSources[index].custom;
+    if (tmpCustom.length() == 0) tmpCustom = tmpInternal;
+    out = KinoVariant::fromString(tmpCustom.c_str());
+    return KinoError::OK;
+  }
+  if (strcmp(property, "inputskip") == 0) {
+    initInputSources();
+    if (index > _InputSources.size()) return KinoError::OutOfRange;
+    out = KinoVariant::fromBool(_InputSources[index].skip);
+    return KinoError::OK;
+  }
+  if (strcmp(property, "dsp") == 0) {
+    std::vector<String> dsps = readDspNames();
+    if (index > dsps.size()) return KinoError::OutOfRange;
+    out = KinoVariant::fromString(dsps[index].c_str());
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
 
 
 // ----------------------------------------------------
@@ -432,10 +523,11 @@ bool YamahaReceiver::moveToFavorites() {
 // ----------------------------------------------------
 // Favoriten auslesen
 // ----------------------------------------------------
-std::vector<String> YamahaReceiver::readNetRadioFavorites() {
-    std::vector<String> stations;
-
-    if (!moveToFavorites()) return stations;
+std::vector<String> YamahaReceiver::readNetRadioFavorites(bool reload/*=false*/) {
+    static std::vector<String> _stations;
+    if ((_stations.size() > 0) && (!reload)) return _stations;
+    if (!moveToFavorites()) return _stations;
+    _stations.clear();
     String resp = readNetRadioList();
 
     // Minimal-Parsing: suche <Txt>...</Txt>
@@ -445,11 +537,11 @@ std::vector<String> YamahaReceiver::readNetRadioFavorites() {
         int end = resp.indexOf("</Txt>", start);
         if (end < 0) break;
         String name = resp.substring(start, end);
-        stations.push_back(name);
+        _stations.push_back(name);
         pos = end + 6;
     }
 
-    return stations;
+    return _stations;
 }
 
 bool YamahaReceiver::selectNetRadioFavorite(const String& radioname) {
@@ -467,8 +559,10 @@ bool YamahaReceiver::selectNetRadioFavorite(const String& radioname) {
   return false; // kein passender Sender gefunden
 }
 
-std::vector<String> YamahaReceiver::readDspNames() {
-  std::vector<String> dspnames;
+std::vector<String> YamahaReceiver::readDspNames(bool reload/*=false*/) {
+  static std::vector<String> dspnames;
+  if ((dspnames.size()>0)&&(!reload)) return dspnames;
+  dspnames.clear();
   if (!sendXMLRequest(FPSTR(XML_GET_DSP_SKIP))) return dspnames;
   if (!_client.find((char*)"RC=\"0\"")) {
     _client.stop();
@@ -507,7 +601,9 @@ std::vector<String> YamahaReceiver::readDspNames() {
 }
 
 NetRadioTrackInfo YamahaReceiver::readCurrentlyPlayingNetRadio() {
-  NetRadioTrackInfo info;
+  static NetRadioTrackInfo info;
+  unsigned long now = millis();
+  if ((info.created != 0)&&(now-info.created < 2000)) return info;
   if (!sendXMLRequest(FPSTR(XML_GET_NETRADIO_PLAYINFO))) return info;
 
   if (_client.find("<Elapsed>"))  info.elapsed = _client.readStringUntil('<');
@@ -515,6 +611,7 @@ NetRadioTrackInfo YamahaReceiver::readCurrentlyPlayingNetRadio() {
   if (_client.find("<Album>"))    info.album   = _client.readStringUntil('<');
   if (_client.find("<Song>"))     info.song    = _client.readStringUntil('<');
   if (_client.find("<URL>"))      info.albumArt = _client.readStringUntil('<');
+  info.created = now;
 
   _client.stop();
   return info;
@@ -613,7 +710,7 @@ bool YamahaReceiver::setEnhancer(bool onoff) {
 
 bool YamahaReceiver::setSoundProgram(const String& dspname) {
     if (executeSetCommand(FPSTR(XML_SET_DSP_START), dspname, FPSTR(XML_SET_DSP_END))) {
-        _source = dspname;
+        _soundProgram = dspname;
         return true;
     }
     return false;
@@ -646,10 +743,20 @@ String YamahaReceiver::sendXML(const String& xml) {
   return response;
 }
 
+void YamahaReceiver::EnsureDelayBeforeRequest(unsigned long timeout) {
+    static unsigned long LastRequest = 0;
+    unsigned long now = millis();
+    while(now - LastRequest < timeout) {
+      delay(10);
+      now = millis();
+    }
+    return;
+}
+
 bool YamahaReceiver::sendXMLRequest(const String& xml, int len/*=0*/) {
     _client.stop(); // Bestehende Verbindungen killen
     _client.setTimeout(1000); // Kurzer Timeout für das LAN
-
+    EnsureDelayBeforeRequest(200);
     if (!_client.connect(_ip, 80)) {
       return false;
     }

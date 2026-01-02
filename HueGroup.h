@@ -15,6 +15,7 @@ public:
 
     uint16_t getId() const;
     const String& getName() const;
+    std::vector<uint8_t> getLightIds() const;
 
     bool allOn() const;
     bool anyOn() const;

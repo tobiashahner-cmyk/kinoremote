@@ -32,13 +32,15 @@ public:
     }
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
+    KinoError queryCount(const char* property, uint16_t& out) override;
+    KinoError query(const char* property, uint16_t index, KinoVariant &out) override;
     bool commit() override;
+    KinoError init() override;    // wie begin, nur andere Semantik
 
     HueBridge(const IPAddress& ip, const String& user);
     HueBridge(const String& ip, const String& user);
 
     bool begin();
-    bool init();    // wie begin, nur andere Semantik
     bool readLights();
 
     bool tick();
@@ -56,7 +58,7 @@ public:
 
     bool readScenes();
     HueScene* getSceneByName(const String& name);
-    const std::vector<HueScene*>& getScenes() const;
+    //const std::vector<HueScene*>& getScenes() const;
     bool setScene(const String& sceneName);
 
     bool readSensors();
@@ -84,11 +86,11 @@ private:
     std::vector<HueGroup*> _groups;
     std::vector<HueScene*> _scenes;
     std::vector<HueSensor*> _sensors;
-
+    bool splitPath(const char* input, char* dev, size_t devLen, char* name, size_t nameLen, char* act, size_t actLen);
     
     int  _tickInterval  = 10000;
     unsigned long _lastTick = 0;
-
+    void EnsureTimeoutBeforeRequest(unsigned long timeout);
     bool httpGET(const String& path);
     bool waitForData(uint32_t timeout = 2000);
     bool skipHttpHeader();

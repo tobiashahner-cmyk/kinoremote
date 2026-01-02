@@ -13,152 +13,359 @@ HueBridge::HueBridge(const String& ip, const String& user)
 }
 
 // ===== neue public API, als Wrapper für die alte API
+
+/**
+ * Zerlegt einen Pfad im Format "dev/name/act" in drei Teile.
+ * Gibt true zurück, wenn alle 3 Teile gefunden wurden und in die Puffer passten.
+ */
+bool HueBridge::splitPath(const char* input, char* dev, size_t devLen, char* name, size_t nameLen, char* act, size_t actLen) {
+    if (!input) return false;
+
+    // 1. Finde ersten Doppelpunkt
+    const char* firstColon = strchr(input, '/');
+    if (!firstColon) return false;
+
+    // 2. Finde zweiten Doppelpunkt
+    const char* secondColon = strchr(firstColon + 1, '/');
+    if (!secondColon) return false;
+
+    // Längen berechnen
+    size_t dLen = firstColon - input;
+    size_t nLen = secondColon - (firstColon + 1);
+    size_t aLen = strlen(secondColon + 1);
+
+    // Prüfen, ob die Zielpuffer groß genug sind (inklusive Null-Terminator)
+    if (dLen >= devLen || nLen >= nameLen || aLen >= actLen) return false;
+
+    // Teile kopieren
+    strncpy(dev, input, dLen);
+    dev[dLen] = '\0';
+
+    strncpy(name, firstColon + 1, nLen);
+    name[nLen] = '\0';
+
+    strcpy(act, secondColon + 1); // act ist der Rest bis zum Ende
+
+    return true;
+}
+
+
+
 KinoError HueBridge::get(const char* prop, KinoVariant& out) {
-  if (prop == nullptr) return KinoError::InvalidProperty;
-
-    // 1. Lokale Kopie erstellen, da wir den String zum Splitten modifizieren müssen
-    char buf[64]; // Puffergröße ggf. anpassen (längster möglicher prop-String)
-    strncpy(buf, prop, sizeof(buf));
-    buf[sizeof(buf) - 1] = '\0'; // Sicherheits-Terminierung
-
-    // 2. String zerlegen (Schema "dev:name:act")
-    char* dev = buf;
-    char* name = nullptr;
-    char* act = nullptr;
-
-    char* firstColon = strchr(dev, ':');
-    if (!firstColon) return KinoError::InvalidProperty;
-    *firstColon = '\0';
-    name = firstColon + 1;
-
-    char* secondColon = strchr(name, ':');
-    if (!secondColon) return KinoError::InvalidProperty;
-    *secondColon = '\0';
-    act = secondColon + 1;
-
-    // Falls ein Teil leer ist (z.B. "light::power")
-    if (*dev == '\0' || *name == '\0' || *act == '\0') {
-      return KinoError::InvalidProperty;
-    }
-
-    // --- AB HIER DIE LOGIK ---
-
-    // LIGHT
-    if (strcmp(dev, "light") == 0) {
-      auto* l = getLightByName(name);
-      if (!l) return KinoError::DeviceNotReady;
-
-      if (strcmp(act, "power") == 0) {
-        out = KinoVariant::fromBool(l->isOn());
-        return KinoError::OK;
-      } 
-      if (strcmp(act, "brightness") == 0) {
-        out = KinoVariant::fromInt(l->getBrightness());
-        return KinoError::OK;
-      }
-      if (strcmp(act, "ct") == 0) {
-        out = KinoVariant::fromInt(l->getCT());
+  // zuerst Einstellungen, die technisch die Gruppe "ALL" betreffen
+  if (strcmp(prop,"tickInterval")==0){
+    out = KinoVariant::fromInt(_tickInterval);
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"power")==0)||(strcmp(prop,"anyon")==0)){
+    for (auto* l : _lights) {
+      if (l->isOn()) {
+        out = KinoVariant::fromBool(true);
         return KinoError::OK;
       }
     }
-
-    // GROUP
-    else if (strcmp(dev, "group") == 0) {
-        auto* g = getGroupByName(name);
-        if (!g) return KinoError::DeviceNotReady;
-
-        if (strcmp(act, "power") == 0) {
-            out = KinoVariant::fromBool(g->anyOn());
-            return KinoError::OK;
-        }
+    out = KinoVariant::fromBool(false);
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"powerall")==0)||(strcmp(prop,"allon")==0)) {
+    for (auto* l : _lights) {
+      if (!l->isOn()) {
+        out = KinoVariant::fromBool(false);
+        return KinoError::OK;
+      }
     }
-
-    // Wenn dev unbekannt oder act in den Untergruppen nicht gefunden wurde
+    out = KinoVariant::fromBool(true);
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"temperature")==0)||(strcmp(prop,"temp")==0)) {
+    int temp = 0;
+    int foundSensors = 0;
+    for (auto* s : _sensors) {
+      if (s->hasValue("temperature")) {
+        temp += s->getValue("temperature").as<int>();
+        foundSensors++;
+      }
+    }
+    if (foundSensors == 0) return KinoError::DeviceNotReady;
+    float t = temp/foundSensors;
+    out = KinoVariant::fromFloat(t);
+    return KinoError::OK;
+  }
+  // prop ist nicht eine der bekannten allgemeingültigen Eigenschaften,
+  // also suche nach einem Pfad der Form {deviceClass}/{deviceName}/{action}
+  char dev[12];
+  char name[32];
+  char act[32];
+  if (!splitPath(prop, dev, sizeof(dev), name, sizeof(name), act, sizeof(act))) return KinoError::InvalidProperty;
+  // deviceClass = "lights" : Es folgt eine {action} für eine bestimmte Lampe {deviceName}
+  if (strcmp(dev, "lights") == 0) {
+    auto* l = getLightByName(name);
+    if (!l) return KinoError::DeviceNotReady;
+    if ((strcmp(act,"power")==0)||(strcmp(act,"on")==0)) {
+      out = KinoVariant::fromBool(l->isOn());
+      return KinoError::OK;
+    } 
+    if ((strcmp(act,"brightness")==0)||(strcmp(act,"bri")==0)) {
+      if (!l->isDimmable()) return KinoError::OutOfRange;
+      out = KinoVariant::fromInt(l->getBrightness());
+      return KinoError::OK;
+    }
+    if (strcmp(act, "ct") == 0) {
+      if (!l->hasCTColor()) return KinoError::OutOfRange;
+      out = KinoVariant::fromInt(l->getCT());
+      return KinoError::OK;
+    }
+    if ((strcmp(act,"color")==0)||(strcmp(act,"rgb")==0)) {
+      if (!l->hasXYColor()) return KinoError::OutOfRange;
+      RgbColor col = l->getRGB();
+      out = KinoVariant::fromColor(col.r, col.g, col.b);
+      return KinoError::OK;
+    }
+    if (strcmp(act, "id") == 0) {
+      out = KinoVariant::fromInt(l->getId());
+      return KinoError::OK;
+    }
     return KinoError::PropertyNotSupported;
+  }
+  // deviceClass = "groups" : Es folgt eine {action} für eine bestimmte Gruppe {deviceName}
+  else if (strcmp(dev, "groups") == 0) {
+    auto* g = getGroupByName(name);
+    if (!g) return KinoError::DeviceNotReady;
+    if ((strcmp(act,"power")==0)||(strcmp(act,"anyon")==0)) {
+      out = KinoVariant::fromBool(g->anyOn());
+      return KinoError::OK;
+    }
+    if ((strcmp(act,"powerall")==0)||(strcmp(act,"allon")==0)) {
+      out = KinoVariant::fromBool(g->allOn());
+      return KinoError::OK;
+    }
+    return KinoError::PropertyNotSupported;
+  }
+  // deviceClass = "sensors" : Es folgt eine {action} für einen bestimmten Sensor {deviceName}
+  else if (strcmp(dev,"sensors") == 0) {
+    auto* s = getSensorByName(name);
+    if (!s) return KinoError::DeviceNotReady;
+    if (strcmp(act,"writable")==0) {
+      out = KinoVariant::fromBool(s->isWritable());
+      return KinoError::OK;
+    }
+    if (!s->hasValue(act)) return KinoError::OutOfRange;
+    out = KinoVariant::fromJsonVariant(s->getValue(act));
+    return KinoError::OK;
+  }
+  // Wenn deviceClass unbekannt 
+  return KinoError::PropertyNotSupported;
 }
 
 KinoError HueBridge::set(const char* prop, const KinoVariant& val) {
-  if (prop == nullptr) return KinoError::InvalidProperty;
-
-    // 1. Lokale Kopie erstellen, da wir den String zum Splitten modifizieren müssen
-    char buf[64]; // Puffergröße ggf. anpassen (längster möglicher prop-String)
-    strncpy(buf, prop, sizeof(buf));
-    buf[sizeof(buf) - 1] = '\0'; // Sicherheits-Terminierung
-
-    // 2. String zerlegen (Schema "dev:name:act")
-    char* dev = buf;
-    char* name = nullptr;
-    char* act = nullptr;
-
-    char* firstColon = strchr(dev, ':');
-    if (!firstColon) return KinoError::InvalidProperty;
-    *firstColon = '\0';
-    name = firstColon + 1;
-
-    char* secondColon = strchr(name, ':');
-    if (!secondColon) return KinoError::InvalidProperty;
-    *secondColon = '\0';
-    act = secondColon + 1;
-
-    // Falls ein Teil leer ist (z.B. "light::power")
-    if (*dev == '\0' || *name == '\0' || *act == '\0') {
-        return KinoError::InvalidProperty;
+  if (strcmp(prop,"tickInterval")==0) {
+    if (val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setTickInterval(val.i)) return KinoError::InternalError;
+    return KinoError::OK;
+  }
+  // zuerst Einstellungen, die technisch die Gruppe "ALL" betreffen
+  if ((strcmp(prop, "power")==0)||(strcmp(prop,"on")==0)) {
+    if (val.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    char jsonString[20];
+    snprintf(jsonString,20,"{\"on\":%s}", ((val.b)?"true":"false"));
+    if (!sendGroupState(0,String(jsonString))) return KinoError::InternalError;
+    for (auto* l : _lights) { // aktualisiere die Lights im cache
+      l->forceOn(val.b);
     }
-
-    // --- AB HIER DIE LOGIK ---
-
-    // LIGHT
-    if (strcmp(dev, "light") == 0) {
-        auto* l = getLightByName(name);
-        if (!l) return KinoError::PropertyNotSupported;
-
-        if (strcmp(act, "power") == 0) {
-            if (val.type != KinoVariant::BOOL) return KinoError::InvalidType;
-            l->setOn(val.b);
-            return KinoError::OK;
-        } 
-        if (strcmp(act, "brightness") == 0) {
-            if (val.type != KinoVariant::INT) return KinoError::InvalidType;
-            l->setBri(val.i);
-            return KinoError::OK;
-        }
+    return KinoError::OK;
+  }
+  if ((strcmp(prop, "brightness")==0)||(strcmp(prop,"bri")==0)) {
+    if (val.type != KinoVariant::INT) return KinoError::InvalidProperty;
+    char jsonString[20];
+    snprintf(jsonString,20,"{\"bri\":%i}", (val.i));
+    if (!sendGroupState(0,String(jsonString))) return KinoError::InternalError;
+    for (auto* l : _lights) { // aktualisiere _lights- cache
+      l->forceBri(val.i);
     }
-
-    // GROUP
-    else if (strcmp(dev, "group") == 0) {
-        auto* g = getGroupByName(name);
-        if (!g) return KinoError::PropertyNotSupported;
-
-        if (strcmp(act, "power") == 0) {
-            if (val.type != KinoVariant::BOOL) return KinoError::InvalidType;
-            g->setOn(val.b);
-            return KinoError::OK;
-        }
-        if (strcmp(act, "brightness") == 0) {
-            if (val.type != KinoVariant::INT) return KinoError::InvalidType;
-            g->setBri(val.i);
-            return KinoError::OK;
-        }
+    return KinoError::OK;
+  }
+  // prop ist nicht eine der bekannten allgemeingültigen Eigenschaften,
+  // also suche nach einem Pfad der Form {deviceClass}/{deviceName}/{action}
+  char dev[12];
+  char name[32];
+  char act[32];
+  if (!splitPath(prop, dev, sizeof(dev), name, sizeof(name), act, sizeof(act))) return KinoError::InvalidProperty;
+  // deviceClass = "lights" : Es folgt eine {action} für eine bestimmte Lampe {deviceName}
+  if (strcmp(dev, "lights") == 0) {
+    auto* l = getLightByName(name);
+    if (!l) return KinoError::DeviceUnknown;
+    if ((strcmp(act,"power")==0)||(strcmp(act,"on")==0)) {
+        if (val.type != KinoVariant::BOOL) return KinoError::InvalidType;
+        l->setOn(val.b);
+        return KinoError::OK;
+    } 
+    if ((strcmp(act,"brightness")==0)||(strcmp(act,"bri")==0)) {
+      if (val.type != KinoVariant::INT) return KinoError::InvalidType;
+      if (!l->isDimmable()) return KinoError::PropertyNotSupported;
+      if (!l->setBri(val.i)) return KinoError::InternalError;
+      return KinoError::OK;
     }
-
-    // SCENE
-    else if (strcmp(dev, "scene") == 0) {
-        auto* s = getSceneByName(name);
-        if (!s) return KinoError::PropertyNotSupported;
-
-        if (strcmp(act, "set") == 0) {
-            s->setActive(this);
-            return KinoError::OK;
-        }
-        if (strcmp(act, "save") == 0) {
-            s->captureLightStates(this);
-            return KinoError::OK;
-        }
+    if (strcmp(act, "ct") == 0) {
+      if (val.type != KinoVariant::INT) return KinoError::InvalidType;
+      if (!l->hasCTColor()) return KinoError::PropertyNotSupported;
+      if (!l->setCT(val.i)) return KinoError::InternalError;
+      return KinoError::OK;
     }
-
-    // Wenn dev unbekannt oder act in den Untergruppen nicht gefunden wurde
+    if ((strcmp(act,"color")==0)||(strcmp(act,"rgb")==0)) {
+      if(val.type != KinoVariant::RGB_COLOR) return KinoError::InvalidType;
+      if (!l->hasXYColor()) return KinoError::PropertyNotSupported;
+      if (!l->setRGB(val.color.r, val.color.g, val.color.b)) return KinoError::InternalError;
+      return KinoError::OK;
+    }
     return KinoError::PropertyNotSupported;
+  }
+  // deviceClass = "groups" : Es folgt eine {action} für eine bestimmte Gruppe {deviceName}
+  else if (strcmp(dev, "groups") == 0) {
+    auto* g = getGroupByName(name);
+    if (!g) return KinoError::DeviceUnknown;
+    if ((strcmp(act,"power")==0)||(strcmp(act,"allon")==0)||(strcmp(act,"on")==0)) {
+      if (val.type != KinoVariant::BOOL) return KinoError::InvalidType;
+      if (!g->setOn(val.b)) return KinoError::InternalError;
+      return KinoError::OK;
+    }
+    if ((strcmp(act,"brightness")==0)||(strcmp(act,"bri")==0)) {
+      if (val.type != KinoVariant::INT) return KinoError::InvalidType;
+      if (!g->setBri(val.i)) return KinoError::InternalError;
+      return KinoError::OK;
+    }
+    return KinoError::PropertyNotSupported;
+  }
+  // deviceClass = "scenes" : Es folgt eine {action} für eine bestimmte Scene {deviceName}
+  else if (strcmp(dev, "scenes") == 0) {
+    auto* s = getSceneByName(name);
+    if (!s) return KinoError::DeviceNotReady;
+    if (strcmp(act, "set") == 0) {
+      if (!s->setActive(this)) return KinoError::InternalError;
+      return KinoError::OK;
+    }
+    if (strcmp(act, "save") == 0) {
+      if (!s->captureLightStates(this)) return KinoError::InternalError;
+      return KinoError::OK;
+    }
+    return KinoError::PropertyNotSupported;
+  }
+  // deviceClass = "groups" : Es folgt eine {action} für eine bestimmte Gruppe {deviceName}
+  else if (strcmp(dev,"sensors")==0) {
+    auto *s = getSensorByName(name);
+    if (!s) return KinoError::DeviceUnknown;
+    if (!s->isWritable()) return KinoError::PropertyNotSupported;
+    if (val.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!s->hasValue(act)) return KinoError::OutOfRange;
+    if (!s->setValue(act,val.i)) return KinoError::InternalError;
+    return KinoError::OK;
+  }
+  // Wenn deviceClass unbekannt 
+  return KinoError::PropertyNotSupported;
 }
+
+KinoError HueBridge::queryCount(const char* property, uint16_t& out) {
+  if (strcmp(property, "lights")==0) {
+    out = _lights.size();
+    return KinoError::OK;
+  }
+  if (strcmp(property, "groups")==0) {
+    out = _groups.size();
+    return KinoError::OK;
+  }
+  if (strcmp(property, "scenes")==0) {
+    out = _scenes.size();
+    return KinoError::OK;
+  }
+  if (strcmp(property, "sensors")==0) {
+    out = _sensors.size();
+    return KinoError::OK;
+  }
+  // Versuche, das Muster "groups/{Gruppenname}/lights" zu finden
+  char tmpName[32];
+  // %31[^/] liest maximal 31 Zeichen bis zum nächsten '/', 
+  // um Buffer-Überläufe zu verhindern.
+  int found = sscanf(property, "groups/%31[^/]/lights", tmpName);
+  if (found == 1) {
+    // BÄM!
+    HueGroup* g=getGroupByName(tmpName);
+    if (!g) return KinoError::DeviceNotReady;
+    std::vector<uint8_t> lightids = g->getLightIds();
+    out = lightids.size();
+    return KinoError::OK;
+  }
+  // Versuche, das Muster "sensors/{Sensorname}/states" zu finden
+  found = sscanf(property, "sensors/%31[^/]/states", tmpName);
+  if (found == 1) {
+    // Sensorname gefunden
+    HueSensor *s = getSensorByName(tmpName);
+    if (!s) return KinoError::DeviceNotReady;
+    out = s->getStateSize();
+    return KinoError::OK;
+  }
+  
+  return KinoError::PropertyNotSupported;
+}
+
+KinoError HueBridge::query(const char* property, uint16_t index, KinoVariant &out) {
+  if (strcmp(property, "lights")==0) {
+    if (index > _lights.size()) return KinoError::OutOfRange;
+    out = KinoVariant::fromString(_lights[index]->getName().c_str());
+    return KinoError::OK;
+  }
+  if (strcmp(property, "groups")==0) {
+    if (index > _groups.size()) return KinoError::OutOfRange;
+    out = KinoVariant::fromString(_groups[index]->getName().c_str());
+    return KinoError::OK;
+  }
+  if (strcmp(property, "scenes")==0) {
+    if (index > _scenes.size()) return KinoError::OutOfRange;
+    out = KinoVariant::fromString(_scenes[index]->getName().c_str());
+    return KinoError::OK;
+  }
+  if (strcmp(property, "sensors")==0) {
+    if (index > _sensors.size()) return KinoError::OutOfRange;
+    out = KinoVariant::fromString(_sensors[index]->getName().c_str());
+    return KinoError::OK;
+  }
+  // Versuche, das Muster "groups/{Gruppenname}/lights" zu finden
+  char tmpName[32];
+  // %31[^/] liest maximal 31 Zeichen bis zum nächsten '/', 
+  // um Buffer-Überläufe zu verhindern.
+  int found = sscanf(property, "groups/%31[^/]/lights", tmpName);
+  if (found == 1) {
+    // BÄM!
+    HueGroup* g=getGroupByName(tmpName);
+    if (!g) return KinoError::PropertyNotSupported;
+    std::vector<uint8_t> lightids = g->getLightIds();
+    if (index > lightids.size()) return KinoError::OutOfRange;
+    HueLight* l = getLightById(lightids[index]);
+    if (!l) return KinoError::PropertyNotSupported;
+    out = KinoVariant::fromString(l->getName().c_str());
+    return KinoError::OK;
+  }
+  // Versuche, das Muster "sensors/{Sensorname}/states" zu finden
+  found = sscanf(property, "sensors/%31[^/]/states", tmpName);
+  if (found == 1) {
+    // Sensorname gefunden
+    HueSensor *s = getSensorByName(tmpName);
+    if (!s) return KinoError::DeviceNotReady;
+    JsonObjectConst sensorState = s->getState();
+    if (index > sensorState.size()) return KinoError::OutOfRange;
+    int i=0;
+    for (JsonPairConst kv : sensorState) {
+      //Serial.println(kv.key().c_str());  
+      if (i==index) {
+        out = KinoVariant::fromString(kv.key().c_str());
+        return KinoError::OK;
+      }
+      i++;
+    }
+    return KinoError::OK;
+  }
+
+  return KinoError::PropertyNotSupported;
+}
+
 
 bool HueBridge::commit() {
   for (auto& g : _groups) {
@@ -167,6 +374,9 @@ bool HueBridge::commit() {
   for (auto& l : _lights) {
     l->applyChanges(this);
   }
+  for (auto& s : _sensors) {
+    s->applyChanges(this);
+  }
   return true;
 }
 
@@ -174,19 +384,15 @@ bool HueBridge::commit() {
 // ===== Public API =====
 
 bool HueBridge::begin() {
-    if (!readLights()) return false;
-    if (!readGroups()) return false;
-    if (!readScenes()) return false;
-    readSensors();
-    return true;
+    return (init()==KinoError::OK);
 }
 
-bool HueBridge::init() {
-    if (!readLights()) return false;
-    if (!readGroups()) return false;
-    if (!readScenes()) return false;
+KinoError HueBridge::init() {
+    if (!readLights()) return KinoError::DeviceNotReady;
+    if (!readGroups()) return KinoError::DeviceNotReady;
+    if (!readScenes()) return KinoError::DeviceNotReady;
     readSensors();
-    return true;
+    return KinoError::OK;
 }
 
 bool HueBridge::tick() {
@@ -194,7 +400,7 @@ bool HueBridge::tick() {
   unsigned long now = millis();
   if (now - _lastTick >= _tickInterval) {
     _lastTick = now;
-    return readLights();
+    return (readLights()&&readSensors());
   }
   return false;
 }
@@ -209,6 +415,17 @@ bool HueBridge::setTickInterval(int ms) {
 
 int HueBridge::getTickInterval() {
   return _tickInterval;
+}
+
+void HueBridge::EnsureTimeoutBeforeRequest(unsigned long timeout) {
+  static unsigned long LastRequest = 0;
+  unsigned long now = millis();
+  while (now - LastRequest < timeout) {
+    yield();
+    delay(10);
+    now = millis();
+  }
+  return;
 }
 
 bool HueBridge::readLights() {
@@ -551,9 +768,10 @@ HueScene* HueBridge::getSceneByName(const String& name) {
     return nullptr;
 }
 
+/*
 const std::vector<HueScene*>& HueBridge::getScenes() const {
     return _scenes;
-}
+}*/
 
 bool HueBridge::setScene(const String& sceneName) {
   HueScene* s = getSceneByName(sceneName);
@@ -816,6 +1034,7 @@ bool HueBridge::setSensorState(uint16_t id,
 // ===== HTTP =====
 
 bool HueBridge::httpGET(const String& path) {
+  EnsureTimeoutBeforeRequest(100);
   if (!_client.connect(_ip, 80)) return false;
 
   _client.printf(
@@ -846,13 +1065,8 @@ bool HueBridge::saveScene(const String& sceneId, const String& jsonPayload) {
 
 
 bool HueBridge::sendState(const String& path, const String& jsonPayload) {
-  static unsigned long lastSend = millis();
-  unsigned long now = millis();
-  if (now - lastSend < 100) {
-    delay(100);
-    lastSend = now;
-  }
-  Serial.println("Hue: sending state");
+  EnsureTimeoutBeforeRequest(100);
+  //Serial.println("Hue: sending state");
   if (!_client.connect(_ip, 80)) return false;
 
   _client.printf(

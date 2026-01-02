@@ -44,7 +44,8 @@ public:
     };
 
     static bool _unknown(JsonObject action);
-    static ActionResult execute(const JsonObject& action);
+    static ActionResult execute(const JsonObject& action,bool testing);
+    static String translateErrorCode(ActionError errCode);
 
 private:
 

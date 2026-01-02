@@ -10,6 +10,7 @@ struct NetRadioTrackInfo {
     String album;                                     // Album (meist leer)
     String song;                                      // Songtitel (wie auf Radio angezeigt)
     String albumArt;                                  // Thumbnail des Senders
+    unsigned long created;                            // Erstellungs-/Aktualisierungszeitpunkt
 };
 
 /*
@@ -38,10 +39,12 @@ class YamahaReceiver : public KinoDevice {
     YamahaReceiver(const String& ip);                 // Konstruktor mit IP als String
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
+    KinoError queryCount(const char* property, uint16_t& out) override;
+    KinoError query(const char* property, uint16_t index, KinoVariant& out) override;
     
     IPAddress getIp() const;
     bool begin();
-    bool init();
+    KinoError init();
     bool getPowerStatus() const;
     bool setPower(bool on);
     int  getVolume() const;                           // liefert aktuelle Lautstärke für Main_Zone, als 3stelligen int. z.B.: -35.5dB ist -355
@@ -63,12 +66,12 @@ class YamahaReceiver : public KinoDevice {
     std::vector<InputSource> readInputSources();      // liefert eine Liste aller möglichen Input-Quellen, siehe oben
     bool setSource(const String& srcName);            // setzt Input-Quelle. Als srcName kann jeder InputSources.internal genutzt werden (solange InputSources.skip = false)
     String getSoundProgram() const;                   // liefert aktuellen DSP als String
-    std::vector<String> readDspNames();               // liefert eine Liste aller verfügbaren DSPs
+    std::vector<String> readDspNames(bool reload=false);               // liefert eine Liste aller verfügbaren DSPs
     bool setSoundProgram(const String& dspname);      // setzt den DSP
     bool getMute() const;                             // liefert aktuellen Stand des Mutings
     bool setMute(bool onoff);                         // schaltet Muting ein oder aus
     bool getStatus();                                 // liest den BasicStatus aus
-    std::vector<String> readNetRadioFavorites();      // liefert eine Liste der NETRADIO- Favoriten als Strings
+    std::vector<String> readNetRadioFavorites(bool reload=false);      // liefert eine Liste der NETRADIO- Favoriten als Strings
     bool selectNetRadioFavorite(const String& radioname); // wählt den übergebenen NETRADIO- Favoriten aus
     NetRadioTrackInfo readCurrentlyPlayingNetRadio(); // liefert Infos über den aktuellen NETRADIO Tracks
     bool tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
@@ -111,7 +114,7 @@ class YamahaReceiver : public KinoDevice {
     String extractTagString(const String& xml, const String& parent, const String& child);  // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
     bool isOk(const String& resp);                                                          // Helper für Fehlerbehandlung nach PUT-Anfragen
     bool executeSetCommand(const __FlashStringHelper* start, const String& val, const __FlashStringHelper* end);
-    
+    void EnsureDelayBeforeRequest(unsigned long timeout);
 
     // ----------------------------------------------------
     // XML Templates in PROGMEM

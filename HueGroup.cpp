@@ -12,6 +12,7 @@ HueGroup::HueGroup(uint16_t id,
 // --- Getter ---
 uint16_t HueGroup::getId() const { return _id; }
 const String& HueGroup::getName() const { return _name; }
+std::vector<uint8_t> HueGroup::getLightIds() const { return _lightIds; }
 
 bool HueGroup::allOn() const {
     if (_lightIds.empty()) return false;

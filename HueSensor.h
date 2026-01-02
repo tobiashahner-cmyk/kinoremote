@@ -18,6 +18,8 @@ public:
     // Lesen
     bool hasValue(const String& key) const;
     JsonVariantConst getValue(const String& key) const;
+    int getStateSize() const;
+    JsonObjectConst getState() const;
 
     // Schreiben (nur für CLIPGenericStatus)
     bool setValue(const String& key, int value);

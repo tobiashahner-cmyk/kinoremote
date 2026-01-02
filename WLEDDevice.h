@@ -40,11 +40,13 @@ class WLEDDevice : public KinoDevice {
 
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
+    KinoError queryCount(const char* property, uint16_t& out) override;
+    KinoError query(const char* property, uint16_t index, KinoVariant &out) override;
+    KinoError init() override;                                      // wie begin(), nur semantisch anders ;-)
     bool commit() override;
   
     // Lifecycle
     bool begin();
-    bool init();                                      // wie begin(), nur semantisch anders ;-)
     bool getStatus();
     bool tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
     bool setTickInterval(int ms);
@@ -96,6 +98,7 @@ class WLEDDevice : public KinoDevice {
     WiFiClient _client;
     int  _tickInterval  = 10000;
     unsigned long _lastTick = 0;
+    void EnsureTimeoutBeforeRequest(unsigned long timeout);
   
     // Status
     StaticJsonDocument<1024> _props;

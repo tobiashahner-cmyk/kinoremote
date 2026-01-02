@@ -36,6 +36,7 @@ bool HueLight::hasCTColor() const { return _hasCT; }
 
 float HueLight::getX() const { return _x; }
 float HueLight::getY() const { return _y; }
+RgbColor HueLight::getRGB() { return xyToRgb(_x, _y, _bri); }
 uint16_t HueLight::getCT() const { return _ct; }
 
 // --- Setter ---
@@ -183,4 +184,51 @@ XyPoint HueLight::rgbToXy(RgbColor color) {
     checkAndCorrectXY(xy);
 
     return xy;
+}
+
+
+// Umrechnung von XY nach RGB
+// Hilfsfunktion: Umgekehrte Gamma-Korrektur
+uint8_t HueLight::reverseGamma(float factor) {
+    if (factor <= 0.0031308f) {
+        factor = 12.92f * factor;
+    } else {
+        factor = 1.055f * pow(factor, (1.0f / 2.4f)) - 0.055f;
+    }
+    
+    // Auf 0.0 - 1.0 begrenzen und auf 0-255 skalieren
+    int result = (int)(factor * 255.0f);
+    if (result < 0) return 0;
+    if (result > 255) return 255;
+    return (uint8_t)result;
+}
+
+RgbColor HueLight::xyToRgb(float x, float y, uint8_t brightness) {
+    // 1. Berechne XYZ Werte
+    // Da wir nur x und y haben, nutzen wir die Helligkeit (0-254) als Y
+    float Y = brightness / 254.0f; 
+    float X = (Y / y) * x;
+    float Z = (Y / y) * (1.0f - x - y);
+
+    // 2. XYZ zu RGB Transformation (Wide RGB D65 Matrix)
+    // Diese Koeffizienten entsprechen dem Farbraum der Hue Lampen
+    float r =  X * 1.656492f - Y * 0.354851f - Z * 0.255038f;
+    float g = -X * 0.707196f + Y * 1.655397f + Z * 0.036152f;
+    float b =  X * 0.051713f - Y * 0.121364f + Z * 1.011530f;
+
+    // 3. Maximale Komponente finden, um bei Überschreitung zu normalisieren
+    if (r > 1.0f || g > 1.0f || b > 1.0f) {
+        float maxVal = max(r, max(g, b));
+        r /= maxVal;
+        g /= maxVal;
+        b /= maxVal;
+    }
+
+    // 4. Umgekehrte Gamma-Korrektur und Konvertierung nach uint8_t
+    RgbColor result;
+    result.r = reverseGamma(r);
+    result.g = reverseGamma(g);
+    result.b = reverseGamma(b);
+
+    return result;
 }

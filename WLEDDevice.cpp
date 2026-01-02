@@ -22,7 +22,7 @@ KinoError WLEDDevice::get(const char* prop, KinoVariant& out) {
     out = KinoVariant::fromInt(_tickInterval);
     return KinoError::OK;
   }
-  if (strcmp(prop,"power")==0) {
+  if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     out = KinoVariant::fromBool(_props["state"]["on"] | false);
     return KinoError::OK;
   }
@@ -30,32 +30,59 @@ KinoError WLEDDevice::get(const char* prop, KinoVariant& out) {
     out = KinoVariant::fromBool(_props["info"]["live"]|false);
     return KinoError::OK;
   }
-  if (strcmp(prop,"override")==0) {
+  if ((strcmp(prop,"override")==0)||(strcmp(prop,"lor")==0)) {
     out = KinoVariant::fromBool(_props["state"]["lor"]|false);
     return KinoError::OK;
   }
-  if (strcmp(prop,"brightness")==0) {
+  if ((strcmp(prop,"brightness")==0)||(strcmp(prop,"bri")==0)) {
     out = KinoVariant::fromInt(_props["state"]["bri"] | 0);
     return KinoError::OK;
   }
-  if (strcmp(prop,"speed")==0) {
+  if ((strcmp(prop,"speed")==0)||(strcmp(prop,"sx")==0)) {
     out = KinoVariant::fromInt(_props["state"]["seg"][0]["sx"] | 0);
     return KinoError::OK;
   }
-  if (strcmp(prop,"intensity")==0) {
+  if ((strcmp(prop,"intensity")==0)||(strcmp(prop,"ix")==0)) {
     out = KinoVariant::fromInt(_props["state"]["seg"][0]["ix"] | 0);
     return KinoError::OK;
   }
-  if (strcmp(prop,"effect")==0) {
+  if ((strcmp(prop,"effect")==0)||(strcmp(prop,"fx")==0)) {
     out = KinoVariant::fromInt(_props["state"]["seg"][0]["fx"] | 0);
     return KinoError::OK;
   }
-  if (strcmp(prop,"palette")==0) {
+  if ((strcmp(prop,"palette")==0)||(strcmp(prop,"pal")==0)) {
     out = KinoVariant::fromInt(_props["state"]["seg"][0]["pal"] | 0);
     return KinoError::OK;
   }
   if (strcmp(prop,"input")==0) {
     out = KinoVariant::fromString(_props["info"]["lm"] | "");
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"color") == 0)||(strcmp(prop,"color1") == 0)||(strcmp(prop,"colorFg") == 0)||(strcmp(prop,"FgColor") == 0)) {
+    RGBColor c = {
+      _props["state"]["seg"][0]["col"][0][0] | 0, 
+      _props["state"]["seg"][0]["col"][0][1] | 0, 
+      _props["state"]["seg"][0]["col"][0][2] | 0 
+    };
+    out = KinoVariant::fromColor(c);
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"color2") == 0)||(strcmp(prop,"colorBg") == 0)||(strcmp(prop,"BgColor") == 0)) {
+    RGBColor c = {
+      _props["state"]["seg"][0]["col"][1][0] | 0, 
+      _props["state"]["seg"][0]["col"][1][1] | 0, 
+      _props["state"]["seg"][0]["col"][1][2] | 0 
+    };
+    out = KinoVariant::fromColor(c);
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"color3") == 0)||(strcmp(prop,"colorFx") == 0)||(strcmp(prop,"FxColor") == 0)) {
+    RGBColor c = {
+      _props["state"]["seg"][0]["col"][2][0] | 0, 
+      _props["state"]["seg"][0]["col"][2][1] | 0, 
+      _props["state"]["seg"][0]["col"][2][2] | 0 
+    };
+    out = KinoVariant::fromColor(c);
     return KinoError::OK;
   }
   return KinoError::PropertyNotSupported;
@@ -67,12 +94,12 @@ KinoError WLEDDevice::set(const char* prop, const KinoVariant& val) {
     if (!setTickInterval(val.i)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"power")==0) {
+  if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     if(val.type != KinoVariant::BOOL) return KinoError::InvalidType;
     if (!setPowerStatus(val.b)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"override")==0) {
+  if ((strcmp(prop,"override")==0)||(strcmp(prop,"lor")==0)) {
     if(val.type != KinoVariant::BOOL) return KinoError::InvalidType;
     if (!setLive(!val.b)) return KinoError::InvalidValue;
     return KinoError::OK;
@@ -82,34 +109,77 @@ KinoError WLEDDevice::set(const char* prop, const KinoVariant& val) {
     if (!setLive(val.b)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"brightness")==0) {
+  if ((strcmp(prop,"brightness")==0)||(strcmp(prop,"bri")==0)) {
     if(val.type != KinoVariant::INT) return KinoError::InvalidType;
     if (!setBrightness(val.i)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"speed")==0) {
+  if ((strcmp(prop,"speed")==0)||(strcmp(prop,"sx")==0)) {
     if(val.type != KinoVariant::INT) return KinoError::InvalidType;
     if (!setSpeed(val.i)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"intensity")==0) {
+  if ((strcmp(prop,"intensity")==0)||(strcmp(prop,"ix")==0)) {
     if(val.type != KinoVariant::INT) return KinoError::InvalidType;
     if (!setIntensity(val.i)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"transitiontime")==0) {
+  if ((strcmp(prop,"transitiontime")==0)||(strcmp(prop,"tt")==0)) {
     if(val.type != KinoVariant::INT) return KinoError::InvalidType;
     if (!setTransitionTime(val.i)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"effect")==0) {
+  if ((strcmp(prop,"effect")==0)||(strcmp(prop,"fx")==0)) {
     if(val.type != KinoVariant::INT) return KinoError::InvalidType;
     if (!setEffect(val.i)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"palette")==0) {
+  if ((strcmp(prop,"palette")==0)||(strcmp(prop,"pal")==0)) {
     if(val.type != KinoVariant::INT) return KinoError::InvalidType;
     if (!setPalette(val.i)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"color") == 0)||(strcmp(prop,"color1") == 0)||(strcmp(prop,"colorFg") == 0)||(strcmp(prop,"FgColor") == 0)) {
+    if (val.type != KinoVariant::RGB_COLOR) return KinoError::InvalidType;
+    if (!setFgColor(val.color.r, val.color.g, val.color.b)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"color2") == 0)||(strcmp(prop,"colorBg") == 0)||(strcmp(prop,"BgColor") == 0)) {
+    if (val.type != KinoVariant::RGB_COLOR) return KinoError::InvalidType;
+    if (!setBgColor(val.color.r, val.color.g, val.color.b)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"color3") == 0)||(strcmp(prop,"colorFx") == 0)||(strcmp(prop,"FxColor") == 0)) {
+    if (val.type != KinoVariant::RGB_COLOR) return KinoError::InvalidType;
+    if (!setFxColor(val.color.r, val.color.g, val.color.b)) return KinoError::InvalidValue;
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+KinoError WLEDDevice::queryCount(const char* property, uint16_t& out) {
+  if (strcmp(property, "palettes")==0) {
+    // read the available palettes
+    out = 0;
+    return KinoError::OK;
+  }
+  if (strcmp(property, "effects")==0) {
+    // read the available effects
+    out = 0;
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+KinoError WLEDDevice::query(const char* property, uint16_t index, KinoVariant& out) {
+  if (strcmp(property, "palettes")==0) {
+    // read the available palettes
+    out = KinoVariant::fromString("");
+    return KinoError::OK;
+  }
+  if (strcmp(property, "effects")==0) {
+    // read the available effects
+    out = KinoVariant::fromString("");
     return KinoError::OK;
   }
   return KinoError::PropertyNotSupported;
@@ -122,9 +192,9 @@ bool WLEDDevice::begin() {
   return true;
 }
 
-bool WLEDDevice::init() {
-  if (!readState()) return false;
-  return true;
+KinoError WLEDDevice::init() {
+  if (readState()) return KinoError::OK;
+  return KinoError::DeviceNotReady;
 }
 
 bool WLEDDevice::getStatus() {
@@ -375,8 +445,19 @@ bool WLEDDevice::setPalette(uint8_t pal) {
 }
 
 // ===== HTTP Helper =====
+void WLEDDevice::EnsureTimeoutBeforeRequest(unsigned long timeout) {
+  static unsigned long LastRequest = 0;
+  unsigned long now = millis();
+  while (now - LastRequest < timeout) {
+    delay(10);
+    now = millis();
+  }
+  return;
+}
+
 bool WLEDDevice::readState() {
   NetworkHelper::resetClient(_client);
+  EnsureTimeoutBeforeRequest(200);
   if (!_client.connect(_ip, 80)) {
     Serial.print("WLED: GET ");
     Serial.println("/json");
@@ -408,6 +489,7 @@ bool WLEDDevice::readState() {
 
 bool WLEDDevice::applyChanges() {
   NetworkHelper::resetClient(_client);
+  EnsureTimeoutBeforeRequest(200);
   if (!_client.connect(_ip, 80)) return false;
   
   _client.printf(

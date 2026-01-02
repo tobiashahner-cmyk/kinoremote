@@ -43,6 +43,7 @@ public:
 
     float getX() const;
     float getY() const;
+    RgbColor getRGB();
     uint16_t getCT() const;
 
     // --- Setter für Änderungen ---
@@ -53,6 +54,7 @@ public:
     bool setRGB(uint8_t r, uint8_t g, uint8_t b);
 
     XyPoint rgbToXy(RgbColor color);
+    
 
     // --- Setter für direkte Änderungen ohne Bridge-Kommunikation
     // NUR für Änderungen über GROUPS
@@ -80,7 +82,8 @@ private:
     void checkAndCorrectXY(XyPoint& p);
     XyPoint getClosestPoint(XyPoint p, XyPoint a, XyPoint b);
     float gammaCorrection(uint8_t color);
-
+    RgbColor xyToRgb(float x, float y, uint8_t brightness);
+    uint8_t reverseGamma(float factor);
     
 
     // Container für noch nicht übertragene Änderungen

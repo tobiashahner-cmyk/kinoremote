@@ -57,7 +57,7 @@ KinoError HyperionDevice::set(const char* prop, const KinoVariant& value) {
     if (!setTickInterval(value.i)) return KinoError::InvalidValue;
     return KinoError::OK;
   }
-  if (strcmp(prop,"power")==0) {
+  if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
     return KinoError::OK;
   }
@@ -78,8 +78,9 @@ bool HyperionDevice::begin() {
   return getStatus();
 }
 
-bool HyperionDevice::init() {
-  return getStatus();
+KinoError HyperionDevice::init() {
+  if(getStatus()) return KinoError::OK;
+  return KinoError::DeviceNotReady;
 }
 
 bool HyperionDevice::getStatus() {
@@ -150,6 +151,16 @@ bool HyperionDevice::getLedDeviceStatus() const {
 }
 
 // ===== JSON-RPC Helper =====
+void HyperionDevice::EnsureTimeoutBeforeRequest(unsigned long timeout) {
+  static unsigned long LastRequest = 0;
+  unsigned long now = millis();
+  while (now - LastRequest < timeout) {
+    delay(10);
+    now = millis();
+  }
+  return;
+}
+
 
 bool HyperionDevice::sendJsonRpc(const JsonDocument& request, String& response) {
   String payload;
@@ -163,6 +174,7 @@ bool HyperionDevice::sendJsonRpc(const JsonDocument& request, String& response) 
 bool HyperionDevice::httpPOST(const char* path,
                               const String& payload,
                               String& response) {
+  EnsureTimeoutBeforeRequest(200);
   if (!_client.connect(_ip, 8090)) {
     return false;
   }
@@ -219,7 +231,7 @@ bool HyperionDevice::readHttpResponse(String& response) {
 
     yield();
   }
-  Serial.print(response);
+  //Serial.print(response);
   _client.stop();
   return response.length() > 0;
 }

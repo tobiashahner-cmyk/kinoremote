@@ -10,6 +10,10 @@ public:
 
     virtual const char* deviceType() const = 0;
 
+    virtual KinoError init() {
+      return KinoError::OK;
+    }
+
     virtual KinoError get(const char* property, KinoVariant& out) {
         (void)property;
         (void)out;
@@ -19,6 +23,14 @@ public:
     virtual KinoError set(const char* property, const KinoVariant& value) {
         (void)property;
         (void)value;
+        return KinoError::PropertyNotSupported;
+    }
+
+    virtual KinoError queryCount(const char* property, uint16_t &out ) {
+        return KinoError::PropertyNotSupported;
+    }
+
+    virtual KinoError query(const char* property, uint16_t index, KinoVariant& out) {
         return KinoError::PropertyNotSupported;
     }
 
