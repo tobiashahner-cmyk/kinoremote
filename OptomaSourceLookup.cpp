@@ -23,6 +23,24 @@ const OptomaSourceLookup::Entry OptomaSourceLookup::_table[] PROGMEM = {
 const uint8_t OptomaSourceLookup::_tableSize =
   sizeof(_table) / sizeof(_table[0]);
 
+size_t OptomaSourceLookup::getTableSize() { return _tableSize; }
+
+bool OptomaSourceLookup::labelByIndex(int index, String& out) {
+  if (index >= _tableSize) return false;
+  Entry e;
+  memcpy_P(&e, &_table[index], sizeof(Entry));
+  out = String(e.name);
+  return true;
+}
+
+bool OptomaSourceLookup::setParameterByIndex(int index, String& out) {
+  if (index > _tableSize) return false;
+  Entry e;
+  memcpy_P(&e, &_table[index], sizeof(Entry));
+  out = String(e.setParam);
+  return true;
+}
+
 OptomaSourceLookup::InputSource
 OptomaSourceLookup::fromReadCode(uint8_t code) {
   for (uint8_t i = 0; i < _tableSize; ++i) {

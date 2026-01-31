@@ -12,16 +12,19 @@ public:
     }
 
   // ===== Konstruktoren =====
-  HyperionDevice(const IPAddress& ip);
-  HyperionDevice(const String& ip);
+  HyperionDevice(WiFiClient& wfc, const IPAddress& ip);
+  HyperionDevice(WiFiClient& wfc, const String& ip);
 
   
-  bool tick();
+  KinoError tick();
   bool setTickInterval(int ms);
   int getTickInterval();
 
+  size_t getPropertyCount() const override;
+    const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
   KinoError get(const char* property, KinoVariant& out) override;
   KinoError set(const char* property, const KinoVariant& value) override;
+  
   KinoError init() override;  // wie begin, nur andere Semantik
 
   // ===== Public API =====
@@ -41,12 +44,12 @@ public:
 private:
   // ===== Eigenschaften =====
   IPAddress _ip;
-  WiFiClient _client;
+  WiFiClient& _client;
 
   bool _powerStatus = false;
   bool _ledDeviceStatus = false;
 
-  int  _tickInterval  = 10000;
+  int  _tickInterval  = 0;
   unsigned long _lastTick = 0;
 
   // ===== JSON-RPC / HTTP Helper =====
@@ -60,4 +63,6 @@ private:
   bool httpPOST(const char* path, const String& payload, String& response);
   bool waitForClientData();
   bool readHttpResponse(String& response);
+
+  static const KinoPropertyInfo _properties[];
 };

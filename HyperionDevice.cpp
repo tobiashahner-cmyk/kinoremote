@@ -2,23 +2,29 @@
 
 // ===== Konstruktoren =====
 
-HyperionDevice::HyperionDevice(const IPAddress& ip)
-: _ip(ip) {}
+HyperionDevice::HyperionDevice(WiFiClient& wfc, const IPAddress& ip)
+: _client(wfc), _ip(ip) {}
 
-HyperionDevice::HyperionDevice(const String& ip) {
+HyperionDevice::HyperionDevice(WiFiClient& wfc, const String& ip) : _client(wfc) {
   _ip.fromString(ip);
 }
 
-bool HyperionDevice::tick() {
-  if (_tickInterval == 0) return false;
+KinoError HyperionDevice::tick() {
+  if (WiFi.status() != WL_CONNECTED) return KinoError::NothingToDo;
+  if (_tickInterval == 0) return KinoError::NothingToDo;
+  if (_refreshing) return KinoError::NothingToDo;
   
   unsigned long now = millis();
   if (now - _lastTick >= _tickInterval) {
     _lastTick = now;
-    getStatus();
-    return true;
+    _refreshing = true;
+    showMemory();
+    bool ok = getStatus();
+    showMemory();
+    _refreshing = false;
+    return (ok ? KinoError::OK : KinoError::DeviceNotReady);
   }
-  return false;
+  return KinoError::NothingToDo;
 }
 
 bool HyperionDevice::setTickInterval(int ms) {
@@ -34,13 +40,33 @@ int HyperionDevice::getTickInterval() {
 }
 
 // ===== neue Public API, als Wrapper auf alte Public API ===
+const KinoPropertyInfo HyperionDevice::_properties[] = {
+  { "tickInterval", "Aktualisierung [ms]", Prop_Read | Prop_Write ,0,20000,500},
+  { "ip",         "IP",         Prop_Read                         },
+  { "on",         "Power",      Prop_Read  | Prop_Write           },
+  { "live",       "Broadcast",  Prop_Read  | Prop_Write           }
+};
+
+size_t HyperionDevice::getPropertyCount() const {
+  return sizeof(_properties) / sizeof(_properties[0]);
+}
+
+const KinoPropertyInfo* HyperionDevice::getPropertyInfo(size_t index) const {
+  if (index >= getPropertyCount()) return nullptr;
+  return &_properties[index];
+}
+
 KinoError HyperionDevice::get(const char* prop, KinoVariant& out) {
   if (!prop) return KinoError::PropertyNotSupported;
   if (strcmp(prop,"tickInterval")==0) {
     out = KinoVariant::fromInt(_tickInterval);
     return KinoError::OK;
   }
-  if (strcmp(prop,"power")==0) {
+  if (strcmp(prop,"ip")==0) {
+    out = KinoVariant::fromString(_ip.toString().c_str());
+    return KinoError::OK;
+  }
+  if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     out = KinoVariant::fromBool(_powerStatus);
     return KinoError::OK;
   }
@@ -53,8 +79,8 @@ KinoError HyperionDevice::get(const char* prop, KinoVariant& out) {
 
 KinoError HyperionDevice::set(const char* prop, const KinoVariant& value) {
   if (strcmp(prop,"tickInterval")==0) {
-    if(value.type != KinoVariant::INT) return KinoError::InvalidType;
-    if (!setTickInterval(value.i)) return KinoError::InvalidValue;
+    //if(value.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setTickInterval(value.asInt())) return KinoError::InvalidValue;
     return KinoError::OK;
   }
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
@@ -62,14 +88,12 @@ KinoError HyperionDevice::set(const char* prop, const KinoVariant& value) {
     return KinoError::OK;
   }
   if (strcmp(prop,"live")==0) {
-    if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
-    if (!setBroadcast(value.b)) return KinoError::InternalError;
+    //if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    if (!setBroadcast(value.asBool())) return KinoError::InternalError;
     return KinoError::OK;
   }
   return KinoError::PropertyNotSupported;
 }
-
-
 
 
 // ===== Public API =====
@@ -90,7 +114,10 @@ bool HyperionDevice::getStatus() {
   req["tan"] = 0;
   serializeJson(req, payload);
 
-  if (!_client.connect(_ip, 8090)) return false;
+  if (!_client.connect(_ip, 8090)) {
+    _client.stop();
+    return false;
+  }
 
   _client.printf(
     "POST /json-rpc HTTP/1.1\r\n"
@@ -105,9 +132,11 @@ bool HyperionDevice::getStatus() {
 
   String componentsJson;
   if (!readComponentsArray(componentsJson)) {
-    Serial.println("readComponentsArray fehlgeschlagen");
+    Serial.println(F("readComponentsArray fehlgeschlagen"));
+    _client.stop();
     return false;
   }
+  _client.stop();
   return parseComponents(componentsJson);
 }
 
@@ -165,7 +194,7 @@ void HyperionDevice::EnsureTimeoutBeforeRequest(unsigned long timeout) {
 bool HyperionDevice::sendJsonRpc(const JsonDocument& request, String& response) {
   String payload;
   serializeJson(request, payload);
-  Serial.println(payload);
+  //Serial.println(payload);
   return httpPOST("/json-rpc", payload, response);
 }
 
@@ -176,6 +205,7 @@ bool HyperionDevice::httpPOST(const char* path,
                               String& response) {
   EnsureTimeoutBeforeRequest(200);
   if (!_client.connect(_ip, 8090)) {
+    _client.stop();
     return false;
   }
 
@@ -192,8 +222,11 @@ bool HyperionDevice::httpPOST(const char* path,
 
   _client.print(payload);
 
-  if (!waitForClientData()) return false;
-  if (!readHttpResponse(response)) return false;
+  //if (!waitForClientData()) return false;
+  //if (!readHttpResponse(response)) return false;
+  waitForClientData();
+  readHttpResponse(response);
+  //Serial.println(response);
   return response.startsWith("HTTP/1.1 200");
 }
 

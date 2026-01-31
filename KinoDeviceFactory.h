@@ -1,6 +1,63 @@
 #pragma once
 
 #include <Arduino.h>
+#include <vector>
+#include <ArduinoJson.h>
+#include "KinoDevice.h"
+
+
+
+class KinoDeviceFactory {
+public:
+  // Initialisiert alle Devices aus /devices.json
+  static bool initDevices();
+
+  // Zugriff für KinoAPI
+  static KinoDevice* getDeviceByName(const char* name);
+  static KinoDevice* getDeviceByIndex(int index);
+  static std::vector<String> getDeviceNames();
+  static const String& getDeviceNameByIndex(int index);
+  static int getDeviceCount();
+
+private:
+  struct DeviceEntry {
+    String name;
+    String className;
+    KinoDevice* device = nullptr;
+    bool initOk = false;
+  };
+
+  static std::vector<DeviceEntry> _devices;
+
+  // JSON helpers
+  static bool loadDevicesJson(DynamicJsonDocument& doc);
+  static bool createDefaultDevicesFile();
+
+  // Device-Erzeugung
+  static KinoDevice* createDeviceFromJson(
+    const String& className,
+    JsonObject cfg
+  );
+
+
+  static const char DEFAULT_AVR[] PROGMEM;
+  static const char DEFAULT_BEAMER[] PROGMEM;
+  static const char DEFAULT_CANVAS[] PROGMEM;
+  static const char DEFAULT_SOUND[] PROGMEM;
+  static const char DEFAULT_HYPERION[] PROGMEM;
+  static const char DEFAULT_HUEBRIDGE[] PROGMEM;
+};
+
+
+
+
+
+
+
+
+/*#pragma once
+
+#include <Arduino.h>
 
 #include "YamahaReceiver.h"
 #include "WLEDDevice.h"
@@ -47,3 +104,4 @@ class KinoDeviceFactory {
       static OptomaBeamer*   createOptoma(const OptomaConfig& cfg);
       static HyperionDevice* createHyperion(const HyperionConfig& cfg);
 };
+*/

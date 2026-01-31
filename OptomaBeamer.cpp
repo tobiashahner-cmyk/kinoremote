@@ -3,19 +3,41 @@
 
 // ===== Konstruktoren =====
 
-OptomaBeamer::OptomaBeamer(const IPAddress& ip, uint8_t beamerId)
-: _ip(ip), _id(beamerId) {}
+OptomaBeamer::OptomaBeamer(WiFiClient& wfc, const IPAddress& ip, uint8_t beamerId)
+: _client(wfc), _ip(ip), _id(beamerId) {}
 
-OptomaBeamer::OptomaBeamer(const String& ip, uint8_t beamerId)
-: _id(beamerId) {
+OptomaBeamer::OptomaBeamer(WiFiClient& wfc, const String& ip, uint8_t beamerId)
+: _client(wfc), _id(beamerId) {
   _ip.fromString(ip);
 }
 
 // neue Public API, als Wrapper auf alte Public API
+const KinoPropertyInfo OptomaBeamer::_properties[] = {
+  { "tickInterval", "Aktualisierung [ms]", Prop_Read | Prop_Write , 0, 20000, 500},
+  { "ip",         "IP",             Prop_Read                         },
+  { "on",         "Power",          Prop_Read  | Prop_Write           },
+  { "uptime",     "Lampenstunden",  Prop_Read                         },
+  { "input",      "Eingang",        Prop_Read  | Prop_Write  | Prop_Query }
+};
+
+size_t OptomaBeamer::getPropertyCount() const {
+  return sizeof(_properties) / sizeof(_properties[0]);
+}
+
+const KinoPropertyInfo* OptomaBeamer::getPropertyInfo(size_t index) const {
+  if (index >= getPropertyCount()) return nullptr;
+  return &_properties[index];
+}
+
+
 KinoError OptomaBeamer::get(const char* prop, KinoVariant& out) {
   if (!prop) return KinoError::PropertyNotSupported;
   if (strcmp(prop,"tickInterval")==0) {
     out = KinoVariant::fromInt(_tickInterval);
+    return KinoError::OK;
+  }
+  if (strcmp(prop,"ip")==0) {
+    out = KinoVariant::fromString(_ip.toString().c_str());
     return KinoError::OK;
   }
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
@@ -29,14 +51,23 @@ KinoError OptomaBeamer::get(const char* prop, KinoVariant& out) {
   if (strcmp(prop,"uptime")==0) {
     out = KinoVariant::fromInt(_lampHours);
     return KinoError::OK;
-  }
+  }/*
+  int found, inpnr;
+  char rest[32];
+  found = sscanf(prop,"input/%d/label%31s", &found, rest);
+  if ((found == 1) || (strlen(rest) == 0)) {    // path = "input/<inputNr>/label
+    String label;
+    îf (!OptomaSourceLookup::labelByIndex(inpnr, label)) return KinoError::OutOfRange;
+    out = KinoVariant::fromString(label.c_str());
+    return KinoError::OK;
+  }*/
   return KinoError::PropertyNotSupported;
 }
 
 KinoError OptomaBeamer::set(const char* prop, const KinoVariant& value) {
   if (strcmp(prop,"tickInterval")==0) {
-    if(value.type != KinoVariant::INT) return KinoError::InvalidType;
-    if (!setTickInterval(value.i)) return KinoError::InvalidValue;
+    //if(value.type != KinoVariant::INT) return KinoError::InvalidType;
+    if (!setTickInterval(value.asInt())) return KinoError::InvalidValue;
     return KinoError::OK;
   }
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
@@ -52,6 +83,24 @@ KinoError OptomaBeamer::set(const char* prop, const KinoVariant& value) {
   return KinoError::PropertyNotSupported;
 }
 
+KinoError OptomaBeamer::queryCount(const char* property, uint16_t& out) {
+  if (strcmp(property, "input")==0) {
+    out = OptomaSourceLookup::getTableSize();
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
+
+
+KinoError OptomaBeamer::query(const char* property, uint16_t index, KinoVariant &out) {
+  if (strcmp(property,"input")==0) {
+    String label;
+    if (!OptomaSourceLookup::labelByIndex(index, label)) return KinoError::OutOfRange;
+    out = KinoVariant::fromString(label.c_str());
+    return KinoError::OK;
+  }
+  return KinoError::PropertyNotSupported;
+}
 
 
 // ===== Public API =====
@@ -75,18 +124,25 @@ bool OptomaBeamer::getStatus() {
 
 
 
-bool OptomaBeamer::tick() {
-  if (_tickInterval == 0) return false;
+KinoError OptomaBeamer::tick() {
+  if (WiFi.status() != WL_CONNECTED) return KinoError::NothingToDo;
+  if (_tickInterval == 0) return KinoError::NothingToDo;
+  if (_refreshing) return KinoError::NothingToDo;
   int now = millis();
   if (now - _lastTick >= _tickInterval) {
     _lastTick = now;
-    return getStatus();
+    _refreshing = true;
+    showMemory();
+    bool ok = getStatus();
+    showMemory();
+    _refreshing = false;
+    return (ok ? KinoError::OK : KinoError::DeviceNotReady);
   }
-  return false;
+  return KinoError::NothingToDo;
 }
 
 bool OptomaBeamer::setPower(bool onoff) {
-  if (!init()) return false;
+  if (!getStatus()) return false;
   if (_powerState == onoff) return true;
   String response;
   if (!sendCommand("00", onoff ? "1" : "0", response)) {
@@ -189,6 +245,7 @@ bool OptomaBeamer::sendCommand(const String& command,
   EnsureTimeoutBeforeRequest(200);
   
   if (!_client.connect(_ip, 23)) {
+    _client.stop();
     return false;
   }
 

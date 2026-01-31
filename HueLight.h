@@ -45,6 +45,7 @@ public:
     float getY() const;
     RgbColor getRGB();
     uint16_t getCT() const;
+    uint16_t getTT() const;
 
     // --- Setter für Änderungen ---
     bool setOn(bool value);
@@ -52,6 +53,7 @@ public:
     bool setCT(uint16_t value);
     bool setXY(float x, float y);
     bool setRGB(uint8_t r, uint8_t g, uint8_t b);
+    bool setTT(uint16_t value);
 
     XyPoint rgbToXy(RgbColor color);
     
@@ -61,6 +63,8 @@ public:
     void forceOn(bool value);
     void forceBri(uint8_t value);
     void forceCT(uint16_t value);
+    // Setter für Änderungen, die beim Refresh von der Bridge kommen
+    void updateValues(const String& name, bool on, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, bool hasBri);
 
     // --- Änderungen anwenden ---
     bool applyChanges(HueBridge* bridge);
@@ -92,6 +96,7 @@ private:
         std::optional<uint8_t> bri;
         std::optional<uint16_t> ct;
         std::optional<std::pair<float,float>> xy;
+        std::optional<uint16_t> tt;
     } pending;
 
     void clearPending() { pending = PendingChanges(); }

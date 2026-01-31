@@ -35,20 +35,28 @@ class WLEDDevice : public KinoDevice {
     }
     
     // Konstruktoren
-    explicit WLEDDevice(const IPAddress& ip);
-    explicit WLEDDevice(const String& ip);
+    explicit WLEDDevice(WiFiClient& wfc, const IPAddress& ip);
+    explicit WLEDDevice(WiFiClient& wfc, const String& ip);
 
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
     KinoError queryCount(const char* property, uint16_t& out) override;
     KinoError query(const char* property, uint16_t index, KinoVariant &out) override;
     KinoError init() override;                                      // wie begin(), nur semantisch anders ;-)
+    bool needsCommit() override;
     bool commit() override;
+    size_t getPropertyCount() const override;
+    const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
+
+    KinoError getEffectMetadata(int effectnr, KinoVariant& out);
+    KinoError getEffectParamName(const KinoVariant& in, int paramIndex, KinoVariant& out);
+    std::vector<KinoPropertyParam> getPaletteParams(int palnr);
+    KinoPropertyParam* getPaletteParam(int palnr, int paramIndex);
   
     // Lifecycle
     bool begin();
     bool getStatus();
-    bool tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
+    KinoError tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
     bool setTickInterval(int ms);
     int getTickInterval();
   
@@ -85,6 +93,9 @@ class WLEDDevice : public KinoDevice {
     bool setFxColor(uint8_t R, uint8_t G, uint8_t B);
     bool setFxColor(WLEDColor col);
     bool setCustom(uint8_t c1x, uint8_t c2x, uint8_t c3x);
+    bool setCustom1(uint8_t c1x);
+    bool setCustom2(uint8_t c2x);
+    bool setCustom3(uint8_t c3x);
     bool setPalette(uint8_t pal);
     bool setLive(bool onoff);
     bool setAlarm(bool onoff);
@@ -94,12 +105,39 @@ class WLEDDevice : public KinoDevice {
     bool applyChanges();
   
   private:
+    // ===== Lazy Streaming (pro Instanz) =====
+    File _lazyFile;
+    String _lazyPath;
+    int _lazyLastIndex = -1;
+    bool _lazyActive = false;
+    // Chunk-Streaming Cache
+    File   _chunkFile;
+    //String _chunkPath;
+    char _chunkPath[64];
+    
+    static constexpr size_t CHUNK_SIZE = 1024;
+    char   _chunkBuf[CHUNK_SIZE];
+    size_t _chunkLen = 0;
+    size_t _chunkPos = 0;
+    
+    bool   _chunkActive = false;
+    int    _chunkLastIndex = -1;
+    void   closeChunkStream();
+    void   copyAndTrim(char* dest, const char* src, size_t srcLen, size_t destSize);
+    
+    void closeLazyStream();
+    bool ensureLazyStream(const String& path, int index);
+    //bool readLineSmart(const String& path, int index, String& out);
+    bool readLineSmart(const char* path, int index, char* out, size_t outLen);
+    static void stripAfterAt(String& s);
+    static void stripAfterAt(char* s);
+  
     IPAddress _ip;
-    WiFiClient _client;
-    int  _tickInterval  = 10000;
+    WiFiClient& _client;
+    int  _tickInterval  = 0;
     unsigned long _lastTick = 0;
     void EnsureTimeoutBeforeRequest(unsigned long timeout);
-  
+    static const KinoPropertyInfo _properties[];
     // Status
     StaticJsonDocument<1024> _props;
     StaticJsonDocument<1024> _newProps;
@@ -109,5 +147,16 @@ class WLEDDevice : public KinoDevice {
     bool _pause = false;
   
     void initFilter();
+    bool readEffects(bool forceRefresh = false);
+    bool readPalettes(bool forceRefresh= false);
+    String effectsFile();
+    void effectsFile(char* filename, size_t filenameLen);
+    String paletteFile();
+    void paletteFile(char* filename, size_t filenameLen);
+    int countParams(size_t linenr);
+    bool getParamLabel(size_t linenr, size_t paramnr, String& out);
+    bool getParamLabel(size_t linenr, size_t paramnr, char* out, size_t outLen);
+    bool getParamField(size_t linenr, size_t paramnr, String& out);
+    bool getParamField(size_t linenr, size_t paramnr, char* out, size_t outLen);
     static StaticJsonDocument<512> _jsonFilter; 
 };

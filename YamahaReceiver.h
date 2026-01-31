@@ -35,13 +35,15 @@ class YamahaReceiver : public KinoDevice {
     const char* deviceType() const override {
         return "yamahareceiver";
     }
-    YamahaReceiver(IPAddress ip);                     // Konstruktor
-    YamahaReceiver(const String& ip);                 // Konstruktor mit IP als String
+    YamahaReceiver(WiFiClient& wfc, IPAddress ip);                     // Konstruktor
+    YamahaReceiver(WiFiClient& wfc, const String& ip);                 // Konstruktor mit IP als String
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
     KinoError queryCount(const char* property, uint16_t& out) override;
     KinoError query(const char* property, uint16_t index, KinoVariant& out) override;
-    
+    size_t getPropertyCount() const override;
+    const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
+
     IPAddress getIp() const;
     bool begin();
     KinoError init();
@@ -74,15 +76,17 @@ class YamahaReceiver : public KinoDevice {
     std::vector<String> readNetRadioFavorites(bool reload=false);      // liefert eine Liste der NETRADIO- Favoriten als Strings
     bool selectNetRadioFavorite(const String& radioname); // wählt den übergebenen NETRADIO- Favoriten aus
     NetRadioTrackInfo readCurrentlyPlayingNetRadio(); // liefert Infos über den aktuellen NETRADIO Tracks
-    bool tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
+    KinoError tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
     bool setTickInterval(int ms);                     // setzt das Intervall für tick() in Millisekunden. Erlaubt: 0 oder 2000 bis unendlich
     int getTickInterval();                            // gibt das Intervall für tick() in Millisekunden zurück
     
   private:
     IPAddress _ip;
-    WiFiClient _client;
+    WiFiClient& _client;
+    // KinoDevice:: properties
+    static const KinoPropertyInfo _props[];
     // ticker
-    unsigned long _tickInterval  = 10000;
+    unsigned long _tickInterval  = 0;
     unsigned long _lastTick = 0;
     // Status Cache
     bool _powerStatus    = false;
@@ -99,10 +103,14 @@ class YamahaReceiver : public KinoDevice {
     std::vector<InputSource> _InputSources;
     bool _gotInputSources = false;
 
+    std::vector<KinoPropertyParam> getAudioParams();
+    std::vector<KinoPropertyParam> getInputParams(const char* inp);
+    std::vector<KinoPropertyParam> getDspParams(const char* dspname);
     void initInputSources();                                                                // init- Helper für InputSources
     InputSource* getInputSourceByKey(const String&keyname);
     String readNetRadioList();                                                              // Helper für readNetRadioFavorites()
     bool moveToFavorites();                                                                 // Helper für readNetRadioFavorites()
+    bool moveToNextPage();
     // String sendXML ist nur noch wegen Abwärtskompatibilität hier. Das fliegt bald raus, sobald
     // alle internen Methoden auf sendXMLRequest umgebaut sind!
     String sendXML(const String& xml);                                                      // Helper für das Senden von XML an den Yamaha
@@ -116,6 +124,7 @@ class YamahaReceiver : public KinoDevice {
     bool executeSetCommand(const __FlashStringHelper* start, const String& val, const __FlashStringHelper* end);
     void EnsureDelayBeforeRequest(unsigned long timeout);
 
+    void sanitize_to_ascii(const char* input, char* output, size_t out_size);
     // ----------------------------------------------------
     // XML Templates in PROGMEM
     // ----------------------------------------------------
@@ -128,6 +137,7 @@ class YamahaReceiver : public KinoDevice {
     static const char XML_SET_SELECT_LINE_ONE[] PROGMEM;
     static const char XML_SET_SELECT_LINENR_START[] PROGMEM;
     static const char XML_SET_SELECT_LINENR_END[] PROGMEM;
+    static const char XML_SELECT_NEXT_PAGE[] PROGMEM;
     static const char XML_GET_DSP_SKIP[] PROGMEM;
     static const char XML_GET_NETRADIO_PLAYINFO[] PROGMEM;
     static const char XML_SET_POWER_START[] PROGMEM;

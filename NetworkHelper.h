@@ -6,14 +6,15 @@
 namespace NetworkHelper {
     // erzwingt einen sauberen Grundzustand für den übergebenen WifiClient
     inline bool resetClient(WiFiClient& c) {
-      c.stop();
       while(c.available()>0) { c.read(); yield();} // Leere den Puffer
+      c.stop();
       return true;
     }
   
     // Überspringt den HTTP-Header, damit wir direkt beim XML/JSON landen
     inline bool skipHeader(WiFiClient& client) {
         // find() ist effizient, da es nicht den ganzen Text puffert
+        client.setTimeout(250);
         return client.find((char*)"\r\n\r\n");
     }
 

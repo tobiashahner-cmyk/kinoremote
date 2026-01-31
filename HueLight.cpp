@@ -39,11 +39,14 @@ float HueLight::getY() const { return _y; }
 RgbColor HueLight::getRGB() { return xyToRgb(_x, _y, _bri); }
 uint16_t HueLight::getCT() const { return _ct; }
 
+uint16_t HueLight::getTT() const { return pending.tt.value_or(0); }
+
 // --- Setter ---
 bool HueLight::setOn(bool value)      { pending.on = value; return true;}
 bool HueLight::setBri(uint8_t value)  { if(_hasBri) pending.bri = value; return true;}
 bool HueLight::setCT(uint16_t value)  { if(_hasCT) { pending.ct = value;  return true; } return false;}
 bool HueLight::setXY(float x, float y){ if(_hasXY) { pending.xy = std::make_pair(x, y);  return true;}  return false;}
+bool HueLight::setTT(uint16_t value) { if(_hasBri){pending.tt = (uint16_t)value/100; if (pending.tt==0) {pending.tt=1; } return true;} return false;}  // tt wird auf der bridge nicht gespeichert
 bool HueLight::setRGB(uint8_t r, uint8_t g, uint8_t b) { 
   RgbColor col = {r,g,b};
   XyPoint xyp = rgbToXy(col); 
@@ -54,6 +57,19 @@ bool HueLight::setRGB(uint8_t r, uint8_t g, uint8_t b) {
 void HueLight::forceOn(bool value)              { _on = value; }
 void HueLight::forceBri(uint8_t value)          { if (_hasBri) _bri = value; }
 void HueLight::forceCT(uint16_t value)          { if (_hasCT)  _ct = value; }
+
+// spezieller Setter für Refresh von der HueBridge
+void HueLight::updateValues(const String& name, bool on, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, bool hasBri) {
+  _name = name;
+  _on = on;
+  _bri = bri;
+  _hasXY = hasXY;
+  _x = x;
+  _y = y;
+  _hasCT = hasCT;
+  _ct = ct;
+  _hasBri = hasBri;
+}
 
 // --- applyChanges ---
 bool HueLight::applyChanges(HueBridge* bridge) {
@@ -69,6 +85,7 @@ bool HueLight::applyChanges(HueBridge* bridge) {
     if(pending.on.has_value()) doc["on"] = pending.on.value();
     if(pending.bri.has_value()) doc["bri"] = pending.bri.value();
     if(pending.ct.has_value()) doc["ct"] = pending.ct.value();
+    if(pending.tt.has_value())  doc["transitiontime"] = pending.tt.value();
     if(pending.xy.has_value()) {
         JsonArray xyArr = doc.createNestedArray("xy");
         xyArr.add(pending.xy->first);

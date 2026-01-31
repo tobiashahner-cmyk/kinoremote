@@ -10,7 +10,10 @@ HueScene::HueScene(const String& id,
 
 const String& HueScene::getId() const { return _id; }
 const String& HueScene::getName() const { return _name; }
+const uint16_t HueScene::getTT() const { return _tt; }
 const std::vector<uint8_t>& HueScene::getLightIds() const { return _lightIds; }
+
+bool HueScene::setTT(uint16_t value) { _tt = (uint16_t)value/100; if (_tt==0) _tt=1; return true;}
 
 /*
 bool HueScene::setActive(HueBridge& bridge) {
@@ -59,12 +62,16 @@ bool HueScene::setActive(HueBridge* bridge) {
     // 1️⃣ Szene aktivieren (Group 0)
     StaticJsonDocument<64> doc;
     doc["scene"] = _id;
+    doc["transitiontime"] = _tt;
 
     String payload;
     serializeJson(doc, payload);
 
     if (!bridge->sendGroupState(0, payload))
         return false;
+
+    // reset transition time
+    _tt = 4;  // Standardwert in der Bridge, wenn nichts Anderes angegeben
 
     // 2️⃣ Gewünschte Zustände aus der Szene lesen
     SceneLightStates states =

@@ -4,7 +4,7 @@
 
 enum class KinoError : uint8_t {
     OK = 0,
-
+    NothingToDo,
     DeviceNotReady,
     PropertyNotSupported,
     InvalidType,

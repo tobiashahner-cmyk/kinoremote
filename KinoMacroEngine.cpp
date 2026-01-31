@@ -1,365 +1,409 @@
 #include "KinoMacroEngine.h"
 #include "KinoAPI.h"
-#include <LittleFS.h>
 
-// Lifecycle
+
+// --------------------------------------------------
+// lifecycle
+// --------------------------------------------------
 bool KinoMacroEngine::begin() {
   _errors.clear();
   _ready = false;
   if (!LittleFS.begin()) {
-      _addError(0,"", "LittleFS init failed");
-      return false;
+    _addError(0, "FS", "LittleFS init failed");
+    return false;
   }
-
   if (!LittleFS.exists("/macros")) {
-      LittleFS.mkdir("/macros");
+    LittleFS.mkdir("/macros");
   }
   _ready = true;
   return true;
 }
 
+
 bool KinoMacroEngine::isReady() const {
   return _ready;
 }
 
-bool KinoMacroEngine::startMacro(const String& name, MacroFinishedCallback cb/*=nullptr*/) {
+
+// --------------------------------------------------
+// execution
+// --------------------------------------------------
+
+bool KinoMacroEngine::startMacro(const String& name, MacroFinishedCallback cb) {
   if (runtime.running) {
-    _addError(0,"runtime", "macro already running");
+    _addError(0, "runtime", "macro already running");
     return false;
   }
-  // always (re-)load the macro, to fill the runtime with correct data
-  if (!_loadMacro(name)) return false;
-  _onFinished = cb;
-  _errors.clear();
-  runtime.actions = _macroDoc["actions"].as<JsonArray>();
-  runtime.index = 0;
+  File f = LittleFS.open(_macroPath(name), "r");
+  if (!f) {
+    _addError(0, "FS", "could not open macro");
+    return false;
+  }
+  _clearErrors();
+  runtime.file = f;
+  runtime.line = 1;
   runtime.running = true;
   runtime.testing = false;
+  _onFinished = cb;
+  _currentMacroName = name;
   return true;
 }
 
-bool KinoMacroEngine::testMacro(const String& name, MacroFinishedCallback cb/*=nullptr*/) {
-  if (runtime.running) {
-    _addError(0,"runtime", "macro already running");
-    return false;
-  }
-  // always (re-)load the macro, to fill the runtime with correct data
-  if (!_loadMacro(name)) return false;
-  _onFinished = cb;
-  _errors.clear();
-  runtime.actions = _macroDoc["actions"].as<JsonArray>();
-  runtime.index = 0;
-  runtime.running = true;
+
+bool KinoMacroEngine::testMacro(const String& name, MacroFinishedCallback cb) {
+  if (!startMacro(name, cb)) return false;
   runtime.testing = true;
   return true;
 }
 
-String KinoMacroEngine::getName() const {
-  return (_macroDoc["name"] | "");
-}
-
 void KinoMacroEngine::tick() {
   if (!runtime.running) return;
+  
   if (_pausing) {
-    unsigned long now = millis();
-    if (now - _pauseStart < _pauseDuration) {
-      return;
-    }
-    _pausing = false; // time is over, continue the macro
-    if (runtime.testing) Serial.printf("pause of %i milliseconds is over, resuming now\n",_pauseDuration);
+    if (millis() - _pauseStart < _pauseDuration) return;
+    _pausing = false;
   }
-  if (runtime.index >= runtime.actions.size()) {
+  
+  if (!runtime.file.available()) {
+    runtime.file.close();
     runtime.running = false;
-    bool success = _errors.empty();
     if (_onFinished) {
-      _onFinished(success);
-      _onFinished = nullptr; // 🔥 wichtig!
+      _onFinished(_errors.empty());
+      _onFinished = nullptr;
+    }
+    _currentMacroName = "";
+    return;
+  }
+  String line = runtime.file.readStringUntil('\n');
+  line.trim();
+  if (line.isEmpty()) {
+    runtime.line++;
+    return;
+  }
+  DynamicJsonDocument actionDoc(1024);
+  DeserializationError err = deserializeJson(actionDoc, line);
+  if (err) {
+    _addError(runtime.line, "JSON", err.c_str());
+    runtime.running = false;
+    if (_onFinished) {
+      _onFinished(false);
+      _onFinished = nullptr;
     }
     return;
   }
-
-  JsonObject action = runtime.actions[runtime.index];
-  _executeAction(action, runtime.index);
-  runtime.index++;
-
-  yield();  // 👈 ABSOLUT PFLICHT
+  _executeAction(actionDoc.as<JsonObject>(), runtime.line);
+  
+  runtime.line++;
+  yield();
 }
+
 
 bool KinoMacroEngine::isRunning() const {
   return runtime.running;
 }
 
+String KinoMacroEngine::getName() const {
+  return _currentMacroName;
+}
 
-
+// --------------------------------------------------
+// action execution
+// --------------------------------------------------
 
 bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
   if (a["cmd"] == "delay") {
     _pausing = true;
-    _pauseDuration = a["seconds"] | 1;
-    _pauseDuration *= 1000;   // convert seconds to milliseconds
+    _pauseDuration = (a["seconds"] | 1) * 1000UL;
     _pauseStart = millis();
-    if (runtime.testing) Serial.printf("will pause for %i milliseconds\n",_pauseDuration);
-    return true;    // tick() will be calling again with the next action after the delay is done
+    return true;
   }
-  
-  ActionResult res = MacroActions::execute(a,runtime.testing);
-
+  ActionResult res = MacroActions::execute(a, runtime.testing);
   if (!res.ok()) {
-    _addError(
-      index,
-      (a["cmd"] | "ACTION"),
-      MacroActions::translateErrorCode(res.error) + ": " + res.message
-    );
+    _addError(index, a["cmd"] | "ACTION",
+    MacroActions::translateErrorCode(res.error) + ": " + res.message);
     return false;
   }
-  
   return true;
 }
 
 
-// Error handling
+// --------------------------------------------------
+// macro manipulation (line based)
+// --------------------------------------------------
+
+bool KinoMacroEngine::getMacroLines(const String& macroName, std::vector<String>& outLines) {
+  _clearErrors();
+  outLines.clear();
+
+  File f = LittleFS.open(_macroPath(macroName), "r");
+  if (!f) {
+    _addError(0, "FS", "could not open macro");
+    return false;
+  }
+  size_t line = 1;
+  while (f.available()) {
+    String l = f.readStringUntil('\n');
+    l.trim();
+    if (!l.isEmpty()) {
+      outLines.push_back(String(line) + ": " + l);
+    }
+    line++;
+  }
+  f.close();
+  return true;
+ }
+
+bool KinoMacroEngine::getMacroLineCount(const String& macroName, size_t& out) {
+  File f = LittleFS.open(_macroPath(macroName), "r");
+  if (!f) {out = 0; return false;}
+  size_t linecount = 0;
+  while (f.available()) {
+    String l = f.readStringUntil('\n');
+    linecount++;
+  }
+  f.close();
+  out = linecount;
+  return true;
+}
+
+bool KinoMacroEngine::getMacroLineByIndex(const String& macroName, size_t index, String& out) {
+  File f = LittleFS.open(_macroPath(macroName), "r");
+  if (!f) { Serial.println("no file handle"); out = ""; return false; }
+  size_t linecount = 0;
+  while (f.available()) {
+    String l = f.readStringUntil('\n');
+    if (linecount == index) {
+      out = l;
+      f.close();
+      return true;
+    }
+    linecount++;
+  }
+  f.close();
+  out = "";
+  return false;
+}
+
+/*
+std::vector<String> KinoMacroEngine::getAvailableMacroCommands() {
+  std::vector<String> commands;
+  commands.push_back("set");
+  commands.push_back("delay");
+  return commands;
+}*/
+
+std::vector<const char*> KinoMacroEngine::getAvailableMacroCommands() {
+  // Wir geben nur Pointer auf statische Strings zurück. 
+  // Diese liegen im Flash und belegen keinen Heap/Stack für Kopien.
+  return { "set", "delay" }; 
+}
+
+bool KinoMacroEngine::addCommand(const String& macroName, size_t index, const String& jsonAction) {
+  String src = _macroPath(macroName);
+  String tmp = src + ".tmp";
+  
+  File in = LittleFS.open(src, "r");
+  if (!in) return false;
+  File out = LittleFS.open(tmp, "w");
+  if (!out) return false;
+  
+  size_t line = 1;
+  bool inserted = false;
+  
+  while (in.available()) {
+    String l = in.readStringUntil('\n');
+    if (line == index) {
+      out.println(jsonAction);
+      inserted = true;
+    }
+    out.println(l);
+    line++;
+  }
+  if (!inserted) out.println(jsonAction);
+  
+  in.close();
+  out.close();
+  LittleFS.remove(src);
+  LittleFS.rename(tmp, src);
+  return true;
+}
+
+bool KinoMacroEngine::deleteCommand(const String& macroName, size_t index) {
+  String src = _macroPath(macroName);
+  String tmp = src + ".tmp";
+  
+  File in = LittleFS.open(src, "r");
+  File out = LittleFS.open(tmp, "w");
+  if (!in || !out) return false;
+  
+  size_t line = 1;
+  while (in.available()) {
+    String l = in.readStringUntil('\n');
+    if (line != index) out.println(l);
+    line++;
+  }
+  
+  in.close();
+  out.close();
+  LittleFS.remove(src);
+  LittleFS.rename(tmp, src);
+  return true;
+}
+
+bool KinoMacroEngine::updateCommand(const String& macroName,
+                                    size_t index,
+                                    const String& jsonAction) {
+  String src = _macroPath(macroName);
+  String tmp = src + ".tmp";
+
+  File in = LittleFS.open(src, "r");
+  File out = LittleFS.open(tmp, "w");
+  if (!in || !out) {
+    Serial.println("KinoMacroEngine::updateCommand(): Could not open file");
+    Serial.print("Source file: "); Serial.println(src);
+    Serial.print("Tmp    file: "); Serial.println(tmp);
+    if (!in) Serial.println("Error lies in Source file");
+    if (!out)Serial.println("Error lies in Tmp file");
+    return false;
+  }
+
+  size_t line = 1;
+  bool replaced = false;
+
+  while (in.available()) {
+    String l = in.readStringUntil('\n');
+    if (line == index) {
+      out.println(jsonAction);
+      replaced = true;
+    } else {
+      out.println(l);
+    }
+    line++;
+  }
+
+  in.close();
+  out.close();
+
+  if (!replaced) {
+    Serial.println("KinoMacroEngine::updateCommand(): Did not replace anything");
+    LittleFS.remove(tmp);
+    return false;
+  }
+
+  LittleFS.remove(src);
+  LittleFS.rename(tmp, src);
+  return true;
+}
+
+bool KinoMacroEngine::createMacro(const String& name) {
+  String path = _macroPath(name);
+  if (LittleFS.exists(path)) return false;
+  File f = LittleFS.open(path, "w");
+  if (!f) return false;
+  f.close();
+  return true;
+}
+
+bool KinoMacroEngine::addOrUpdateMacro(const String& json) {
+  DynamicJsonDocument doc(512);
+  if (deserializeJson(doc, json)) return false;
+  if (!doc.containsKey("name") || !doc.containsKey("actions")) return false;
+  
+  String name = doc["name"].as<String>();
+  File f = LittleFS.open(_macroPath(name), "w");
+  if (!f) return false;
+  
+  for (JsonObject a : doc["actions"].as<JsonArray>()) {
+    serializeJson(a, f);
+    f.println();
+  }
+  f.close();
+  return true;
+}
+
+bool KinoMacroEngine::deleteMacro(const String& macroName) {
+  String path = _macroPath(macroName);
+  if (!LittleFS.exists(path)) return false;
+  return LittleFS.remove(path);
+}
+
+bool KinoMacroEngine::renameMacro(const String& oldName,const String& newName) {
+  String onm = _macroPath(oldName);
+  String nnm = _macroPath(newName);
+  if (nnm.length() > 31) return false;
+  return LittleFS.rename(onm, nnm);
+}
+
+std::vector<String> KinoMacroEngine::listMacros() {
+  std::vector<String> names;
+  Dir dir = LittleFS.openDir("/macros");
+  while (dir.next()) names.push_back(dir.fileName());
+  return names;
+}
+
+size_t KinoMacroEngine::getMacroCount() {
+  size_t ct = 0;
+  Dir dir = LittleFS.openDir("/macros");
+  while (dir.next()) ct++;
+  return ct;
+}
+
+String KinoMacroEngine::getMacroName(size_t index) {
+  size_t ct = 0;
+  String mname = "";
+  Dir dir = LittleFS.openDir("/macros");
+  while (dir.next()) {
+    if (ct == index) {
+      mname = dir.fileName();
+      break;
+    }
+    ct++;
+  }
+  mname.replace(".macro","");
+  return mname;
+}
+
+size_t KinoMacroEngine::getMacroIndex(const String& macroName) {
+  String cmp = macroName+String(".macro");
+  size_t index = -1;
+  Dir dir = LittleFS.openDir("/macros");
+  while(dir.next()) {
+    if (cmp == dir.fileName()) return (index+1);
+    index++;
+  }
+  return index;
+}
+
+
+
+// --------------------------------------------------
+// error handling
+// --------------------------------------------------
 
 void KinoMacroEngine::_clearErrors() {
   _errors.clear();
 }
 
+
 size_t KinoMacroEngine::errorCount() const {
   return _errors.size();
 }
 
-void KinoMacroEngine::_addError(uint8_t index, const String& cmd, const String& message) {
-  _errors.push_back({index, cmd, message});
-}
 
 const MacroError& KinoMacroEngine::getError(size_t index) const {
   return _errors[index];
 }
 
 
-
-// Macro Logic
-bool KinoMacroEngine::addOrUpdateMacro(const String& json) {
-  _macroDoc.clear();
-  DeserializationError err = deserializeJson(_macroDoc, json);
-  if (err) {
-    _addError(0,"JSON", err.c_str());
-    _addError(0,"",json);
-    return false;
-  }
-
-  if (!_macroDoc.containsKey("name")) {
-    _addError(0,"JSON", "missing name");
-    return false;
-  }
-  if (!_macroDoc.containsKey("actions")) {
-    _addError(0,"JSON", "missing actions");
-  }
-
-  return _saveMacro();
-}
-
-// Makro- Manipulationen:
-bool KinoMacroEngine::getMacroLines(const String& macroName, std::vector<String>& outLines) {
-  _errors.clear();
-  outLines.clear();
-  if (runtime.running) {
-    _addError(0,"","Macro running, could not load");
-    return false;
-  }
-  outLines.clear();
-  if (!_loadMacro(macroName)) {
-    return false;
-  }
-  JsonArray actions = _macroDoc["actions"].as<JsonArray>();
-  size_t lineNr = 1;
-  for (JsonObject action : actions) {
-    String line;
-    serializeJson(action, line);
-    outLines.push_back(String(lineNr++) + ": " + line);
-  }
-  return true;
-}
-
-bool KinoMacroEngine::addCommand(const String& macroName, size_t index, const String& jsonActionElement) {
-    _clearErrors();
-    if (!_loadMacro(macroName)) {
-      _addError(0,"FS","could not open macro file");
-      return false;
-    }
-    JsonArray actions = _macroDoc["actions"];
-
-    // ---------- Action-Element parsen ----------
-    DynamicJsonDocument actionDoc(512);
-    DeserializationError err = deserializeJson(actionDoc, jsonActionElement);
-    if (err) {
-        _addError(0, "JSON", String("action: ") + err.c_str());
-        return false;
-    }
-
-    if (!actionDoc.is<JsonObject>()) {
-        _addError(0, "JSON", "action is not object");
-        return false;
-    }
-
-    // ---------- Index normalisieren ----------
-    size_t insertIndex;
-    if (index == 0) {
-        insertIndex = 0;                // defensiv
-    } else if (index > actions.size()) {
-        insertIndex = actions.size();   // anhängen
-    } else {
-        insertIndex = index - 1;        // 1-basiert → 0-basiert
-    }
-
-    // ---------- Einfügen ----------
-    JsonArray newActions = _macroDoc.createNestedArray("_tmp");
-
-    for (size_t i = 0; i < actions.size(); ++i) {
-        if (i == insertIndex) {
-            newActions.add(actionDoc.as<JsonObject>());
-        }
-        newActions.add(actions[i]);
-    }
-
-    if (insertIndex >= actions.size()) {
-        newActions.add(actionDoc.as<JsonObject>());
-    }
-
-    _macroDoc["actions"] = newActions;
-    _macroDoc.remove("_tmp");
-
-    return _saveMacro();
+void KinoMacroEngine::_addError(uint16_t index, const String& cmd, const String& message) {
+  _errors.emplace_back(index, cmd, message);
 }
 
 
+// --------------------------------------------------
+// helpers
+// --------------------------------------------------
 
-bool KinoMacroEngine::deleteCommand(const String& macroName, size_t index) {
-  if (index < 1) {
-    _addError(0, "CMD", "index must be >= 1");
-    return false;
-  }
-  if (!_loadMacro(macroName)) {
-    _addError(0,"FS","could not open macro file");
-    return false;
-  }
-  
-  JsonArray actions = _macroDoc["actions"].as<JsonArray>();
-  if (actions.isNull()) {
-    _addError(0, "JSON", "actions is not an array");
-    return false;
-  }
-
-  if (index > actions.size()) {
-    _addError(0, "CMD", "index out of range");
-    return false;
-  }
-
-  // 1-basiert → 0-basiert
-  actions.remove(index - 1);
-
-  return _saveMacro();
+String KinoMacroEngine::_macroPath(const String& name) const {
+  return "/macros/" + name + ".macro";
 }
-
-bool KinoMacroEngine::updateCommand(const String& macroName, size_t index, const String& jsonActionElement) {
-  if (index < 1) {
-    _addError(0, "CMD", "index must be >= 1");
-    return false;
-  }
-
-  // Neues Action-Element parsen
-  DynamicJsonDocument actionDoc(512);
-  DeserializationError actionErr = deserializeJson(actionDoc, jsonActionElement);
-  if (actionErr) {
-    _addError(0, "JSON", actionErr.c_str());
-    return false;
-  }
-  if (!actionDoc.is<JsonObject>()) {
-    _addError(0, "JSON", "action must be an object");
-    return false;
-  }
-  
-  if (!_loadMacro(macroName)) {
-    _addError(0,"FS","could not open macro file");
-    return false;
-  }
-  JsonArray actions = _macroDoc["actions"].as<JsonArray>();
-  if (actions.isNull()) {
-    _addError(0, "JSON", "actions is not an array");
-    return false;
-  }
-  if (index > actions.size()) {
-    _addError(0, "CMD", "index out of range");
-    return false;
-  }
-
-  // Ersetzen (1-basiert → 0-basiert)
-  actions[index - 1].set(actionDoc.as<JsonObject>());
-
-  return _saveMacro();
-}
-
-// File system helpers:
-std::vector<String> KinoMacroEngine::listMacros() {
-  std::vector<String> names;
-  Dir dir = LittleFS.openDir("/macros");
-  while (dir.next()) {
-      names.push_back(dir.fileName());
-  }
-  return names;
-}
-
-bool KinoMacroEngine::_loadMacro(const String& macroName) {
-  String path;
-  path.reserve(32);
-  path += "/macros/" + macroName + ".json";
-  if (!LittleFS.exists(path)) {
-    _addError(0,"FS: not found", path);
-    return false;
-  }
-  File f = LittleFS.open(path, "r");
-  if (!f) {
-    _addError(0,"FS: read failed", path);
-    return false;
-  }
-  _macroDoc.clear();
-  DeserializationError err = deserializeJson(_macroDoc, f);
-  f.close();
-  if (err) {
-    _addError(0,"JSON", err.c_str());
-    return false;
-  }
-  return true;
-}
-
-bool KinoMacroEngine::_saveMacro() {
-  String name = _macroDoc["name"].as<String>();
-  String path;
-  path.reserve(32);
-  path += "/macros/" + name + ".json";
-
-  File f = LittleFS.open(path, "w");
-  if (!f) {
-      _addError(0,"FS: write failed", path);
-      return false;
-  }
-
-  size_t bytesWritten = serializeJson(_macroDoc, f);
-  f.close();
-
-  return (bytesWritten > 0);
-}
-
-bool KinoMacroEngine::deleteMacro(const String& macroName) {
-  String path = "/macros/" + macroName + ".json";
-  if (!LittleFS.exists(path)) {
-    _addError(0,"FS: not found", path);
-    return false;
-  }
-  if (!LittleFS.remove(path)) {
-    _addError(0,"FS: could not remove", path);
-    return false;
-  }
-  return true;
-}
-
-// Lifecycle:

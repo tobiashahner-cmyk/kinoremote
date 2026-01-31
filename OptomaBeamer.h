@@ -25,17 +25,21 @@ class OptomaBeamer : public KinoDevice {
     };
   
     // Konstruktoren
-    OptomaBeamer(const IPAddress& ip, uint8_t beamerId);
-    OptomaBeamer(const String& ip, uint8_t beamerId);
+    OptomaBeamer(WiFiClient& wfc, const IPAddress& ip, uint8_t beamerId);
+    OptomaBeamer(WiFiClient& wfc, const String& ip, uint8_t beamerId);
 
+    size_t getPropertyCount() const override;
+    const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
+    KinoError queryCount(const char* property, uint16_t& out) override;
+    KinoError query(const char* property, uint16_t index, KinoVariant &out) override;
     KinoError init() override;    // wie begin, nur andere Semantik
   
     // Lifecycle
     bool begin();
     bool getStatus();
-    bool tick();
+    KinoError tick();
   
     // Getter
     bool getPowerStatus() const;
@@ -57,10 +61,10 @@ class OptomaBeamer : public KinoDevice {
     // Verbindung / Identität
     IPAddress _ip;
     uint8_t _id;
-    WiFiClient _client;
+    WiFiClient& _client;
   
     // Status
-    unsigned long _tickInterval  = 10000;
+    unsigned long _tickInterval  = 0;
     unsigned long _lastTick = 0;
     
     bool _powerState = false;
@@ -77,4 +81,5 @@ class OptomaBeamer : public KinoDevice {
     bool isOkResponse(const String& response);
     bool parseStatusResponse(const String& response);
     String encodeDisplayMode(DisplayMode dm) const;
+    static const KinoPropertyInfo _properties[];
 };

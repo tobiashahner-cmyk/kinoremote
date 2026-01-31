@@ -135,6 +135,73 @@ struct KinoVariant {
     return KinoVariant(); // Gibt NONE zurück
   }
 
+  // ------- set-Methoden für Wiederverwendung -------
+  void setString(const char* v) {
+    prepareSet();
+    type = STRING;
+    s = v ? strdup(v) : nullptr;
+  }
+
+  void setInt(int32_t v) {
+    prepareSet();
+    type = INT;
+    i = v;
+  }
+
+  void setBool(bool v) {
+    prepareSet();
+    type = BOOL;
+    b = v;
+  }
+
+  void setFloat(float v) {
+    prepareSet();
+    type = FLOAT;
+    f = v;
+  }
+
+  void setColor(uint8_t r, uint8_t g, uint8_t b) {
+    prepareSet();
+    type = RGB_COLOR;
+    color = { r, g, b };
+  }
+
+  void setColor(const RGBColor& c) {
+    prepareSet();
+    type = RGB_COLOR;
+    color = c;
+  }
+
+  void setNone() {
+    prepareSet();
+    type = NONE;
+  }
+
+  void setFromJsonVariant(JsonVariantConst j) {
+    if (j.is<bool>()) {
+      setBool(j.as<bool>());
+    } 
+    else if (j.is<int32_t>()) {
+      setInt(j.as<int32_t>());
+    } 
+    else if (j.is<float>()) {
+      setFloat(j.as<float>());
+    } 
+    else if (j.is<const char*>()) {
+      setString(j.as<const char*>());
+    }
+    else if (j.is<JsonArrayConst>()) {
+      JsonArrayConst arr = j.as<JsonArrayConst>();
+      if (arr.size() == 3) {
+        setColor(arr[0], arr[1], arr[2]);
+      } else {
+        setNone();
+      }
+    } else {
+      setNone();
+    }
+  }
+
   bool asBool() const {
     switch (type) {
       case BOOL:   return b;
@@ -142,7 +209,7 @@ struct KinoVariant {
       case FLOAT:  return f != 0.0f;
       case STRING: 
           if (!s) return false;
-          if (strcasecmp(s, "true") == 0 || strcmp(s, "1") == 0) return true;
+          if (strcasecmp(s, "true") == 0 || strcasecmp(s, "on") == 0 || strcmp(s, "1") == 0) return true;
           return false;
       default:     return false;
     }
@@ -172,6 +239,34 @@ struct KinoVariant {
     // Hinweis: Liefert bei Typ STRING den Pointer, sonst nullptr.
     // Für eine echte Konvertierung Zahl -> String müsste man einen Puffer verwalten (komplexer).
     return (type == STRING) ? s : nullptr;
+  }
+
+  const char* c_str() const {
+    // 1. Wenn es schon ein String ist, einfach den Pointer rausgeben (Null-Overhead)
+    if (type == STRING) return s ? s : "";
+
+    // 2. Statischer Puffer für Konvertierungen (Zahlen, Farben, etc.)
+    // WICHTIG: 'static' sorgt dafür, dass der Puffer im RAM bleibt und nicht auf dem Stack.
+    // 32 Byte reichen locker für jede Zahl oder Hex-Farbe.
+    static char buf[32]; 
+
+    switch (type) {
+        case BOOL:   
+            return b ? "true" : "false";
+        case INT:    
+            itoa(i, buf, 10);
+            return buf;
+        case FLOAT:  
+            dtostrf(f, 1, 2, buf);
+            return buf;
+        case RGB_COLOR: 
+            snprintf(buf, sizeof(buf), "#%02X%02X%02X", color.r, color.g, color.b);
+            return buf;
+        case NONE:
+            return "none";
+        default:     
+            return "";
+    }
   }
 
   String toString() const {
@@ -220,6 +315,16 @@ struct KinoVariant {
     } else { // Format #RRGGBB
       return { (uint8_t)((rgb >> 16) & 0xFF), (uint8_t)((rgb >> 8) & 0xFF), (uint8_t)(rgb & 0xFF) };
     }
+  }
+
+  // Interne Sicherheit: Räumt alten String-Speicher auf, 
+  // bevor ein neuer Typ zugewiesen wird
+  void prepareSet() {
+    if (type == STRING && s) {
+      free(s);
+      s = nullptr;
+    }
+    type = NONE; // Grundzustand
   }
 
 };

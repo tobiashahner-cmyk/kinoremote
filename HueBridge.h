@@ -30,20 +30,23 @@ public:
     const char* deviceType() const override {
         return "huebridge";
     }
+    size_t getPropertyCount() const override;
+    const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
     KinoError queryCount(const char* property, uint16_t& out) override;
     KinoError query(const char* property, uint16_t index, KinoVariant &out) override;
+    bool needsCommit() override;
     bool commit() override;
     KinoError init() override;    // wie begin, nur andere Semantik
 
-    HueBridge(const IPAddress& ip, const String& user);
-    HueBridge(const String& ip, const String& user);
+    HueBridge(WiFiClient& wfc, const IPAddress& ip, const String& user);
+    HueBridge(WiFiClient& wfc, const String& ip, const String& user);
 
     bool begin();
     bool readLights();
 
-    bool tick();
+    KinoError tick();
     int getTickInterval();
     bool setTickInterval(int ms);
 
@@ -63,6 +66,7 @@ public:
 
     bool readSensors();
     HueSensor* getSensorByName(const String& name);
+    HueSensor* getSensorById(uint16_t sensorId);
     bool setSensorState(uint16_t id, const JsonObject& state);
 
     bool setPower(bool onoff);
@@ -81,17 +85,27 @@ public:
 private:
     IPAddress _ip;
     String _user;
-    WiFiClient _client;
+    WiFiClient& _client;
+
+    bool httpError(const char* cause);
+    
     std::vector<HueLight*> _lights;
     std::vector<HueGroup*> _groups;
     std::vector<HueScene*> _scenes;
     std::vector<HueSensor*> _sensors;
     bool splitPath(const char* input, char* dev, size_t devLen, char* name, size_t nameLen, char* act, size_t actLen);
+
+    std::vector<String> getLightParams(const HueLight* l);
+    std::vector<String> getGroupParams(const HueGroup* g);
+    std::vector<String> getSensorParams(const HueSensor* s);
+
     
-    int  _tickInterval  = 10000;
+    int  _tickInterval  = 0;
     unsigned long _lastTick = 0;
     void EnsureTimeoutBeforeRequest(unsigned long timeout);
     bool httpGET(const String& path);
     bool waitForData(uint32_t timeout = 2000);
     bool skipHttpHeader();
+
+    static const KinoPropertyInfo _properties[];
 };

@@ -25,10 +25,13 @@ public:
     Unknown
   };
 
+  static bool labelByIndex(int index, String& out);
+  static bool setParameterByIndex(int index, String& out);
   static InputSource fromReadCode(uint8_t code);
   static bool toSetParameter(InputSource src, String& outParam);
   static const char* toString(InputSource src);
   static InputSource fromString(const String& name);
+  static size_t getTableSize();
 
 private:
   struct Entry {

@@ -34,10 +34,13 @@ bool HueGroup::anyOn() const {
     return false;
 }
 
+uint16_t HueGroup::getTT() const { return pending.tt.value_or(0);  }
+
 // --- Setter ---
 bool HueGroup::setOn(bool value)     { pending.on = value; return true;}
 bool HueGroup::setBri(uint8_t value) { pending.bri = value; return true;}
 bool HueGroup::setCT(uint16_t value) { pending.ct = value; return true;}
+bool HueGroup::setTT(uint16_t value) { pending.tt = (uint16_t)value/100; if (pending.tt == 0) {pending.tt=1;} return true;}
 
 // --- applyChanges ---
 bool HueGroup::applyChanges(HueBridge* bridge) {
@@ -53,6 +56,7 @@ bool HueGroup::applyChanges(HueBridge* bridge) {
     if (pending.on)  doc["on"]  = *pending.on;
     if (pending.bri) doc["bri"] = *pending.bri;
     if (pending.ct)  doc["ct"]  = *pending.ct;
+    if (pending.tt)  doc["transitiontime"] = *pending.tt;
 
     String payload;
     serializeJson(doc, payload);
@@ -79,4 +83,5 @@ void HueGroup::clearPending() {
     pending.on.reset();
     pending.bri.reset();
     pending.ct.reset();
+    pending.tt.reset();
 }

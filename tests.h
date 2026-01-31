@@ -47,7 +47,7 @@ void showCanvasTicker() {
   KinoAPI::getProperty("canvas","live",v);
   Serial.print("Live Data:  "); Serial.print((v.b) ? "incoming, " : "none, "); 
   KinoAPI::getProperty("canvas","lor",v);
-  Serial.println((!v.b) ? "ignoriert" : "bearbeitet");
+  Serial.println((v.b) ? "ignoriert" : "bearbeitet");
   KinoAPI::getProperty("canvas","input",v);
   Serial.print("LD Source:  "); Serial.println(v.s);
   KinoAPI::getProperty("canvas","fx",v);
@@ -169,7 +169,7 @@ void showHueTicker() {
       Serial.println("Licht Sensor Theke nicht gefunden");
   }*/
 }
-
+/*
 void testBasicStatus() {
     // Basic Status
     Serial.println("--- GET BASIC STATUS ---");
@@ -287,4 +287,4 @@ void canvasTestStatus() {
   Serial.print("Live Data:  "); Serial.print((_canvas->isReceivingLiveData()) ? "incoming, " : "none, "); Serial.println((_canvas->isOverridingLiveData()) ? "ignoriert" : "bearbeitet");
   Serial.print("Effekt:     "); Serial.println(_canvas->getEffect());
   Serial.print("  Speed:    "); Serial.println(_canvas->getSpeed());
-}
+}*/

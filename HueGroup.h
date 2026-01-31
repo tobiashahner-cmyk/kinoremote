@@ -15,6 +15,7 @@ public:
 
     uint16_t getId() const;
     const String& getName() const;
+    uint16_t getTT() const;
     std::vector<uint8_t> getLightIds() const;
 
     bool allOn() const;
@@ -23,6 +24,7 @@ public:
     bool setOn(bool value);
     bool setBri(uint8_t value);
     bool setCT(uint16_t value);
+    bool setTT(uint16_t value);
 
     bool applyChanges(HueBridge* bridge);
 
@@ -37,6 +39,7 @@ private:
         std::optional<bool> on;
         std::optional<uint8_t> bri;
         std::optional<uint16_t> ct;
+        std::optional<uint16_t> tt;
     } pending;
 
     void clearPending();
