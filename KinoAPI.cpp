@@ -194,9 +194,12 @@ namespace KinoAPI {
 
   KinoError getDeviceName(size_t devIndex, KinoVariant& out) {
     if (devIndex >= KinoDeviceFactory::getDeviceCount()) return KinoError::OutOfRange;
-    String devName = KinoDeviceFactory::getDeviceNameByIndex(devIndex);
-    if (devName.length()==0) return KinoError::InternalError;
-    out = KinoVariant::fromString(devName.c_str());
+    //String devName = KinoDeviceFactory::getDeviceNameByIndex(devIndex);
+    char devName[32];
+    if (!KinoDeviceFactory::getDeviceNameByIndex(devIndex, devName, sizeof(devName))) return KinoError::InternalError;
+    //if (devName.length()==0) return KinoError::InternalError;
+    //out = KinoVariant::fromString(devName.c_str());
+    out.setString(devName);
     return KinoError::OK;
   }
 
@@ -211,28 +214,36 @@ namespace KinoAPI {
     unsigned long freeHeap = ESP.getFreeHeap();
     uint16_t maxFreeBlockSize = ESP.getMaxFreeBlockSize();
     uint8_t heapFragmentation = ESP.getHeapFragmentation();
+    unsigned long freeStack = ESP.getFreeContStack();
     Serial.print(F("FreeHeap: "));
     Serial.print(freeHeap);
     Serial.print(F(" | MaxBlock: "));
     Serial.print(maxFreeBlockSize);
     Serial.print(F(" | Fragmentation: "));
     Serial.println(heapFragmentation);
+    Serial.print(F(" | Stack: "));
+    Serial.println(freeStack);
   }
 
   // This method will repeatedly cycle through all available devices and ask them
   // to tick(). Each device will handle its own ticks according to its tickInterval
   // A static int "runner" ensures that only ONE device will tick() in a loop() cycle
   //KinoError handleDeviceTicks(std::function<void(String devname)> cb) {
-  KinoError handleDeviceTicks(std::function<void(const String& devname)> cb) {
+  KinoError handleDeviceTicks(std::function<void(const char* devname, bool success)> cb) {
     static int runner = 0;
     int devCount = KinoDeviceFactory::getDeviceCount();
     KinoDevice* d = KinoDeviceFactory::getDeviceByIndex(runner);
     KinoError tickresult = KinoError::DeviceUnknown;
     if (d) {
       tickresult = d->tick();
-      if ((tickresult == KinoError::OK) && (cb != nullptr)) {
+      /*if ((tickresult == KinoError::OK) && (cb != nullptr)) {
         cb(KinoDeviceFactory::getDeviceNameByIndex(runner));
-      } 
+      }*/
+      if (tickresult != KinoError::NothingToDo) {
+         char devName[32];
+         KinoDeviceFactory::getDeviceNameByIndex(runner, devName, sizeof(devName));
+         cb(devName, (tickresult == KinoError::OK));
+      }
     }
     runner++;
     if (runner >= devCount) runner=0;
@@ -297,11 +308,17 @@ namespace KinoAPI {
   }
   
   KinoError commit(const char* deviceName) {
+    bool ok = true;
+    Serial.println(F("Speicher vor Commit"));
+    showMemory();
     if (!deviceName) return KinoError::DeviceNotReady;
     //KinoDevice* d = getDeviceByName(deviceName);
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
     if (!d) return KinoError::DeviceNotReady;
-    if (!d->commit()) return KinoError::InternalError;
+    ok = d->commit();
+    Serial.println(F("Speicher nach Commit"));
+    showMemory();
+    if (!ok) return KinoError::InternalError;
     return KinoError::OK;
   }
 

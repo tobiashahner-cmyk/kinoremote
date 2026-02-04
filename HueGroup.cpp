@@ -4,15 +4,15 @@
 #include <ArduinoJson.h>
 
 HueGroup::HueGroup(uint16_t id,
-                   const String& name,
+                   const char* name,
                    HueBridge& bridge,
                    const std::vector<uint8_t>& lightIds)
-: _id(id), _name(name), _bridge(bridge), _lightIds(lightIds) {}
+: _id(id), _bridge(bridge), _lightIds(lightIds) { strlcpy(_name, name, sizeof(_name)); }
 
 // --- Getter ---
 uint16_t HueGroup::getId() const { return _id; }
-const String& HueGroup::getName() const { return _name; }
-std::vector<uint8_t> HueGroup::getLightIds() const { return _lightIds; }
+const char* HueGroup::getName() const { return _name; }
+const std::vector<uint8_t>& HueGroup::getLightIds() const { return _lightIds; }
 
 bool HueGroup::allOn() const {
     if (_lightIds.empty()) return false;
@@ -58,7 +58,7 @@ bool HueGroup::applyChanges(HueBridge* bridge) {
     if (pending.ct)  doc["ct"]  = *pending.ct;
     if (pending.tt)  doc["transitiontime"] = *pending.tt;
 
-    String payload;
+    char payload[128];
     serializeJson(doc, payload);
 
     if (!bridge->sendGroupState(_id, payload))

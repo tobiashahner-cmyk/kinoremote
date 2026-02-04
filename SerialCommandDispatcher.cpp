@@ -88,19 +88,23 @@ int determineType(const char* chk) {
 
 static KinoVariant prepareForJson(const String p) {
   int typeNr = determineType(p.c_str());
-  KinoVariant val;
+  KinoVariant val; val.setNone();
   switch (typeNr) {
     case 1  : // bool
-      val = KinoVariant::fromBool(toBool(p));
+      //val = KinoVariant::fromBool(toBool(p));
+      val.setBool(toBool(p));
       break;
     case 2  : // int
-      val = KinoVariant::fromInt(p.toInt());
+      //val = KinoVariant::fromInt(p.toInt());
+      val.setInt(p.toInt());
       break;
     case 3  : // float
-      val = KinoVariant::fromFloat(p.toFloat());
+      //val = KinoVariant::fromFloat(p.toFloat());
+      val.setFloat(p.toFloat());
       break;
     case 4  : // string
-      val = KinoVariant::fromString(p.c_str());
+      //val = KinoVariant::fromString(p.c_str());
+      val.setString(p.c_str());
       break;
     case 5  : {// rgbcolor
       uint8_t r,g,b;
@@ -109,7 +113,8 @@ static KinoVariant prepareForJson(const String p) {
         Serial.println(F("error converting color to RGB, use json encoded command instead"));
         return val;
       }
-      val = KinoVariant::fromColor(r,g,b);
+      //val = KinoVariant::fromColor(r,g,b);
+      val.setColor(r,g,b);
       break; }
     default :
       Serial.println(F("could not determine type of value, use json encoded command instead"));
@@ -315,18 +320,22 @@ bool showError(KinoError e) {
 // SERIAL ONLY, for Debugging:
 
 bool kino_memory(String* p, uint8_t n) {
-  unsigned long freeHeap = ESP.getFreeHeap();
+  /*unsigned long freeHeap = ESP.getFreeHeap();
   uint16_t maxFreeBlockSize = ESP.getMaxFreeBlockSize();
   uint8_t heapFragmentation = ESP.getHeapFragmentation();
+  unsigned long freeStack = ESP.getFreeContStack();
   Serial.print(F("FreeHeap: "));
   Serial.print(freeHeap);
   Serial.print(F(" | MaxBlock: "));
   Serial.print(maxFreeBlockSize);
   Serial.print(F(" | Fragmentation: "));
   Serial.println(heapFragmentation);
+  Serial.print(F(" | Stack: "));
+  Serial.print(freeStack);
   if (freeHeap < 15000) return false;
   if (maxFreeBlockSize < 15000) return false;
-  if (heapFragmentation > 30) return false;
+  if (heapFragmentation > 30) return false;*/
+  KinoAPI::showMemory();
   return true;
 }
 
@@ -338,15 +347,15 @@ bool kino_startTest(String*p, uint8_t n) {
     int randNumber = random(5000, 10001);
     KinoVariant devName;
     e = KinoAPI::getDeviceName(i, devName);
-    e = KinoAPI::setProperty(devName.toString().c_str(), "tickInterval", KinoVariant::fromInt(randNumber));
+    e = KinoAPI::setProperty(devName.c_str(), "tickInterval", KinoVariant::fromInt(randNumber));
     if (e == KinoError::OK) {
       Serial.print(F("TickInterval for "));
-      Serial.print(devName.toString());
+      Serial.print(devName.c_str());
       Serial.print(F(" is now "));
       Serial.println(randNumber);
     } else {
       Serial.print(F("could not set tickInterval for device "));
-      Serial.println(devName.toString());
+      Serial.println(devName.c_str());
       ok = false;
     }
     randNumber = random(100,501);
@@ -674,10 +683,13 @@ bool hue_showSensors(String* p, uint8_t n) {
 }
 
 
-bool kino_showTicker(const String& deviceName) {
-  Serial.print(F("Ticker "));
-  Serial.println(deviceName);
-  return true;
+void kino_showTicker(const char* deviceName, bool isOk) {
+  if (!isOk) {
+    Serial.print(F("Ticker "));
+    Serial.print(deviceName);
+    Serial.print(F(" failed!"));
+    KinoAPI::showMemory();
+  }
 }
 
 

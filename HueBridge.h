@@ -40,72 +40,94 @@ public:
     bool commit() override;
     KinoError init() override;    // wie begin, nur andere Semantik
 
-    HueBridge(WiFiClient& wfc, const IPAddress& ip, const String& user);
-    HueBridge(WiFiClient& wfc, const String& ip, const String& user);
 
+    // Initialisierung
+    HueBridge(const IPAddress& ip, const char* user);
+    HueBridge(const String& ip, const char* user);
     bool begin();
-    bool readLights();
 
+    // Getter / Setter
+    bool setPower(bool onoff);
+    bool anyOn();
+    
+    // Ticker
     KinoError tick();
     int getTickInterval();
     bool setTickInterval(int ms);
 
-    HueLight* getLightByName(const String& name);
+    // Lights
+    bool readLights();
+    HueLight* getLightByName(const char* name);
     HueLight* getLightById(uint8_t id);
     const std::vector<HueLight*>& getLights() const;
+    bool sendLightState(uint8_t lightId, const char* jsonPayload);
+    int getLightParamCount(const HueLight* l);
+    bool getLightParam(const HueLight* l, int paramIndex, char* out, size_t outLen);
 
+    // Groups
     bool readGroups();
-
-    HueGroup* getGroupByName(const String& name);
+    HueGroup* getGroupByName(const char* name);
     const std::vector<HueGroup*>& getGroups() const;
+    bool sendGroupState(uint16_t groupId, const char* jsonPayload);
+    int getGroupParamCount(const HueGroup* g);
+    bool getGroupParam(const HueGroup* g, int paramIndex, char* out, size_t outLen);
 
+    // Scenes
     bool readScenes();
-    HueScene* getSceneByName(const String& name);
+    HueScene* getSceneByName(const char* name);
     //const std::vector<HueScene*>& getScenes() const;
-    bool setScene(const String& sceneName);
+    std::map<uint8_t, bool> getScenePowerStates(const char* sceneId);
+    SceneLightStates getSceneLightStates(const char* sceneId);
+    bool setScene(const char* sceneName);
+    bool saveScene(const char* sceneId, const char* jsonPayload);
 
+    // Sensors
     bool readSensors();
-    HueSensor* getSensorByName(const String& name);
+    HueSensor* getSensorByName(const char* name);
     HueSensor* getSensorById(uint16_t sensorId);
     bool setSensorState(uint16_t id, const JsonObject& state);
-
-    bool setPower(bool onoff);
-    bool anyOn();
-    
-
-    // --- HTTP PUT für Light State ---
-    bool sendLightState(uint8_t lightId, const String& jsonPayload);
-    bool sendGroupState(uint16_t groupId, const String& jsonPayload);
-    bool sendState(const String& path, const String& jsonPayload);
-    bool saveScene(const String& sceneId, const String& jsonPayload);
-    std::map<uint8_t, bool> getScenePowerStates(const String& sceneId);
-    SceneLightStates getSceneLightStates(const String& sceneId);
+    bool getSensorParam(const HueSensor* s, int paramIndex, char* out, size_t outLen);
 
     
 private:
     IPAddress _ip;
-    String _user;
-    WiFiClient& _client;
-
-    bool httpError(const char* cause);
-    
+    char _user[64];
+    //WiFiClient& _client;
     std::vector<HueLight*> _lights;
     std::vector<HueGroup*> _groups;
     std::vector<HueScene*> _scenes;
     std::vector<HueSensor*> _sensors;
-    bool splitPath(const char* input, char* dev, size_t devLen, char* name, size_t nameLen, char* act, size_t actLen);
 
+    // ticker
+    int  _tickInterval  = 0;
+    unsigned long _lastTick = 0;
+    
+    // getter und setter - helper    
+    bool splitPath(const char* input, char* dev, size_t devLen, char* name, size_t nameLen, char* act, size_t actLen);
     std::vector<String> getLightParams(const HueLight* l);
     std::vector<String> getGroupParams(const HueGroup* g);
     std::vector<String> getSensorParams(const HueSensor* s);
 
+    // read* helper
+    void updateOrAddLight(int id, JsonVariant doc);
+    void addGroup(int id, JsonVariant doc);
+    void addScene(const char* idStr, JsonVariant doc);
+    void updateOrAddSensor(int id, JsonVariant doc);
     
-    int  _tickInterval  = 0;
-    unsigned long _lastTick = 0;
+    // stream helper
     void EnsureTimeoutBeforeRequest(unsigned long timeout);
-    bool httpGET(const String& path);
-    bool waitForData(uint32_t timeout = 2000);
+    bool findNextKey(WiFiClient& client, char* out, size_t outSize, bool numericOnly);
+    size_t _globalDepth;
+    // HTTP helper
+    bool httpError(WiFiClient& client, const char* cause);
+    bool waitForData(WiFiClient& client, uint32_t timeout = 2000);
     bool skipHttpHeader();
+    bool httpGET(WiFiClient& client, const char* path);
+    bool sendState(const char* path, const char* jsonPayload);
 
     static const KinoPropertyInfo _properties[];
+    
+    StaticJsonDocument<128> _filter;
+    StaticJsonDocument<1024> _httpJson;
+    
 };

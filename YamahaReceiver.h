@@ -35,8 +35,8 @@ class YamahaReceiver : public KinoDevice {
     const char* deviceType() const override {
         return "yamahareceiver";
     }
-    YamahaReceiver(WiFiClient& wfc, IPAddress ip);                     // Konstruktor
-    YamahaReceiver(WiFiClient& wfc, const String& ip);                 // Konstruktor mit IP als String
+    YamahaReceiver(IPAddress ip);                     // Konstruktor
+    YamahaReceiver(const String& ip);                 // Konstruktor mit IP als String
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
     KinoError queryCount(const char* property, uint16_t& out) override;
@@ -82,7 +82,7 @@ class YamahaReceiver : public KinoDevice {
     
   private:
     IPAddress _ip;
-    WiFiClient& _client;
+    //WiFiClient& _client;
     // KinoDevice:: properties
     static const KinoPropertyInfo _props[];
     // ticker
@@ -108,20 +108,20 @@ class YamahaReceiver : public KinoDevice {
     std::vector<KinoPropertyParam> getDspParams(const char* dspname);
     void initInputSources();                                                                // init- Helper für InputSources
     InputSource* getInputSourceByKey(const String&keyname);
-    String readNetRadioList();                                                              // Helper für readNetRadioFavorites()
-    bool moveToFavorites();                                                                 // Helper für readNetRadioFavorites()
-    bool moveToNextPage();
+    String readNetRadioList(WiFiClient& client);                                                              // Helper für readNetRadioFavorites()
+    bool moveToFavorites(WiFiClient& client);                                                                 // Helper für readNetRadioFavorites()
+    bool moveToNextPage(WiFiClient& client);
     // String sendXML ist nur noch wegen Abwärtskompatibilität hier. Das fliegt bald raus, sobald
     // alle internen Methoden auf sendXMLRequest umgebaut sind!
-    String sendXML(const String& xml);                                                      // Helper für das Senden von XML an den Yamaha
+    String sendXML(WiFiClient& client, const String& xml);                                                      // Helper für das Senden von XML an den Yamaha
     // Sendet den Request und lässt den Client am Header-Ende stehen
-    bool sendXMLRequest(const String& xml, int len=0);
+    bool sendXMLRequest(WiFiClient& client,const String& xml, int len=0);
     int extractTagInt(const String& xml, const String& tag);                                // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
     int extractTagInt(const String& xml, const String& parent, const String& child);        // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
     String extractTagString(const String& xml, const String& tag);                          // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
     String extractTagString(const String& xml, const String& parent, const String& child);  // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
     bool isOk(const String& resp);                                                          // Helper für Fehlerbehandlung nach PUT-Anfragen
-    bool executeSetCommand(const __FlashStringHelper* start, const String& val, const __FlashStringHelper* end);
+    bool executeSetCommand(WiFiClient& client, const __FlashStringHelper* start, const String& val, const __FlashStringHelper* end);
     void EnsureDelayBeforeRequest(unsigned long timeout);
 
     void sanitize_to_ascii(const char* input, char* output, size_t out_size);

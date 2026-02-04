@@ -1,14 +1,15 @@
 #include "HueSensor.h"
 #include "HueBridge.h"
 
-HueSensor::HueSensor(uint16_t id,
-                     const String& name,
-                     const String& type)
-: _id(id), _name(name), _type(type) {}
+HueSensor::HueSensor(uint16_t id, const char* name, const char* type)
+: _id(id) {
+  strlcpy(_name, name, sizeof(_name)); 
+  strlcpy(_type, type, sizeof(_type));
+}
 
 uint16_t HueSensor::getId() const { return _id; }
-const String& HueSensor::getName() const { return _name; }
-const String& HueSensor::getType() const { return _type; }
+const char* HueSensor::getName() const { return _name; }
+const char* HueSensor::getType() const { return _type; }
 
 void HueSensor::updateState(const JsonObject& state) {
     _state.clear();
@@ -34,7 +35,8 @@ JsonObjectConst HueSensor::getState() const {
 }
 
 bool HueSensor::isWritable() const {
-    return _type == "CLIPGenericStatus";
+    //return _type == "CLIPGenericStatus";
+    return (strcmp(_type, "CLIPGenericStatus")==0);
 }
 
 bool HueSensor::setValue(const String& key, int value) {

@@ -16,7 +16,7 @@ public:
   static KinoDevice* getDeviceByName(const char* name);
   static KinoDevice* getDeviceByIndex(int index);
   static std::vector<String> getDeviceNames();
-  static const String& getDeviceNameByIndex(int index);
+  static const bool getDeviceNameByIndex(int index, char* devName, size_t devNameLen);
   static int getDeviceCount();
 
 private:

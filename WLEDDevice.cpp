@@ -237,10 +237,10 @@ void WLEDDevice::stripAfterAt(char* s) {
 
 // ===== Konstruktoren =====
 
-WLEDDevice::WLEDDevice(WiFiClient& wfc, const IPAddress& ip)
-: _ip(ip), _client(wfc) {}
+WLEDDevice::WLEDDevice(const IPAddress& ip)
+: _ip(ip) {}
 
-WLEDDevice::WLEDDevice(WiFiClient& wfc, const String& ip) : _client(wfc) {
+WLEDDevice::WLEDDevice(const String& ip) {
   _ip.fromString(ip);
 }
 
@@ -743,10 +743,13 @@ void WLEDDevice::paletteFile(char* out, size_t outLen) {
 }
 
 // Helperfunktion zum Zählen von Parametern eines bestimmten Effekts
+/* countParams(size_t linenr) V1
 int WLEDDevice::countParams(size_t linenr) {
-    String line;
-    String fxfile = effectsFile();
-    if (!FileHelper::readLineAt(fxfile.c_str(), linenr, line)) return 0;
+    String line; line.reserve(128);
+    //String fxfile = effectsFile();
+    char fxfile[48];
+    effectsFile(fxfile,48);
+    if (!FileHelper::readLineAt(fxfile, linenr, line)) return 0;
 
     int atPos = line.indexOf('@');
     int firstSemi = line.indexOf(';');
@@ -772,13 +775,64 @@ int WLEDDevice::countParams(size_t linenr) {
         start = commaPos + 1;
     }
     return count;
+}*/
+/* countParams(size_t linenr) V2 2026-02-03 : Strings entfernt und durch char* ersetzt */
+int WLEDDevice::countParams(size_t linenr) {
+    char line[128]; 
+    char fxfile[48];
+    effectsFile(fxfile, sizeof(fxfile));
+
+    // Deine neue readLineAt Funktion nutzen
+    if (!FileHelper::readLineAt(fxfile, linenr, line, sizeof(line))) return 0;
+
+    // indexOf('@') -> strchr(line, '@')
+    char* atPtr = strchr(line, '@');
+    // indexOf(';') -> strchr(line, ';')
+    char* semiPtr = strchr(line, ';');
+
+    if (atPtr == NULL) return 5; // Fallback für alte WLED
+
+    // "part" simulieren: Startet nach '@', endet vor ';' oder am String-Ende
+    char* part = atPtr + 1;
+    if (semiPtr != NULL) {
+        *semiPtr = '\0'; // String am Semikolon kappen, um 'part' zu isolieren
+    }
+
+    int count = 0;
+    char* currentField = part;
+
+    // Wir prüfen nur die ersten 5 Felder (Slider)
+    for (int i = 0; i < 5; i++) {
+        // Suche nächstes Komma
+        char* commaPos = strchr(currentField, ',');
+        if (commaPos != NULL) {
+            *commaPos = '\0'; // Feld temporär terminieren
+        }
+
+        // "trim()" und "length() > 0" Logik
+        // Wir überspringen führende Leerzeichen
+        while (*currentField == ' ') currentField++;
+        
+        // Wenn nach dem Trimmen noch Zeichen da sind (und es kein "!" ist, falls gewünscht)
+        if (*currentField != '\0') {
+            count++;
+        }
+
+        if (commaPos == NULL) break; // Kein weiteres Komma -> Ende
+        currentField = commaPos + 1; // Nächstes Feld beginnt nach dem Komma
+    }
+
+    return count;
 }
+
 
 // deprecated: char* version below!
 bool WLEDDevice::getParamLabel(size_t linenr, size_t paramnr, String& out) {
   String line;
-  String fxfile = effectsFile();
-    if (!FileHelper::readLineAt(fxfile.c_str(), linenr, line)) return false;
+  //String fxfile = effectsFile();
+  char fxfile[48];
+  effectsFile(fxfile,48);
+    if (!FileHelper::readLineAt(fxfile, linenr, line)) return false;
 
     // Standardnamen nur für die 5 Slider
     const char* defaults[] = {"sx", "ix", "c1x", "c2x", "c3x"};
@@ -1021,21 +1075,26 @@ const KinoPropertyInfo* WLEDDevice::getPropertyInfo(size_t index) const {
 }
 
 KinoError WLEDDevice::getEffectMetadata(int effectnr, KinoVariant& out) {
-  String ip = _ip.toString();
-  ip.replace(".", "_");
-  String effectsFile = "/wled/" + ip + "/effects.txt";
-  String line;
+  //String ip = _ip.toString();
+  //ip.replace(".", "_");
+  //String effectsFile = "/wled/" + ip + "/effects.txt";
+  char fxFile[48];
+  effectsFile(fxFile, sizeof(fxFile));
+  String line; line.reserve(128);
 
-  if (!FileHelper::readLineAt(effectsFile.c_str(), effectnr, line)) return KinoError::InvalidValue;
+  //if (!FileHelper::readLineAt(effectsFile.c_str(), effectnr, line)) return KinoError::InvalidValue;
+  if (!FileHelper::readLineAt(fxFile, effectnr, line)) return KinoError::InvalidValue;
 
   int start = line.indexOf('@');
   // Wenn kein @ da ist oder nichts dahinter kommt
   if (start == -1 || (unsigned int)(start + 1) >= line.length()) {
-    out = KinoVariant::fromString("");
+    //out = KinoVariant::fromString("");
+    out.setString("");
     return KinoError::OK; // Kein Fehler, nur eben keine Metadaten
   }
 
-  out = KinoVariant::fromString(line.substring(start + 1).c_str());
+  //out = KinoVariant::fromString(line.substring(start + 1).c_str());
+  out.setString(line.substring(start + 1).c_str());
   return KinoError::OK;
 }
 
@@ -1045,7 +1104,8 @@ KinoError WLEDDevice::getEffectParamName(const KinoVariant& in, int paramIndex, 
   // Spezialfall: Wenn gar keine Metadaten vorhanden sind,
   // geben wir einen leeren String zurück, damit die UI die Defaults wählt.
   if (metadata.length() == 0) {
-    out = KinoVariant::fromString("");
+    //out = KinoVariant::fromString("");
+    out.setString("");
     return KinoError::OK;
   }
 
@@ -1058,7 +1118,8 @@ KinoError WLEDDevice::getEffectParamName(const KinoVariant& in, int paramIndex, 
       // Wir sind am Ende der Liste angekommen, bevor wir den paramIndex erreicht haben.
       // Das bedeutet: Dieser Parameter wird im Metadaten-String nicht erwähnt.
       // Ergo: Standardverhalten (leerer String).
-      out = KinoVariant::fromString("");
+      //out = KinoVariant::fromString("");
+      out.setString("");
       return KinoError::OK;
     }
     start = end + 1;
@@ -1068,7 +1129,8 @@ KinoError WLEDDevice::getEffectParamName(const KinoVariant& in, int paramIndex, 
   String result = (end == -1) ? metadata.substring(start) : metadata.substring(start, end);
   result.trim();
 
-  out = KinoVariant::fromString(result.c_str());
+  //out = KinoVariant::fromString(result.c_str());
+  out.setString(result.c_str());
   return KinoError::OK;
 }
 
@@ -1113,28 +1175,33 @@ KinoError WLEDDevice::init() {
 }
 
 bool WLEDDevice::readEffects(bool forceRefresh/*=false*/) {
-  String filePath = effectsFile();
+  //String filePath = effectsFile();
+  char filePath[48];
+  effectsFile(filePath, sizeof(filePath));
 
-  if (FileHelper::exists(filePath.c_str())) {
+  //if (FileHelper::exists(filePath.c_str())) {
+  if (FileHelper::exists(filePath)) {
     if (!forceRefresh) return true;
-    FileHelper::remove(filePath.c_str());
+    //FileHelper::remove(filePath.c_str());
+    FileHelper::remove(filePath);
   }
 
-  NetworkHelper::resetClient(_client);
+  //NetworkHelper::resetClient(_client);
+  WiFiClient client;
   EnsureTimeoutBeforeRequest(200);
-  if (!_client.connect(_ip, 80)) {
+  if (!client.connect(_ip, 80)) {
     Serial.print("WLED: GET ");
     Serial.println("/json");
     Serial.println("could not connect");
     return false;
   }
-  _client.printf(
+  client.printf(
     "GET /json/effects HTTP/1.1\r\n"
     "Host: %s\r\n"
     "Connection: close\r\n\r\n",
-    _ip.toString().c_str()
+    _ip
   );
-  if (!NetworkHelper::skipHeader(_client)) return false;
+  if (!NetworkHelper::skipHeader(client)) return false;
 
   // =============== Effektnamen aus dem Stream extrahieren und wegschreiben
 
@@ -1145,24 +1212,25 @@ bool WLEDDevice::readEffects(bool forceRefresh/*=false*/) {
   int count = 0;
 
   // 1. Warte auf Daten (Timeout 5s)
-  while (_client.available() == 0) {
+  while (client.available() == 0) {
     if (millis() - startTime > 5000) {
-      NetworkHelper::resetClient(_client);
+      NetworkHelper::resetClient(client);
       return false;
     }
     delay(1);
   }
 
   // 2. Stream zeichenweise verarbeiten
-  while (_client.connected() || _client.available() > 0) {
-    if (_client.available() > 0) {
-      char c = _client.read();
+  while (client.connected() || client.available() > 0) {
+    if (client.available() > 0) {
+      char c = client.read();
 
       if (c == '"') {
         if (inString) {
           // Ende des Namens erreicht -> Speichern
           if (currentEffect.length() > 0) {
-            FileHelper::writeLine(filePath.c_str(), currentEffect);
+            //FileHelper::writeLine(filePath.c_str(), currentEffect);
+            FileHelper::writeLine(filePath, currentEffect);
             count++;
             currentEffect = "";
           }
@@ -1177,7 +1245,7 @@ bool WLEDDevice::readEffects(bool forceRefresh/*=false*/) {
       else if (inString) {
         // Sonderfall: Escape-Zeichen (z.B. \" im Namen) ignorieren oder behandeln
         if (c == '\\') {
-          char escaped = _client.read(); // Nächstes Zeichen einfach mitnehmen
+          char escaped = client.read(); // Nächstes Zeichen einfach mitnehmen
           currentEffect += escaped;
         } else {
           currentEffect += c;
@@ -1191,33 +1259,39 @@ bool WLEDDevice::readEffects(bool forceRefresh/*=false*/) {
   }
 
   // ========================================================================
-  NetworkHelper::resetClient(_client);
+  NetworkHelper::resetClient(client);
   return true;
 }
 
 bool WLEDDevice::readPalettes(bool forceRefresh/*=false*/) {
-  String filePath = paletteFile();
+  //String filePath = paletteFile();
+  char filePath[48];
+  paletteFile(filePath, sizeof(filePath));
 
-  if (FileHelper::exists(filePath.c_str())) {
+  //if (FileHelper::exists(filePath.c_str())) {
+  if (FileHelper::exists(filePath)) {
     if (!forceRefresh) return true;
-    FileHelper::remove(filePath.c_str());
+    //FileHelper::remove(filePath.c_str());
+    FileHelper::remove(filePath);
   }
 
-  NetworkHelper::resetClient(_client);
+  //NetworkHelper::resetClient(_client);
+  WiFiClient client;
   EnsureTimeoutBeforeRequest(200);
-  if (!_client.connect(_ip, 80)) {
+  if (!client.connect(_ip, 80)) {
     Serial.print("WLED: GET ");
     Serial.println("/json/palettes");
     Serial.println("could not connect");
+    client.stop();
     return false;
   }
-  _client.printf(
+  client.printf(
     "GET /json/palettes HTTP/1.1\r\n"
     "Host: %s\r\n"
     "Connection: close\r\n\r\n",
-    _ip.toString().c_str()
+    _ip
   );
-  if (!NetworkHelper::skipHeader(_client)) return false;
+  if (!NetworkHelper::skipHeader(client)) return false;
 
   // =============== Effektnamen aus dem Stream extrahieren und wegschreiben
 
@@ -1228,24 +1302,25 @@ bool WLEDDevice::readPalettes(bool forceRefresh/*=false*/) {
   int count = 0;
 
   // 1. Warte auf Daten (Timeout 5s)
-  while (_client.available() == 0) {
+  while (client.available() == 0) {
     if (millis() - startTime > 5000) {
-      NetworkHelper::resetClient(_client);
+      NetworkHelper::resetClient(client);
       return false;
     }
     delay(1);
   }
 
   // 2. Stream zeichenweise verarbeiten
-  while (_client.connected() || _client.available() > 0) {
-    if (_client.available() > 0) {
-      char c = _client.read();
+  while (client.connected() || client.available() > 0) {
+    if (client.available() > 0) {
+      char c = client.read();
 
       if (c == '"') {
         if (inString) {
           // Ende des Namens erreicht -> Speichern
           if (currentEffect.length() > 0) {
-            FileHelper::writeLine(filePath.c_str(), currentEffect);
+            //FileHelper::writeLine(filePath.c_str(), currentEffect);
+            FileHelper::writeLine(filePath, currentEffect);
             count++;
             currentEffect = "";
           }
@@ -1260,7 +1335,7 @@ bool WLEDDevice::readPalettes(bool forceRefresh/*=false*/) {
       else if (inString) {
         // Sonderfall: Escape-Zeichen (z.B. \" im Namen) ignorieren oder behandeln
         if (c == '\\') {
-          char escaped = _client.read(); // Nächstes Zeichen einfach mitnehmen
+          char escaped = client.read(); // Nächstes Zeichen einfach mitnehmen
           currentEffect += escaped;
         } else {
           currentEffect += c;
@@ -1274,7 +1349,7 @@ bool WLEDDevice::readPalettes(bool forceRefresh/*=false*/) {
   }
 
   // ========================================================================
-  NetworkHelper::resetClient(_client);
+  NetworkHelper::resetClient(client);
   return true;
 }
 
@@ -1292,9 +1367,9 @@ KinoError WLEDDevice::tick() {
   if (now - _lastTick >= _tickInterval) {
     _lastTick = now;
     _refreshing = true;
-    showMemory();
+    //showMemory();
     bool ok = readState();
-    showMemory();
+    //showMemory();
     _refreshing = false;
     return (ok ? KinoError::OK : KinoError::DeviceNotReady);
   }
@@ -1359,31 +1434,70 @@ String WLEDDevice::getLiveSource() const {
   return _props["info"]["lm"] | "";
 }
 
+void WLEDDevice::getLiveSource(char* src, size_t srcLen) {
+  const char* lm = _props["info"]["lm"]|"";
+  strncpy(src, lm, srcLen);
+  src[srcLen-1] = '\0';
+}
+
 WLEDColor WLEDDevice::getColFg() const {
-  WLEDColor c = {
+  /*WLEDColor c = {
     _props["state"]["seg"][0]["col"][0][0] | 0,
     _props["state"]["seg"][0]["col"][0][1] | 0,
     _props["state"]["seg"][0]["col"][0][2] | 0
+  };*/
+  JsonArrayConst  col = _props["state"]["seg"][0]["col"][0];
+  /*WLEDColor c = {
+    col[0]|0,
+    col[1]|0,
+    col[2]|0
   };
-  return c;
+  return c;*/
+  return {
+    col[0]|0,
+    col[1]|0,
+    col[2]|0
+  };
 }
 
 WLEDColor WLEDDevice::getColBg() const {
-  WLEDColor c = {
+  /*WLEDColor c = {
     _props["state"]["seg"][0]["col"][1][0] | 0,
     _props["state"]["seg"][0]["col"][1][1] | 0,
     _props["state"]["seg"][0]["col"][1][2] | 0
+  };*/
+  JsonArrayConst  col = _props["state"]["seg"][0]["col"][1];
+  /*WLEDColor c = {
+    col[0]|0,
+    col[1]|0,
+    col[2]|0
   };
-  return c;
+  return c;*/
+  return {
+    col[0]|0,
+    col[1]|0,
+    col[2]|0
+  };
 }
 
 WLEDColor WLEDDevice::getColFx() const {
-  WLEDColor c = {
+  /*WLEDColor c = {
     _props["state"]["seg"][0]["col"][2][0] | 0,
     _props["state"]["seg"][0]["col"][2][1] | 0,
     _props["state"]["seg"][0]["col"][2][2] | 0
+  };*/
+  JsonArrayConst  col = _props["state"]["seg"][0]["col"][2];
+  /*WLEDColor c = {
+    col[0]|0,
+    col[1]|0,
+    col[2]|0
   };
-  return c;
+  return c;*/
+  return {
+    col[0]|0,
+    col[1]|0,
+    col[2]|0
+  };
 }
 
 // ===== Setter =====
@@ -1560,6 +1674,49 @@ void WLEDDevice::EnsureTimeoutBeforeRequest(unsigned long timeout) {
 }
 
 bool WLEDDevice::readState() {
+  //NetworkHelper::resetClient(_client);
+  WiFiClient client;
+  EnsureTimeoutBeforeRequest(200);
+  // Verbindung aufbauen mit etwas mehr Zeit (WLAN-Latenz!)
+  client.setTimeout(1000); 
+  if (!client.connect(_ip, 80)) {
+    Serial.println(F("WLED: could not connect"));
+    return false;
+  }
+
+  client.print(F("GET /json HTTP/1.1\r\n"));
+  client.print(F("Host: ")); client.print(_ip); client.print(F("\r\n"));
+  client.print(F("Connection: close\r\n\r\n"));
+
+  // 1. Header überspringen (kurzes Timeout ist hier okay)
+  if (!NetworkHelper::skipHeader(client)) {
+    NetworkHelper::resetClient(client);
+    return false;
+  }
+
+  // 2. Timeout für den Body HOCHSETZEN
+  // JSON bei WLED kann groß sein, hier brauchen wir Geduld!
+  client.setTimeout(2000); 
+
+  initFilter();
+  // deserializeJson liest direkt vom Stream
+  DeserializationError error = deserializeJson(_props, client, DeserializationOption::Filter(_jsonFilter));
+
+  if (!error) {
+    _newProps = _props;
+    NetworkHelper::resetClient(client);
+    return true;
+  } else {
+    Serial.print(F("WLED Parsing error: "));
+    Serial.println(error.c_str());
+  }
+  
+  NetworkHelper::resetClient(client);
+  return false;
+}
+
+/*
+bool WLEDDevice::readState() {
   NetworkHelper::resetClient(_client);
   EnsureTimeoutBeforeRequest(200);
   if (!_client.connect(_ip, 80)) {
@@ -1594,28 +1751,29 @@ bool WLEDDevice::readState() {
   }
   NetworkHelper::resetClient(_client);
   return false;
-}
+}*/
 
 bool WLEDDevice::applyChanges() {
-  NetworkHelper::resetClient(_client);
+  //NetworkHelper::resetClient(_client);
+  WiFiClient client;
   EnsureTimeoutBeforeRequest(200);
-  if (!_client.connect(_ip, 80)) return false;
+  if (!client.connect(_ip, 80)) {client.stop(); return false;}
 
-  _client.printf(
+  client.printf(
     "POST /json/state HTTP/1.1\r\n"
     "Host: %s\r\n"
     "Content-Type: application/json\r\n"
     "Content-Length: %d\r\n"
     "Connection: close\r\n\r\n",
-    _ip.toString().c_str(),
+    _ip,
     measureJson(_newProps["state"])
   );
 
-  serializeJson(_newProps["state"], _client);
+  serializeJson(_newProps["state"], client);
 
-  String resp = _client.readStringUntil('\n');
+  String resp = client.readStringUntil('\n');
   bool success = resp.startsWith("HTTP/1.1 200");
-  NetworkHelper::resetClient(_client);
+  NetworkHelper::resetClient(client);
   bool lor = _newProps["state"]["lor"];
   if (success) {
     _props.clear();

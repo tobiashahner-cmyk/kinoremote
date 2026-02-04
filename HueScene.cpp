@@ -3,13 +3,17 @@
 #include "HueLight.h"
 #include <ArduinoJson.h>
 
-HueScene::HueScene(const String& id,
-                   const String& name,
-                   const std::vector<uint8_t>& lightIds)
-: _id(id), _name(name), _lightIds(lightIds) {}
+HueScene::HueScene(const char* id, const char* name, const std::vector<uint8_t>& lightIds)
+: _lightIds(lightIds) { 
+  strlcpy(_name, name, sizeof(_name));
+  strlcpy(_id, id, sizeof(_id));
+}
 
-const String& HueScene::getId() const { return _id; }
-const String& HueScene::getName() const { return _name; }
+const char* HueScene::getId() const { return _id; }
+const char* HueScene::getName() const { return _name; }
+
+
+
 const uint16_t HueScene::getTT() const { return _tt; }
 const std::vector<uint8_t>& HueScene::getLightIds() const { return _lightIds; }
 
@@ -64,7 +68,7 @@ bool HueScene::setActive(HueBridge* bridge) {
     doc["scene"] = _id;
     doc["transitiontime"] = _tt;
 
-    String payload;
+    char payload[64];
     serializeJson(doc, payload);
 
     if (!bridge->sendGroupState(0, payload))
@@ -95,7 +99,7 @@ bool HueScene::setActive(HueBridge* bridge) {
             String lightPayload;
             serializeJson(lightDoc, lightPayload);
 
-            bridge->sendLightState(id, lightPayload);
+            bridge->sendLightState(id, lightPayload.c_str());
         }
 
         // Lokalen Cache synchronisieren
@@ -113,7 +117,7 @@ bool HueScene::captureLightStates(HueBridge* bridge) {
     StaticJsonDocument<64> doc;
     doc["storelightstate"] = true;
 
-    String payload;
+    char payload[48];
     serializeJson(doc, payload);
 
     return bridge->saveScene(_id, payload);

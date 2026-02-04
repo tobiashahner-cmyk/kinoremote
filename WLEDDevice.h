@@ -35,8 +35,8 @@ class WLEDDevice : public KinoDevice {
     }
     
     // Konstruktoren
-    explicit WLEDDevice(WiFiClient& wfc, const IPAddress& ip);
-    explicit WLEDDevice(WiFiClient& wfc, const String& ip);
+    explicit WLEDDevice(const IPAddress& ip);
+    explicit WLEDDevice(const String& ip);
 
     KinoError get(const char* property, KinoVariant& out) override;
     KinoError set(const char* property, const KinoVariant& value) override;
@@ -71,6 +71,7 @@ class WLEDDevice : public KinoDevice {
     uint8_t getSpeed() const;
     uint8_t getIntensity() const;
     String getLiveSource() const;
+    void getLiveSource(char* src, size_t srcLen);
     uint8_t getPalette() const;
     bool inAlarm() const;
     bool inPause() const;
@@ -133,7 +134,7 @@ class WLEDDevice : public KinoDevice {
     static void stripAfterAt(char* s);
   
     IPAddress _ip;
-    WiFiClient& _client;
+    //WiFiClient& _client;
     int  _tickInterval  = 0;
     unsigned long _lastTick = 0;
     void EnsureTimeoutBeforeRequest(unsigned long timeout);

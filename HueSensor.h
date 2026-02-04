@@ -8,12 +8,12 @@ class HueBridge;
 class HueSensor {
 public:
     HueSensor(uint16_t id,
-              const String& name,
-              const String& type);
+              const char* name,
+              const char* type);
 
     uint16_t getId() const;
-    const String& getName() const;
-    const String& getType() const;
+    const char* getName() const;
+    const char* getType() const;
 
     // Lesen
     bool hasValue(const String& key) const;
@@ -31,8 +31,8 @@ public:
 
 private:
     uint16_t _id;
-    String _name;
-    String _type;
+    char _name[48];
+    char _type[32];
 
     StaticJsonDocument<256> _state;
 

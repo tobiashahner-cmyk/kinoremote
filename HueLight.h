@@ -21,7 +21,7 @@ class HueBridge;
 class HueLight {
 public:
     HueLight(uint8_t id,
-             const String& name,
+             const char* name,
              bool on,
              uint8_t bri,
              bool hasXY,
@@ -32,7 +32,7 @@ public:
              bool hasBri);
 
     uint8_t getId() const;
-    const String& getName() const;
+    const char* getName() const;
 
     bool isOn() const;
     uint8_t getBrightness() const;
@@ -64,14 +64,14 @@ public:
     void forceBri(uint8_t value);
     void forceCT(uint16_t value);
     // Setter für Änderungen, die beim Refresh von der Bridge kommen
-    void updateValues(const String& name, bool on, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, bool hasBri);
+    void updateValues(const char* name, bool on, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, bool hasBri);
 
     // --- Änderungen anwenden ---
     bool applyChanges(HueBridge* bridge);
 
 private:
     uint8_t _id;
-    String _name;
+    char _name[32];
 
     bool _on;
     uint8_t _bri;

@@ -3,7 +3,7 @@
 #include <ArduinoJson.h>
 
 HueLight::HueLight(uint8_t id,
-                   const String& name,
+                   const char* name,
                    bool on,
                    uint8_t bri,
                    bool hasXY,
@@ -13,7 +13,6 @@ HueLight::HueLight(uint8_t id,
                    uint16_t ct,
                    bool hasBri)
 : _id(id),
-  _name(name),
   _on(on),
   _bri(bri),
   _hasBri(hasBri),
@@ -21,11 +20,11 @@ HueLight::HueLight(uint8_t id,
   _x(x),
   _y(y),
   _hasCT(hasCT),
-  _ct(ct) {}
+  _ct(ct) {strlcpy(_name, name, sizeof(_name));}
 
 // --- Getter ---
 uint8_t HueLight::getId() const { return _id; }
-const String& HueLight::getName() const { return _name; }
+const char* HueLight::getName() const { return _name; }
 
 bool HueLight::isOn() const { return _on; }
 uint8_t HueLight::getBrightness() const { return _bri; }
@@ -59,8 +58,9 @@ void HueLight::forceBri(uint8_t value)          { if (_hasBri) _bri = value; }
 void HueLight::forceCT(uint16_t value)          { if (_hasCT)  _ct = value; }
 
 // spezieller Setter für Refresh von der HueBridge
-void HueLight::updateValues(const String& name, bool on, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, bool hasBri) {
-  _name = name;
+void HueLight::updateValues(const char* name, bool on, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, bool hasBri) {
+  //_name = name;
+  strlcpy(_name, name, sizeof(_name));
   _on = on;
   _bri = bri;
   _hasXY = hasXY;
@@ -72,6 +72,7 @@ void HueLight::updateValues(const String& name, bool on, uint8_t bri, bool hasXY
 }
 
 // --- applyChanges ---
+/* applyChanges() V1
 bool HueLight::applyChanges(HueBridge* bridge) {
     // Prüfen, ob überhaupt Änderungen vorliegen
     bool hasChanges = pending.on.has_value() || 
@@ -92,11 +93,50 @@ bool HueLight::applyChanges(HueBridge* bridge) {
         xyArr.add(pending.xy->second);
     }
 
-    String payload;
+    char payload[128];
     serializeJson(doc, payload);
 
     if(!bridge->sendLightState(_id, payload)) return false;
 
+    // Lokale Werte aktualisieren
+    if(pending.on.has_value()) _on = pending.on.value();
+    if(pending.bri.has_value()) _bri = pending.bri.value();
+    if(pending.ct.has_value()) _ct = pending.ct.value();
+    if(pending.xy.has_value()) { 
+      _x = pending.xy->first; 
+      _y = pending.xy->second; 
+    }
+
+    clearPending();
+    return true;
+}*/
+
+/* applyChanges() V2 : 2026-02-02 JsonDocument entfernt und char-Puffer direkt gebaut */
+bool HueLight::applyChanges(HueBridge* bridge) {
+  bool hasChanges = pending.on.has_value() || 
+                      pending.bri.has_value() || 
+                      pending.ct.has_value() || 
+                      pending.xy.has_value();
+    if (!hasChanges) return true;
+
+    char payload[128];
+    int pos = 0;
+    pos += snprintf(payload + pos, sizeof(payload) - pos, "{");
+
+    if(pending.on.has_value()) 
+        pos += snprintf(payload + pos, sizeof(payload) - pos, "\"on\":%s,", pending.on.value() ? "true" : "false");
+    if(pending.bri.has_value()) 
+        pos += snprintf(payload + pos, sizeof(payload) - pos, "\"bri\":%d,", pending.bri.value());
+    if(pending.ct.has_value()) 
+        pos += snprintf(payload + pos, sizeof(payload) - pos, "\"ct\":%d,", pending.ct.value());
+    if(pending.xy.has_value()) 
+        pos += snprintf(payload + pos, sizeof(payload) - pos, "\"xy\":[%.4f,%.4f],", pending.xy->first, pending.xy->second);
+
+    // Letztes Komma entfernen und schließen
+    if (payload[pos - 1] == ',') pos--; 
+    snprintf(payload + pos, sizeof(payload) - pos, "}");
+
+    if(!bridge->sendLightState(_id, payload)) return false;
     // Lokale Werte aktualisieren
     if(pending.on.has_value()) _on = pending.on.value();
     if(pending.bri.has_value()) _bri = pending.bri.value();

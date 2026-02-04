@@ -9,14 +9,14 @@ class HueBridge;
 class HueGroup {
 public:
     HueGroup(uint16_t id,
-             const String& name,
+             const char* name,
              HueBridge& bridge,
              const std::vector<uint8_t>& lightIds);
 
     uint16_t getId() const;
-    const String& getName() const;
+    const char* getName() const;
     uint16_t getTT() const;
-    std::vector<uint8_t> getLightIds() const;
+    const std::vector<uint8_t>& getLightIds() const;
 
     bool allOn() const;
     bool anyOn() const;
@@ -30,7 +30,7 @@ public:
 
 private:
     uint16_t _id;
-    String _name;
+    char _name[32];
 
     HueBridge& _bridge;
     std::vector<uint8_t> _lightIds;

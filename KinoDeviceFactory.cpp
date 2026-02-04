@@ -9,7 +9,6 @@
 #include "HyperionDevice.h"
 #include "HueBridge.h"
 
-extern WiFiClient globalWifiClient;
 
 std::vector<KinoDeviceFactory::DeviceEntry> KinoDeviceFactory::_devices;
 
@@ -106,16 +105,24 @@ std::vector<String> KinoDeviceFactory::getDeviceNames() {
   return "";
 }*/
 
-const String& KinoDeviceFactory::getDeviceNameByIndex(int index) {
-  static const String empty = ""; // Statisch, damit die Referenz immer gültig bleibt
-  if (index < 0 || index >= _devices.size()) return empty;
+const bool KinoDeviceFactory::getDeviceNameByIndex(int index, char* devName, size_t devNameLen) {
+  //static const String empty = ""; // Statisch, damit die Referenz immer gültig bleibt
+  if (index < 0 || index >= _devices.size()) {
+    if (devNameLen > 0) devName[0] = '\0'; 
+    return false; 
+  }
   
   int i = 0;
   for (auto& d : _devices) {
-    if (i == index) return d.name; // Gibt Referenz auf den existierenden String zurück
+    if (i == index) {
+      //return d.name; // Gibt Referenz auf den existierenden String zurück
+      strncpy(devName, d.name.c_str(), devNameLen);
+      return true;
+    }
     i++;
   }
-  return empty;
+  if (devNameLen > 0) devName[0] = '\0';
+  return false;
 }
 
 int KinoDeviceFactory::getDeviceCount() {
@@ -229,21 +236,18 @@ static IPAddress ipFromJson(JsonVariant v) {
 KinoDevice* KinoDeviceFactory::createDeviceFromJson(const String& className, JsonObject cfg) {
   if (className == "yamahareceiver") {
     return new YamahaReceiver(
-      globalWifiClient,
       ipFromJson(cfg["ip"])
     );
   }
 
   if (className == "wleddevice") {
     return new WLEDDevice(
-      globalWifiClient,
       ipFromJson(cfg["ip"])
     );
   }
 
   if (className == "optomabeamer") {
     return new OptomaBeamer(
-      globalWifiClient,
       ipFromJson(cfg["ip"]),
       cfg["id"] | 0
     );
@@ -251,14 +255,12 @@ KinoDevice* KinoDeviceFactory::createDeviceFromJson(const String& className, Jso
 
   if (className == "hyperiondevice") {
     return new HyperionDevice(
-      globalWifiClient,
       ipFromJson(cfg["ip"])
     );
   }
 
   if (className == "huebridge") {
     return new HueBridge(
-      globalWifiClient,
       ipFromJson(cfg["ip"]),
       cfg["token"] | ""
     );

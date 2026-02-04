@@ -2,4 +2,4 @@
 #include <Arduino.h>
 
 void handleSerialCommands();
-bool kino_showTicker(const String& deviceName);
+void kino_showTicker(const char* deviceName, bool success);

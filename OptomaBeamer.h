@@ -25,8 +25,8 @@ class OptomaBeamer : public KinoDevice {
     };
   
     // Konstruktoren
-    OptomaBeamer(WiFiClient& wfc, const IPAddress& ip, uint8_t beamerId);
-    OptomaBeamer(WiFiClient& wfc, const String& ip, uint8_t beamerId);
+    OptomaBeamer(const IPAddress& ip, uint8_t beamerId);
+    OptomaBeamer(const String& ip, uint8_t beamerId);
 
     size_t getPropertyCount() const override;
     const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
@@ -61,7 +61,7 @@ class OptomaBeamer : public KinoDevice {
     // Verbindung / Identität
     IPAddress _ip;
     uint8_t _id;
-    WiFiClient& _client;
+    //WiFiClient& _client;
   
     // Status
     unsigned long _tickInterval  = 0;

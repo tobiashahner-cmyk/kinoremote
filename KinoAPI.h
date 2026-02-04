@@ -39,7 +39,7 @@ namespace KinoAPI {
   std::vector<String> getDeviceNames();
   KinoError initDevice(const char* deviceName);
   void showMemory();
-  KinoError handleDeviceTicks(std::function<void(const String& devname)> cb = nullptr);
+  KinoError handleDeviceTicks(std::function<void(const char* devname, bool success)> cb = nullptr);
   KinoError getDeviceType(const char* deviceName, KinoVariant& out);
   KinoError getProperty(const char* deviceName, const char* property, KinoVariant& out);
   KinoError setProperty(const char* deviceName, const char* property, const KinoVariant& value);

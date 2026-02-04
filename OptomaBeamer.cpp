@@ -3,11 +3,11 @@
 
 // ===== Konstruktoren =====
 
-OptomaBeamer::OptomaBeamer(WiFiClient& wfc, const IPAddress& ip, uint8_t beamerId)
-: _client(wfc), _ip(ip), _id(beamerId) {}
+OptomaBeamer::OptomaBeamer(const IPAddress& ip, uint8_t beamerId)
+: _ip(ip), _id(beamerId) {}
 
-OptomaBeamer::OptomaBeamer(WiFiClient& wfc, const String& ip, uint8_t beamerId)
-: _client(wfc), _id(beamerId) {
+OptomaBeamer::OptomaBeamer(const String& ip, uint8_t beamerId)
+: _id(beamerId) {
   _ip.fromString(ip);
 }
 
@@ -132,9 +132,9 @@ KinoError OptomaBeamer::tick() {
   if (now - _lastTick >= _tickInterval) {
     _lastTick = now;
     _refreshing = true;
-    showMemory();
+    //showMemory();
     bool ok = getStatus();
-    showMemory();
+    //showMemory();
     _refreshing = false;
     return (ok ? KinoError::OK : KinoError::DeviceNotReady);
   }
@@ -238,9 +238,8 @@ void OptomaBeamer::EnsureTimeoutBeforeRequest(unsigned long timeout) {
   return;
 }
 
-bool OptomaBeamer::sendCommand(const String& command,
-                              const String& parameter,
-                              String& response) {
+/* sendCommand() V1
+bool OptomaBeamer::sendCommand(const String& command, const String& parameter, String& response) {
   NetworkHelper::resetClient(_client);
   EnsureTimeoutBeforeRequest(200);
   
@@ -276,6 +275,47 @@ bool OptomaBeamer::sendCommand(const String& command,
 
   response = _client.readStringUntil('\r');
   _client.stop();
+  return isOkResponse(response);
+}
+*/
+
+/* sendCommand() V2 lokalen WiFiClient eingeführt*/
+bool OptomaBeamer::sendCommand(const String& command, const String& parameter, String& response) {
+  WiFiClient client;
+  EnsureTimeoutBeforeRequest(200);
+  
+  if (!client.connect(_ip, 23)) {
+    client.stop();
+    return false;
+  }
+
+  char cmd[32];
+  if (parameter.length() > 0) {
+    snprintf(cmd, sizeof(cmd),
+             "~%02u%s %s",
+             _id,
+             command.c_str(),
+             parameter.c_str());
+  } else {
+    snprintf(cmd, sizeof(cmd),
+             "~%02u%s",
+             _id,
+             command.c_str());
+  }
+
+  client.print(cmd);
+  client.print("\r");
+
+  unsigned long start = millis();
+  while (!client.available()) {
+    if (millis() - start > 2000) {
+      client.stop();
+      return false;
+    }
+  }
+
+  response = client.readStringUntil('\r');
+  client.stop();
   return isOkResponse(response);
 }
 

@@ -12,8 +12,8 @@ public:
     }
 
   // ===== Konstruktoren =====
-  HyperionDevice(WiFiClient& wfc, const IPAddress& ip);
-  HyperionDevice(WiFiClient& wfc, const String& ip);
+  HyperionDevice(const IPAddress& ip);
+  HyperionDevice(const String& ip);
 
   
   KinoError tick();
@@ -44,25 +44,32 @@ public:
 private:
   // ===== Eigenschaften =====
   IPAddress _ip;
-  WiFiClient& _client;
+  //WiFiClient& _client;
 
   bool _powerStatus = false;
   bool _ledDeviceStatus = false;
 
   int  _tickInterval  = 0;
   unsigned long _lastTick = 0;
+  StaticJsonDocument<1024> _doc;   // zum Parsen der Json HTTP-Antwort
+  static StaticJsonDocument<64> _filter; // Filter für deserializeJson
+  static bool _filterInitialized;
+  void setupFilter();
 
   // ===== JSON-RPC / HTTP Helper =====
   void EnsureTimeoutBeforeRequest(unsigned long timeout);
-  bool sendJsonRpc(const JsonDocument& request, String& response);
-  bool parseServerInfo(const String& json);
+  //bool sendJsonRpc(const JsonDocument& request, String& response);
+  bool sendJsonRpc(const JsonDocument& request);
+  //bool parseServerInfo(const String& json);
 
-  bool parseComponents(const String& jsonArray);
-  bool readComponentsArray(String& out);
+  //bool parseComponents(const String& jsonArray);
+  //bool readComponentsArray(WiFiClient& client, String& out);
 
-  bool httpPOST(const char* path, const String& payload, String& response);
-  bool waitForClientData();
-  bool readHttpResponse(String& response);
+  //bool httpPOST(const char* path, const String& payload, String& response);
+  bool httpPOST(const char* path, const JsonDocument& request);
+  bool waitForClientData(WiFiClient& client);
+  bool parseComponentsFromStream(WiFiClient& client);
+  bool readHttpResponse(WiFiClient& client, String& response);
 
   static const KinoPropertyInfo _properties[];
 };
