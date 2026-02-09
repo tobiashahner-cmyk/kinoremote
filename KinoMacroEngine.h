@@ -44,6 +44,8 @@ size_t getMacroIndex(const String& macroName);
 
 //std::vector<String> getAvailableMacroCommands();
 std::vector<const char*> getAvailableMacroCommands();
+size_t getMacroCommandCount();
+bool getMacroCommand(size_t index, char* out, size_t outLen);
 
 bool createMacro(const String& name);
 bool addOrUpdateMacro(const String& json); // compatibility shim

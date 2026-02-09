@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
+#include <ArduinoJson.h>
 
 
 YamahaReceiver::YamahaReceiver(IPAddress ip) : _ip(ip) {}
@@ -24,6 +25,39 @@ KinoError YamahaReceiver::init() {
 // ----------------------------------------------------
 // für KinoAPI: overrides für set und get aus KinoDevice
 // ----------------------------------------------------
+
+bool YamahaReceiver::isDirty() {
+  return _dirty;
+}
+
+void YamahaReceiver::clearDirty() {
+  _dirty = false;
+}
+
+bool YamahaReceiver::getStatusUpdate(const char* devName, JsonObject& root) {
+  if (!_dirty) return false;
+  root["dev"] = devName;
+  root["on"] = _powerStatus;
+  root["mute"] = _mute;
+  root["vol"] = _volume;
+  root["enhancer"] = _enhancer;
+  root["treble"] = _treble;
+  root["bass"] = _bass;
+  root["swtrim"] = _subwooferTrim;
+  root["input"] = _source;
+  root["dsp"] = _soundProgram;
+  root["straight"] = _straight;
+  NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
+  char helper[128];
+  sanitize_to_ascii(nri.station.c_str(), helper, sizeof(helper));
+  root["station"] = helper;
+  sanitize_to_ascii(nri.song.c_str(), helper, sizeof(helper));
+  root["song"] = helper;
+  sanitize_to_ascii(nri.elapsed.c_str(), helper, sizeof(helper));
+  root["elapsed"] = helper;
+  _dirty = false;
+  return true;
+}
 
 KinoError YamahaReceiver::set(const char* property, const KinoVariant& value) {
     if (!property) {
@@ -253,11 +287,13 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
           String tmpCustom = _InputSources[i].custom;
           if (tmpCustom.length() > 0) {
             //Serial.print("Label for "); Serial.print(inp); Serial.print(" is "); Serial.println(tmpCustom);
-            out = KinoVariant::fromString(tmpCustom.c_str());
+            //out = KinoVariant::fromString(tmpCustom.c_str());
+            out.setString(tmpCustom.c_str());
             return KinoError::OK;
           } else {
             //Serial.print("Label for "); Serial.print(inp); Serial.print(" is "); Serial.print(tmpCustom); Serial.print(", but returning "); Serial.println(tmpInternal);
-            out = KinoVariant::fromString(tmpInternal.c_str());
+            //out = KinoVariant::fromString(tmpInternal.c_str());
+            out.setString(tmpInternal.c_str());
             return KinoError::OK;
           }
         }
@@ -459,9 +495,9 @@ const KinoPropertyInfo YamahaReceiver::_props[] = {
 
   { "station",    "Station",      Prop_Read | Prop_Write | Prop_Query },
 
-  //{ "song",       "Song",         Prop_Read | Prop_Status },
+  { "song",       "Song",         Prop_Read | Prop_Status },
 
-  //{ "elapsed",    "Elapsed",      Prop_Read | Prop_Status },
+  { "elapsed",    "Elapsed",      Prop_Read | Prop_Status },
 
   { "ip",         "IP Address",   Prop_Read | Prop_Internal },
 
@@ -557,50 +593,72 @@ bool YamahaReceiver::getStatus() {
     // Wir gehen die Tags in der Reihenfolge durch, wie Yamaha sie schickt:
     // 1. Power
     if (client.find("<Power>")) {
+        bool oldpwr = _powerStatus;
         _powerStatus = (client.readStringUntil('<') == "On");
+        if (_powerStatus != oldpwr) _dirty = true;
     }
     
     // 2. Volume (liegt in <Volume><Lvl><Val>...</Val></Lvl></Volume>)
     if (client.find("<Val>")) {
+        int oldvol = _volume;
         _volume = client.readStringUntil('<').toInt();
+        if (oldvol != _volume) _dirty = true;
     }
     // 5. Mute
     if (client.find("<Mute>")) {
+        bool oldmute = _mute;
         _mute = (client.readStringUntil('<') == "On");
+        if (oldmute != _mute) _dirty = true;
     }
     // 2a. Subwoofer Trim (liegt im nächsten <Val>...</Val>
     if (client.find("<Val>")) {
+        int oldswtrim = _subwooferTrim;
         _subwooferTrim = client.readStringUntil('<').toInt();
+        if (oldswtrim != _subwooferTrim) _dirty = true;
     }
     // 3. Input
     if (client.find("<Input_Sel>")) {
+        String oldSrc = _source;
         _source = client.readStringUntil('<');
+        if (oldSrc != _source) _dirty = true;
     }
     // Straight (liegt in <Straight>...</Straight>
     if (client.find("<Straight>")) {
+        bool oldStraight = _straight;
         _straight = (client.readStringUntil('<') == "On");
+        if (oldStraight != _straight) _dirty = true;
     }
     // Enhancer
     if (client.find("<Enhancer>")) {
+        bool oldEnhancer = _enhancer;
         _enhancer = (client.readStringUntil('<') == "On");
+        if (oldEnhancer != _enhancer) _dirty = true;
     }
     // 4. Sound Program
     if (client.find("<Sound_Program>")) {
+        String oldSP = _soundProgram;
         _soundProgram = client.readStringUntil('<');
+        if (oldSP != _soundProgram) _dirty = true;
     }
     // Bass: (liegt im nächsten <Val>...</Val>
     if (client.find("<Val>")) {
+        int oldBass = _bass;
         _bass = client.readStringUntil('<').toInt();
+        if (oldBass != _bass) _dirty = true;
     }
     // Treble: liegt im nächsten <Val>...</Val>
     if (client.find("<Val>")) {
+        int oldTreble = _treble;
         _treble = client.readStringUntil('<').toInt();
+        if (oldTreble != _treble) _dirty = true;
     }
     
 
     // WICHTIG: Den Rest des Streams verwerfen und schließen
     while(client.available()>0) { client.read(); yield();}
     client.stop();
+
+    if (_powerStatus && (_source=="NET RADIO")) _dirty = true;    // forces refresh of play info
     return true;
 }
 
@@ -916,6 +974,7 @@ NetRadioTrackInfo YamahaReceiver::readCurrentlyPlayingNetRadio() {
 bool YamahaReceiver::setPower(bool onoff) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_POWER_START), onoff ? "On" : "Standby", FPSTR(XML_SET_POWER_END))) {
+      if (_powerStatus != onoff) _dirty = true;
       _powerStatus = onoff;
       return true;
   }
@@ -926,6 +985,7 @@ bool YamahaReceiver::setVolume(int vol) {
   WiFiClient client;
   if (vol > 0) vol *= -1;
   if (client, executeSetCommand(client, FPSTR(XML_SET_VOLUME_START), String(vol), FPSTR(XML_SET_VOLUME_END))) {
+      if (_volume != vol) _dirty = true;
       _volume = vol;
       _mute = false;
       return true;
@@ -953,6 +1013,7 @@ bool YamahaReceiver::setVolumePercent(int vol) {
 bool YamahaReceiver::setMute(bool onoff) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_MUTE_START), onoff ? "On" : "Off", FPSTR(XML_SET_MUTE_END))) {
+      if (_mute != onoff) _dirty = true;
       _mute = onoff;
       return true;
   }
@@ -962,6 +1023,7 @@ bool YamahaReceiver::setMute(bool onoff) {
 bool YamahaReceiver::setTreble(int treb) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_TREBLE_START), String(treb), FPSTR(XML_SET_TREBLE_END))) {
+      if(_treble != treb) _dirty = true;
       _treble = treb;
       return true;
   }
@@ -971,6 +1033,7 @@ bool YamahaReceiver::setTreble(int treb) {
 bool YamahaReceiver::setBass(int bas) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_BASS_START), String(bas), FPSTR(XML_SET_BASS_END))) {
+      if (_bass != bas) _dirty = true;
       _bass = bas;
       return true;
   }
@@ -980,6 +1043,7 @@ bool YamahaReceiver::setBass(int bas) {
 bool YamahaReceiver::setSubwooferTrim(int val) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_SWTRIM_START), String(val), FPSTR(XML_SET_SWTRIM_END))) {
+      if (_subwooferTrim != val) _dirty = true;
       _subwooferTrim = val;
       return true;
   }
@@ -989,6 +1053,7 @@ bool YamahaReceiver::setSubwooferTrim(int val) {
 bool YamahaReceiver::setSource(const String& srcName) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_SOURCE_START), srcName, FPSTR(XML_SET_SOURCE_END))) {
+      if (_source != srcName) _dirty = true;
       _source = srcName;
       return true;
   }
@@ -998,6 +1063,7 @@ bool YamahaReceiver::setSource(const String& srcName) {
 bool YamahaReceiver::setStraight(bool onoff) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_STRAIGHT_START), onoff ? "On" : "Off", FPSTR(XML_SET_STRAIGHT_END))) {
+      if (_straight != onoff) _dirty = true;
       _straight = onoff;
       return true;
   }
@@ -1007,6 +1073,7 @@ bool YamahaReceiver::setStraight(bool onoff) {
 bool YamahaReceiver::setEnhancer(bool onoff) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_ENHANCER_START), onoff ? "On" : "Off", FPSTR(XML_SET_ENHANCER_END))) {
+      if (_enhancer != onoff) _dirty = true;
       _enhancer = onoff;
       return true;
   }
@@ -1016,6 +1083,7 @@ bool YamahaReceiver::setEnhancer(bool onoff) {
 bool YamahaReceiver::setSoundProgram(const String& dspname) {
   WiFiClient client;
   if (executeSetCommand(client, FPSTR(XML_SET_DSP_START), dspname, FPSTR(XML_SET_DSP_END))) {
+      if (_soundProgram != dspname) _dirty = true;
       _soundProgram = dspname;
       return true;
   }

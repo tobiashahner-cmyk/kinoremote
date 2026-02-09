@@ -54,6 +54,7 @@ public:
     KinoError tick();
     int getTickInterval();
     bool setTickInterval(int ms);
+    bool getStatusUpdate(const char* devName, JsonObject& root) override;
 
     // Lights
     bool readLights();
@@ -66,11 +67,13 @@ public:
 
     // Groups
     bool readGroups();
+    HueGroup* getGroupById(uint8_t gid);
     HueGroup* getGroupByName(const char* name);
     const std::vector<HueGroup*>& getGroups() const;
     bool sendGroupState(uint16_t groupId, const char* jsonPayload);
     int getGroupParamCount(const HueGroup* g);
     bool getGroupParam(const HueGroup* g, int paramIndex, char* out, size_t outLen);
+    void setGroupsDirtyFlags(uint8_t lightId);
 
     // Scenes
     bool readScenes();
@@ -110,7 +113,7 @@ private:
 
     // read* helper
     void updateOrAddLight(int id, JsonVariant doc);
-    void addGroup(int id, JsonVariant doc);
+    void updateOrAddGroup(int id, JsonVariant doc);
     void addScene(const char* idStr, JsonVariant doc);
     void updateOrAddSensor(int id, JsonVariant doc);
     

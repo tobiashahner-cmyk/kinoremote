@@ -263,7 +263,7 @@ KinoError HueBridge::get(const char* prop, KinoVariant& out) {
         out.setInt(0);
         if (getLightParam(l, paramIndex, param, sizeof(param))) {
           if (strcmp(param, "bri")==0) out.setInt(0);
-          if (strcmp(param, "ct" )==0) out.setInt(153);
+          if (strcmp(param, "ct" )==0) out.setInt(l->getMinCT());
           return KinoError::OK;
         } else {
           out.setNone();
@@ -272,19 +272,11 @@ KinoError HueBridge::get(const char* prop, KinoVariant& out) {
         return KinoError::PropertyNotSupported;
       }
       if (strcmp(rest,"/maxvalue")==0) {
-        /*int mv = 0;
-        std::vector<String> params = getLightParams(l);
-        if (paramIndex >= params.size()) return KinoError::OutOfRange;
-        if (params[paramIndex] == "bri")  out = KinoVariant::fromInt(255);
-        else if (params[paramIndex] == "ct")   out = KinoVariant::fromInt(555);
-        else if (params[paramIndex] == "tt")   out = KinoVariant::fromInt(10000);
-        else return KinoError::PropertyNotSupported;
-        return KinoError::OK;*/
         char param[10];
         out.setInt(100);
         if (getLightParam(l, paramIndex, param, sizeof(param))) {
           if (strcmp(param, "bri")==0)  out.setInt(255);
-          if (strcmp(param, "ct" )==0)  out.setInt(555);
+          if (strcmp(param, "ct" )==0)  out.setInt(l->getMaxCT());
           if (strcmp(param, "tt" )==0)  out.setInt(10000);
           return KinoError::OK;
         } else {
@@ -294,14 +286,6 @@ KinoError HueBridge::get(const char* prop, KinoVariant& out) {
         return KinoError::PropertyNotSupported;
       }
       if (strcmp(rest,"/valuestep")==0) {
-        /*int mv = 0;
-        std::vector<String> params = getLightParams(l);
-        if (paramIndex >= params.size()) return KinoError::OutOfRange;
-        if (params[paramIndex] == "bri")  out = KinoVariant::fromInt(1);
-        else if (params[paramIndex] == "ct")   out = KinoVariant::fromInt(1);
-        else if (params[paramIndex] == "tt")   out = KinoVariant::fromInt(100);
-        else return KinoError::PropertyNotSupported;
-        return KinoError::OK;*/
         char param[10];
         out.setInt(1);
         if (getLightParam(l, paramIndex, param, sizeof(param))) {
@@ -662,9 +646,9 @@ KinoError HueBridge::get(const char* prop, KinoVariant& out) {
       if (paramIndex == 1) out = KinoVariant::fromString("speichern");
       if (paramIndex == 2) out = KinoVariant::fromString("Transition Time [ms]");
       return KinoError::OK;*/
-      if (paramIndex == 1) out.setString("setzen");
-      if (paramIndex == 2) out.setString("speichern");
-      if (paramIndex == 3) out.setString("Trans.Time[ms]");
+      if (paramIndex == 0) out.setString("setzen");
+      if (paramIndex == 1) out.setString("speichern");
+      if (paramIndex == 2) out.setString("Trans.Time[ms]");
       return KinoError::OK;
     }
     if (strcmp(rest,"/access")==0) {
@@ -982,6 +966,100 @@ KinoError HueBridge::query(const char* property, uint16_t index, KinoVariant &ou
   }
 
   return KinoError::PropertyNotSupported;
+}
+
+void HueBridge::setGroupsDirtyFlags(uint8_t lightId) {
+  for (auto* g : _groups) {
+    g->setDirty(lightId);
+  }
+}
+
+bool HueBridge::getStatusUpdate(const char* devName, JsonObject& root) {
+  static size_t nextLight = 0;
+  static size_t nextGroup = 0;
+  static size_t nextSensor = 0;
+  static int scan = 0;  // 0=lights, 1=groups, 2=sensors
+
+  if (scan == 0) {
+    scan = 1;
+    HueLight* l = _lights[nextLight];
+    nextLight++;
+    if (nextLight == _lights.size()) nextLight = 0;
+    
+    if (!l) return false;
+
+    if (l->isDirty()) {
+      Serial.print("found light to update: "); Serial.println(l->getName());
+      root["dev"] = devName;
+      char path[32];
+      snprintf(path, sizeof(path), "lights/%s", l->getName());
+      path[sizeof(path)-1] = '\0';
+      root["path"] = path;
+      root["on"] = l->isOn();
+      if (l->isDimmable()) root["bri"] = l->getBrightness();
+      if (l->hasCTColor()) root["ct"] = l->getCT();
+      if (l->hasXYColor()) {
+        RgbColor c = l->getRGB();
+        KinoVariant col = KinoVariant::fromColor(c.r, c.g, c.b);
+        root["col"] = col.c_str();
+      }
+      l->clearDirty();
+      nextLight++;
+      if (nextLight == _lights.size()) nextLight = 0;
+      return true;
+    }
+    return false;
+  } else if (scan ==1) {
+    scan = 2;
+    HueGroup* g = _groups[nextGroup];
+    nextGroup++;
+    if (nextGroup == _groups.size()) nextGroup = 0;
+    if (!g) return false;
+    if (g->isDirty()) {
+      root["dev"] = devName;
+      char path[32];
+      snprintf(path, sizeof(path), "groups/%s", g->getName());
+      path[sizeof(path)-1] = '\0';
+      root["path"] = path;
+      bool anyOn = false;
+      int totalBri = 0; size_t lCount = 0;
+      for (uint8_t lid : g->getLightIds()) {
+        HueLight* l = _lights[lid];
+        if (!l) continue;
+        if (l->isOn()) {
+          anyOn = true;
+          totalBri = l->isDimmable() ? l->getBrightness() : 255;
+        }
+        lCount++;
+      }
+      root["on"] = anyOn;
+      root["bri"] = (int)(totalBri/lCount);
+      g->clearDirty();
+      return true;
+    }
+    return false;
+  } else if (scan == 2) {
+    // check sensor
+    scan = 0;
+    HueSensor* s = _sensors[nextSensor];
+    nextSensor++;
+    if (nextSensor == _sensors.size()) nextSensor = 0;
+    if (!s) return false;
+    if (s->isDirty()) {
+      root["dev"] = devName;
+      char path[32];
+      snprintf(path, sizeof(path), "sensors/%s", s->getName());
+      path[sizeof(path)-1] = '\0';
+      root["path"] = path;
+      JsonObjectConst curState = s->getState();
+      for (JsonPairConst kv : curState) {
+        root[kv.key()] = kv.value();
+      }
+      s->clearDirty();
+      return true;
+    }
+  }
+  return false;
 }
 
 bool HueBridge::needsCommit() {
@@ -1513,15 +1591,16 @@ void HueBridge::updateOrAddLight(int id, JsonVariant doc) {
 
   bool hasCT = doc["state"].containsKey("ct");
   uint16_t ct = hasCT ? doc["state"]["ct"].as<uint16_t>() : 0;
-  uint16_t minct = hasCT ? doc["capabilities"]["control"]["ct"]["min"]|0 : 0;
-  uint16_t maxct = hasCT ? doc["capabilities"]["control"]["ct"]["max"]|0 : 0;
+  uint16_t minct = hasCT ? doc["capabilities"]["control"]["ct"]["min"].as<uint16_t>()|0 : 0;
+  uint16_t maxct = hasCT ? doc["capabilities"]["control"]["ct"]["max"].as<uint16_t>()|0 : 0;
 
   HueLight* existing = getLightById(id);
   if (existing) {
-    existing->updateValues(name, on, bri, hasXY, x, y, hasCT, ct, hasBri);
+    existing->updateValues(name, on, hasBri, bri, hasXY, x, y, hasCT, ct, minct, maxct);
+    if (existing->isDirty()) setGroupsDirtyFlags(id);
   } else {
     // Sicherheitshalber prüfen wir, ob 'new' geklappt hat (Heap-Check)
-    HueLight* newL = new HueLight(id, name, on, bri, hasXY, x, y, hasCT, ct, hasBri);
+    HueLight* newL = new HueLight(id, name, on, hasBri, bri, hasXY, x, y, hasCT, ct, minct, maxct);
     if (newL) {
       _lights.push_back(newL);
     } else {
@@ -1548,6 +1627,13 @@ HueLight* HueBridge::getLightByName(const char* name) {
 
 const std::vector<HueLight*>& HueBridge::getLights() const {
   return _lights;
+}
+
+HueGroup* HueBridge::getGroupById(uint8_t gid) {
+  for (auto* g : _groups) {
+    if (g->getId() == gid) return g;
+  }
+  return nullptr;
 }
 
 HueGroup* HueBridge::getGroupByName(const char* name) {
@@ -1794,8 +1880,8 @@ bool HueBridge::readGroups() {
     return false;
   }
 
-  for (auto* g : _groups) delete g;
-  _groups.clear();
+  /*for (auto* g : _groups) delete g;
+  _groups.clear();*/
 
   char idStr[32];
   // 2026-02-02 doc ersetzt durch _httpJson, _filter eingeführt
@@ -1810,7 +1896,7 @@ bool HueBridge::readGroups() {
       _globalDepth = 1;
       // Logik zum Extrahieren der Light-IDs bleibt in addGroup
       //addGroup(atoi(idStr), doc);
-      addGroup(atoi(idStr), _httpJson);
+      updateOrAddGroup(atoi(idStr), _httpJson);
     } else {
       Serial.print(F("Deserialization failed for group "));
       Serial.println(idStr);
@@ -1819,7 +1905,7 @@ bool HueBridge::readGroups() {
   return !_groups.empty();
 }
 
-void HueBridge::addGroup(int id, JsonVariant doc) {
+void HueBridge::updateOrAddGroup(int id, JsonVariant doc) {
   //serializeJson(doc, Serial); 
   //Serial.println();
   const char* name = doc["name"] | "";
@@ -1830,9 +1916,13 @@ void HueBridge::addGroup(int id, JsonVariant doc) {
     const char* lIdStr = v.as<const char*>();
     if (lIdStr) lightIds.push_back((uint8_t)atoi(lIdStr));
   }
-  
-  HueGroup* newG = new HueGroup(id, name, *this, lightIds);
-  if (newG) _groups.push_back(newG);
+  HueGroup* existing = getGroupById(id);
+  if (!existing) {
+    HueGroup* newG = new HueGroup(id, name, *this, lightIds);
+    if (newG) _groups.push_back(newG);
+  } else {
+    existing->updateValues(name, lightIds);
+  }
 }
 
 /* readScenes() V1

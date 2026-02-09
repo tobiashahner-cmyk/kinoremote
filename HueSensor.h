@@ -29,7 +29,11 @@ public:
     bool isWritable() const;
     bool applyChanges(HueBridge* bridge);
 
+    bool isDirty();
+    void clearDirty();
+
 private:
+    bool _dirty;
     uint16_t _id;
     char _name[48];
     char _type[32];

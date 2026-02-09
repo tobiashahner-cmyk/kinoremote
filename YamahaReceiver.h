@@ -79,8 +79,11 @@ class YamahaReceiver : public KinoDevice {
     KinoError tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
     bool setTickInterval(int ms);                     // setzt das Intervall für tick() in Millisekunden. Erlaubt: 0 oder 2000 bis unendlich
     int getTickInterval();                            // gibt das Intervall für tick() in Millisekunden zurück
-    
+    bool isDirty();
+    void clearDirty();
+    bool getStatusUpdate(const char* devName, JsonObject& root);
   private:
+    bool _dirty;
     IPAddress _ip;
     //WiFiClient& _client;
     // KinoDevice:: properties

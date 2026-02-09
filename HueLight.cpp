@@ -5,13 +5,16 @@
 HueLight::HueLight(uint8_t id,
                    const char* name,
                    bool on,
+                   bool hasBri,
                    uint8_t bri,
                    bool hasXY,
                    float x,
                    float y,
                    bool hasCT,
                    uint16_t ct,
-                   bool hasBri)
+                   uint16_t minct,
+                   uint16_t maxct
+                   )
 : _id(id),
   _on(on),
   _bri(bri),
@@ -20,11 +23,18 @@ HueLight::HueLight(uint8_t id,
   _x(x),
   _y(y),
   _hasCT(hasCT),
-  _ct(ct) {strlcpy(_name, name, sizeof(_name));}
+  _ct(ct),
+  _minct(minct),
+  _maxct(maxct) {
+    strlcpy(_name, name, sizeof(_name)); 
+    _dirty = false;
+  }
 
 // --- Getter ---
 uint8_t HueLight::getId() const { return _id; }
 const char* HueLight::getName() const { return _name; }
+bool HueLight::isDirty() { return _dirty; }
+void HueLight::clearDirty() { _dirty = false; }
 
 bool HueLight::isOn() const { return _on; }
 uint8_t HueLight::getBrightness() const { return _bri; }
@@ -37,6 +47,8 @@ float HueLight::getX() const { return _x; }
 float HueLight::getY() const { return _y; }
 RgbColor HueLight::getRGB() { return xyToRgb(_x, _y, _bri); }
 uint16_t HueLight::getCT() const { return _ct; }
+uint16_t HueLight::getMinCT() const { return _minct; }
+uint16_t HueLight::getMaxCT() const { return _maxct; }
 
 uint16_t HueLight::getTT() const { return pending.tt.value_or(0); }
 
@@ -44,31 +56,53 @@ uint16_t HueLight::getTT() const { return pending.tt.value_or(0); }
 bool HueLight::setOn(bool value)      { pending.on = value; return true;}
 bool HueLight::setBri(uint8_t value)  { if(_hasBri) pending.bri = value; return true;}
 bool HueLight::setCT(uint16_t value)  { if(_hasCT) { pending.ct = value;  return true; } return false;}
-bool HueLight::setXY(float x, float y){ if(_hasXY) { pending.xy = std::make_pair(x, y);  return true;}  return false;}
+bool HueLight::setXY(float x, float y){ if(_hasXY) { pending.xy = std::make_pair(x, y); return true;}  return false;}
 bool HueLight::setTT(uint16_t value) { if(_hasBri){pending.tt = (uint16_t)value/100; if (pending.tt==0) {pending.tt=1; } return true;} return false;}  // tt wird auf der bridge nicht gespeichert
+
+
 bool HueLight::setRGB(uint8_t r, uint8_t g, uint8_t b) { 
   RgbColor col = {r,g,b};
-  XyPoint xyp = rgbToXy(col); 
+  XyPoint xyp = rgbToXy(col);
   return setXY(xyp.x, xyp.y);
   }
 
 // --- spezielle Setter für direkten Zugriff ohne "pending"
-void HueLight::forceOn(bool value)              { _on = value; }
-void HueLight::forceBri(uint8_t value)          { if (_hasBri) _bri = value; }
-void HueLight::forceCT(uint16_t value)          { if (_hasCT)  _ct = value; }
+void HueLight::forceOn(bool value) {
+  if (_on != value) _dirty = true;
+  _on = value; 
+}
+
+void HueLight::forceBri(uint8_t value) { 
+  if (_hasBri) {
+    if (_bri != value) _dirty = true;
+    _bri = value; 
+  }
+}
+void HueLight::forceCT(uint16_t value) { 
+  if (_hasCT) {
+    if (_ct != value) _dirty = true;
+    _ct = value;
+  }
+}
 
 // spezieller Setter für Refresh von der HueBridge
-void HueLight::updateValues(const char* name, bool on, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, bool hasBri) {
+void HueLight::updateValues(const char* name, bool on, bool hasBri, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, uint16_t minct, uint16_t maxct) {
   //_name = name;
   strlcpy(_name, name, sizeof(_name));
+  if (on != _on) _dirty = true;
   _on = on;
+  _hasBri = hasBri;
+  if (_hasBri && (_bri != bri)) _dirty = true;
   _bri = bri;
   _hasXY = hasXY;
+  if (_hasXY && ((_x != x)||(_y != y))) _dirty = true;
   _x = x;
   _y = y;
   _hasCT = hasCT;
+  if (_hasCT && (_ct != ct)) _dirty = true;
   _ct = ct;
-  _hasBri = hasBri;
+  _minct = minct;
+  _maxct = maxct;
 }
 
 // --- applyChanges ---
@@ -118,7 +152,6 @@ bool HueLight::applyChanges(HueBridge* bridge) {
                       pending.ct.has_value() || 
                       pending.xy.has_value();
     if (!hasChanges) return true;
-
     char payload[128];
     int pos = 0;
     pos += snprintf(payload + pos, sizeof(payload) - pos, "{");
@@ -147,6 +180,7 @@ bool HueLight::applyChanges(HueBridge* bridge) {
     }
 
     clearPending();
+    _dirty = true;
     return true;
 }
 

@@ -198,6 +198,21 @@ std::vector<const char*> KinoMacroEngine::getAvailableMacroCommands() {
   return { "set", "delay" }; 
 }
 
+size_t KinoMacroEngine::getMacroCommandCount() {
+  return 2;
+}
+
+bool KinoMacroEngine::getMacroCommand(size_t index, char* out, size_t outLen) {
+  if (index > 1) {
+    out[0] = '\0';
+    return false;
+  }
+  if (index == 0) strncpy(out, "set", outLen);
+  if (index == 1) strncpy(out, "delay", outLen);
+  out[outLen-1] = '\0';
+  return true;
+}
+
 bool KinoMacroEngine::addCommand(const String& macroName, size_t index, const String& jsonAction) {
   String src = _macroPath(macroName);
   String tmp = src + ".tmp";

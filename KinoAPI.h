@@ -13,6 +13,8 @@ namespace KinoAPI {
   KinoError getMacroLineByIndex(const char* macroName, size_t index, char* buf, size_t bufLen);
   //std::vector<String> getAvailableMacroCommands();
   std::vector<const char*> getAvailableMacroCommands();
+  size_t getMacroCommandCount();
+  KinoError getMacroCommand(size_t index, char* out, size_t outLen);
   bool startMacroEngine();
   bool handleMacroTicks();
   bool executeMacro(const String& name, MacroFinishedCallback cb=nullptr);
@@ -57,5 +59,7 @@ namespace KinoAPI {
   bool isWritable(const KinoPropertyInfo*& prop);
   bool isInternal(const KinoPropertyInfo*& prop);
   bool isStatus(const KinoPropertyInfo*& prop);
+
+  KinoError getJsonUpdates(JsonDocument& doc);
 
 }

@@ -26,9 +26,14 @@ public:
     bool setCT(uint16_t value);
     bool setTT(uint16_t value);
 
+    void updateValues(const char* name, const std::vector<uint8_t> lightIds);
     bool applyChanges(HueBridge* bridge);
+    bool isDirty();
+    void setDirty(uint8_t lightId);
+    void clearDirty();
 
 private:
+    bool _dirty;
     uint16_t _id;
     char _name[32];
 

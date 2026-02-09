@@ -110,6 +110,14 @@ namespace KinoAPI {
     return macroEngine.getAvailableMacroCommands();
   }
 
+  size_t getMacroCommandCount() {
+    return macroEngine.getMacroCommandCount();
+  }
+  
+  KinoError getMacroCommand(size_t index, char* out, size_t outLen) {
+    return macroEngine.getMacroCommand(index, out, outLen) ? KinoError::OK : KinoError::OutOfRange;
+  }
+
   bool addMacroCommand(const String& macroName, size_t index, const String& jsonActionElement) {
     return macroEngine.addCommand(macroName, index, jsonActionElement);
   }
@@ -194,11 +202,8 @@ namespace KinoAPI {
 
   KinoError getDeviceName(size_t devIndex, KinoVariant& out) {
     if (devIndex >= KinoDeviceFactory::getDeviceCount()) return KinoError::OutOfRange;
-    //String devName = KinoDeviceFactory::getDeviceNameByIndex(devIndex);
     char devName[32];
     if (!KinoDeviceFactory::getDeviceNameByIndex(devIndex, devName, sizeof(devName))) return KinoError::InternalError;
-    //if (devName.length()==0) return KinoError::InternalError;
-    //out = KinoVariant::fromString(devName.c_str());
     out.setString(devName);
     return KinoError::OK;
   }
@@ -220,7 +225,7 @@ namespace KinoAPI {
     Serial.print(F(" | MaxBlock: "));
     Serial.print(maxFreeBlockSize);
     Serial.print(F(" | Fragmentation: "));
-    Serial.println(heapFragmentation);
+    Serial.print(heapFragmentation);
     Serial.print(F(" | Stack: "));
     Serial.println(freeStack);
   }
@@ -250,13 +255,31 @@ namespace KinoAPI {
     return tickresult;
   }
 
+  KinoError getJsonUpdates(JsonDocument& doc) {
+    static size_t lastIdx = 0;
+    size_t total = KinoDeviceFactory::getDeviceCount();
+    
+    for (size_t i = 0; i < total; i++) {
+        size_t idx = (lastIdx + i) % total;
+        KinoDevice* d = KinoDeviceFactory::getDeviceByIndex(idx);
+        if (!d) return KinoError::InternalError;
+        char devName[32];
+        if (!KinoDeviceFactory::getDeviceNameByIndex(idx, devName, sizeof(devName))) return KinoError::InternalError;
+        JsonObject root = doc.to<JsonObject>();
+        if (d && d->getStatusUpdate(devName, root)) {
+          Serial.print("KinoAPI::getJsonUpdates : got update from device "); Serial.println(devName);
+            lastIdx = (idx + 1) % total;
+            return KinoError::OK;
+        }
+    }
+    return KinoError::NothingToDo;
+  }
+
 
   KinoError getDeviceType(const char* deviceName, KinoVariant& out) {
     if (!deviceName) return KinoError::DeviceNotReady;
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
-    //if (!d) return KinoError::DeviceNotReady;
     if (!d) { out.setNone(); return KinoError::DeviceNotReady; }
-    //out = KinoVariant::fromString(d->deviceType());
     out.setString(d->deviceType());
     return KinoError::OK;
   }
@@ -265,24 +288,18 @@ namespace KinoAPI {
     if (!deviceName) return KinoError::DeviceNotReady;
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
     if (!d) return KinoError::DeviceNotReady;
-    /*KinoError e = d->get(property, out);
-    return e;*/
     return d->get(property, out);
   }
   
   KinoError setProperty(const char* deviceName, const char* property, const KinoVariant& value) {
     if (!deviceName) return KinoError::DeviceNotReady;
-    //KinoDevice* d = getDeviceByName(deviceName);
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
     if (!d) return KinoError::DeviceNotReady;
-    /*KinoError e = d->set(property, value);
-    return e;*/
     return d->set(property, value);
   }
   
   KinoError getQueryCount(const char* deviceName, const char* property, uint16_t& out) {
     if (!deviceName) return KinoError::DeviceNotReady;
-    //KinoDevice* d = getDeviceByName(deviceName);
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
     if (!d) return KinoError::DeviceNotReady;
     return d->queryCount(property, out);
@@ -290,12 +307,9 @@ namespace KinoAPI {
   
   KinoError getQuery(const char* deviceName, const char* property, int index, KinoVariant& out) {
     if (!deviceName) return KinoError::DeviceNotReady;
-    //KinoDevice* d = getDeviceByName(deviceName);
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
     if (!d) return KinoError::DeviceNotReady;
     if (!property) return KinoError::InvalidProperty;
-    /*KinoError e = d->query(property, index, out);
-    return e;*/
     return d->query(property, index, out);
   }
 
@@ -309,15 +323,14 @@ namespace KinoAPI {
   
   KinoError commit(const char* deviceName) {
     bool ok = true;
-    Serial.println(F("Speicher vor Commit"));
-    showMemory();
+    //Serial.println(F("Speicher vor Commit"));
+    //showMemory();
     if (!deviceName) return KinoError::DeviceNotReady;
-    //KinoDevice* d = getDeviceByName(deviceName);
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
     if (!d) return KinoError::DeviceNotReady;
     ok = d->commit();
-    Serial.println(F("Speicher nach Commit"));
-    showMemory();
+    //Serial.println(F("Speicher nach Commit"));
+    //showMemory();
     if (!ok) return KinoError::InternalError;
     return KinoError::OK;
   }
@@ -353,6 +366,8 @@ namespace KinoAPI {
     }
     return KinoError::OutOfRange;
   }
+
+
 
   bool isInternal(const KinoPropertyInfo*& prop) {
     return ((prop->flags & KinoPropertyFlags::Prop_Internal) > 0);

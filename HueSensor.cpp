@@ -5,17 +5,29 @@ HueSensor::HueSensor(uint16_t id, const char* name, const char* type)
 : _id(id) {
   strlcpy(_name, name, sizeof(_name)); 
   strlcpy(_type, type, sizeof(_type));
+  _dirty = false;
 }
+
+bool HueSensor::isDirty() { return _dirty;}
+void HueSensor::clearDirty() { _dirty = false; }
 
 uint16_t HueSensor::getId() const { return _id; }
 const char* HueSensor::getName() const { return _name; }
 const char* HueSensor::getType() const { return _type; }
 
 void HueSensor::updateState(const JsonObject& state) {
-    _state.clear();
-    for (JsonPair kv : state) {
-        _state[kv.key()] = kv.value();
+  for (JsonPair kv : state) {
+    if (_dirty) continue;
+    if (!_state.containsKey(kv.key())) {
+      _dirty = true;
+      continue;
     }
+    if (_state[kv.key()] != kv.value()) _dirty = true;
+  }
+  _state.clear();
+  for (JsonPair kv : state) {
+    _state[kv.key()] = kv.value();
+  }
 }
 
 bool HueSensor::hasValue(const String& key) const {
@@ -52,13 +64,13 @@ bool HueSensor::applyChanges(HueBridge* bridge) {
 
     if (!bridge->setSensorState(_id, _pending.as<JsonObject>()))
         return false;
-
     // lokalen Cache synchronisieren
     for (JsonPair kv : _pending.as<JsonObject>()) {
         _state[kv.key()] = kv.value();
     }
 
     clearPending();
+    _dirty = true;
     return true;
 }
 

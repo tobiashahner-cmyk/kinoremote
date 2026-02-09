@@ -7,7 +7,11 @@ HueGroup::HueGroup(uint16_t id,
                    const char* name,
                    HueBridge& bridge,
                    const std::vector<uint8_t>& lightIds)
-: _id(id), _bridge(bridge), _lightIds(lightIds) { strlcpy(_name, name, sizeof(_name)); }
+: _id(id), _bridge(bridge), _lightIds(lightIds) 
+{ 
+  strlcpy(_name, name, sizeof(_name)); 
+  _dirty = false;  
+}
 
 // --- Getter ---
 uint16_t HueGroup::getId() const { return _id; }
@@ -42,6 +46,49 @@ bool HueGroup::setBri(uint8_t value) { pending.bri = value; return true;}
 bool HueGroup::setCT(uint16_t value) { pending.ct = value; return true;}
 bool HueGroup::setTT(uint16_t value) { pending.tt = (uint16_t)value/100; if (pending.tt == 0) {pending.tt=1;} return true;}
 
+bool HueGroup::isDirty() { return _dirty; }
+void HueGroup::setDirty(uint8_t lightId) {
+  for (uint8_t id : _lightIds) {
+    if (id == lightId) {
+      _dirty = true;
+      return;
+    }
+  }
+}
+
+void HueGroup::clearDirty() { _dirty = false; }
+
+void HueGroup::updateValues(const char* name, const std::vector<uint8_t> lightIds) {
+  // dirty check : neue Lampen dazu?
+  bool isdirty = false;
+  for (uint8_t lid : lightIds) {
+    bool isnew = true;
+    for (int i=0; i<_lightIds.size(); i++) {
+      if (_lightIds[i] == lid) isnew = false;
+    }
+    if (isnew) isdirty = true;
+  }
+  // dirty check 2: alte Lampe entfernt?
+  for (uint8_t lid : _lightIds) {
+    bool isold = true;
+    for (int i=0; i< lightIds.size(); i++) {
+      if (lightIds[i] == lid) isold = false;
+    }
+    if (isold) isdirty = true;
+  }
+  if (strcmp(_name, name)!=0) {
+    strlcpy(_name, name, sizeof(_name));
+    _dirty = true;
+  }
+  if (!isdirty) return;
+  _lightIds.clear();
+  for (uint8_t lid : lightIds) {
+    _lightIds.push_back(lid);
+  }
+  _dirty = true;
+}
+
+
 // --- applyChanges ---
 bool HueGroup::applyChanges(HueBridge* bridge) {
     bool hasChanges =
@@ -75,6 +122,7 @@ bool HueGroup::applyChanges(HueBridge* bridge) {
     }
 
     clearPending();
+    _dirty = true;
     return true;
 }
 

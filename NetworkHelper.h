@@ -14,7 +14,7 @@ namespace NetworkHelper {
     // Überspringt den HTTP-Header, damit wir direkt beim XML/JSON landen
     inline bool skipHeader(WiFiClient& client) {
         // find() ist effizient, da es nicht den ganzen Text puffert
-        client.setTimeout(500);
+        client.setTimeout(1000);
         bool ok = client.find((char*)"\r\n\r\n");
         if (!ok) {
           Serial.println(F("NetworkHelper::skipHeader failed"));

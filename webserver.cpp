@@ -8,13 +8,15 @@ namespace webserver {
   StaticJsonDocument<1024> _settings;         // Container für Werte von Properties und Parametern, die innerhalb eines Makros gesetzt werden
   StaticJsonDocument<256>  _lineSettings;     // Container für Werte von Properties und Parametern, die innerhalb einer Makrozeile gesetzt werden
   StaticJsonDocument<256>  _lineKeys;         // Merkliste für Funktions-Selects, die für eine Makrozeile schon angezeigt wurden
-  StaticJsonDocument<1024> _parseContainer;   // Puffer für deserializeJson
+  StaticJsonDocument<512> _parseContainer;   // Puffer für diverse kleine Jsons (macroLine, Websocket Push)
 
   
   const int _paramPathLen = 128;
   char _paramPath[128];
   const int _pathHelperLen = 128;
   char _pathHelper[128];
+
+  bool WSConnected = false;
 
 KinoError begin() {
   _server.on("/",handleRoot);
@@ -27,14 +29,58 @@ KinoError begin() {
   _server.on("/devFuncControls",sendFuncControls);
   _server.on("/insertMacroLine",insertMacroLine);
   _server.on("/newMacro",createNewMacro);
+  _server.on("/style.css", handleCSS);
+  _server.on("/script.js", handleJS);
   _server.onNotFound(handle404);
   _server.begin();
+  _socket.begin();
+  _socket.onEvent(webSocketEvent);
   return KinoError::OK;
 }
+
+void handleCSS() {
+  // Cache für 31 Tage (2678400 Sekunden) aktivieren
+  _server.sendHeader("Cache-Control", "public, max-age=2678400");
+  _server.send_P(200, "text/css", HTML_CSS);
+}
+
+void handleJS() {
+  // Cache für 31 Tage (2678400 Sekunden) aktivieren
+  _server.sendHeader("Cache-Control", "public, max-age=2678400");
+  _server.send_P(200, "text/js", HTML_JAVASCRIPT);
+}
+  
 
 void loop() {
   _socket.loop();
   _server.handleClient();
+  //StaticJsonDocument<512> pushJson;
+  _parseContainer.clear();
+  if (!WSConnected) return;
+  if (KinoAPI::getJsonUpdates(_parseContainer) == KinoError::OK) {
+    char buf[512];
+    serializeJson(_parseContainer, buf);
+    Serial.println(buf);
+    _socket.broadcastTXT(buf);
+  }
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+    switch(type) {
+        case WStype_DISCONNECTED:
+            Serial.printf("[%u] Disconnected!\n", num);
+            break;
+        case WStype_CONNECTED: {
+            IPAddress ip = _socket.remoteIP(num);
+            Serial.printf("[%u] Connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
+            WSConnected = true;
+            break;
+        }
+        case WStype_TEXT:
+            // Hier könnten Befehle vom Browser ankommen
+            Serial.printf("[%u] get Text: %s\n", num, payload);
+            break;
+    }
 }
 
 void handle404() {
@@ -723,13 +769,15 @@ void getMacroValue(const char* dev, const char* key, const char* apikey, KinoVar
   // 1. Hole den Variant einmal ab
   JsonVariant v = _lineSettings[dev][key];
   if (!v.isNull()) { 
-    mVal = KinoVariant::fromJsonVariant(v);
+    //mVal = KinoVariant::fromJsonVariant(v);
+    mVal.setFromJsonVariant(v);
     return;
   }
   // 2. Check in den allgemeinen Makro-Einstellungen
   v = _settings[dev][key];
   if (!v.isNull()) {
-    mVal = KinoVariant::fromJsonVariant(v);
+    //mVal = KinoVariant::fromJsonVariant(v);
+    mVal.setFromJsonVariant(v);
     return;
   }
   // 3. Fallback: Live-Wert von der API
@@ -738,7 +786,8 @@ void getMacroValue(const char* dev, const char* key, const char* apikey, KinoVar
     return;
   }
   // 4. Default
-  mVal = KinoVariant(); // Setzt den Typ auf NONE
+  //mVal = KinoVariant(); // Setzt den Typ auf NONE
+  mVal.setNone();
 }
 
 //void webserver::showDelayInput(const String& curSecs, int lineIndex) {
@@ -754,10 +803,14 @@ void showDelayInput(int curSecs, int lineIndex) {
 
 void showMacroCommandSelect(const char* curCmd, int lineIndex) {
   _server.sendContent(F("<select name='cmd' class='cmdselect'>"));
-  std::vector<const char*> availableCommands = KinoAPI::getAvailableMacroCommands();
+  //std::vector<const char*> availableCommands = KinoAPI::getAvailableMacroCommands();
+  int cmdCount = KinoAPI::getMacroCommandCount();
   
   _server.sendContent(F("<option value=''>Kommando</option>"));
-  for (const char* cmd : availableCommands) {
+  //for (const char* cmd : availableCommands) {
+  char cmd[20];
+  for (int i=0; i<cmdCount; i++) {
+    KinoAPI::getMacroCommand(i, cmd, sizeof(cmd));
     _server.sendContent(F("<option value='"));
     _server.sendContent(cmd);
     _server.sendContent("'");
@@ -1451,7 +1504,7 @@ void showParamPropertyControl(const char* deviceName, const char* getsetPath) {
         break;
       }
       default: {
-        infoText(prop->label, "unknown");
+        infoText(deviceName, getsetPath, prop->label, "unknown");
         break;
       }
     }
@@ -1563,7 +1616,7 @@ void showFuncControls(const String& dev, const String& key, int lineIndex) {
               break;
             }
             default: {
-              infoText(paramLabel.toString().c_str(), "unknown");
+              infoText(dev.c_str(), getsetPath.c_str(), paramLabel.toString().c_str(), "unknown");
               break;
             }
           } // one parameter done
@@ -1594,7 +1647,7 @@ void showFuncControls(const String& dev, const String& key, int lineIndex) {
           break;
         }
         default: {
-          infoText(pi->label, "unknown");
+          infoText(dev.c_str(), pi->key, pi->label, "unknown");
           break;
         }
       }
@@ -1643,7 +1696,7 @@ void showFuncControls(const String& dev, const String& key, int lineIndex) {
               break;
             }
             default: {
-              infoText(paramLabel.toString().c_str(), "unknown");
+              infoText(dev.c_str(), getsetPath.c_str(), paramLabel.toString().c_str(), "unknown");
               break;
             }
           } // one parameter done
@@ -1699,7 +1752,7 @@ void showFuncControls(const String& dev, const String& key, int lineIndex) {
             break;
           }
           default: {
-            infoText(paramLabel.toString().c_str(), "unknown");
+            infoText(dev.c_str(), getsetPath.c_str(), paramLabel.toString().c_str(), "unknown");
             break;
           }
         } // one parameter done
@@ -1757,7 +1810,7 @@ void showFuncControls(const String& dev, const String& key, int lineIndex) {
           break;
         }
         default: {
-          infoText(paramLabel.toString().c_str(), "unknown");
+          infoText(dev.c_str(), getsetpath.c_str(), paramLabel.toString().c_str(), "unknown");
           break;
         }
       } // end of one parameter
@@ -1798,17 +1851,18 @@ void showFuncControls(const char* dev, const char* key, int lineIndex) {
       int optionValueLen = 32; char optionValue[optionValueLen];
       int optionLabelLen = 64; char optionLabel[optionLabelLen];
       for (int oc=0; oc < nrOfOptions; oc++) {
-        //Serial.print("requesting optionvalue for "); Serial.print(pi->key); Serial.print(" #"); Serial.print(oc);
         err = KinoAPI::getQuery(dev, pi->key, oc, tmp);
         strncpy(optionValue, tmp.c_str(), optionValueLen);
         optionValue[optionValueLen-1] = '\0';
-        //Serial.print(" => "); Serial.println(tmp.c_str());
-        //Serial.print("requesting label for "); Serial.print(pi->key); Serial.print("/"); Serial.print(optionValue.toString());
         snprintf(_pathHelper, _pathHelperLen, "%s/%s/label", pi->key, optionValue);
         err = KinoAPI::getProperty(dev, _pathHelper, tmp);
-        //Serial.println(" => "); Serial.println(tmp.c_str());
         
-        if (tmp.type == KinoVariant::NONE) {strncpy(optionLabel, optionValue, optionLabelLen); optionLabel[optionLabelLen-1] = '\0';}
+        if (tmp.type == KinoVariant::NONE) {
+          strncpy(optionLabel, optionValue, optionLabelLen); 
+        } else {
+          strncpy(optionLabel, tmp.c_str(), optionLabelLen);
+        }
+        optionLabel[optionLabelLen-1] = '\0';
         
         bool selected = (strcmp(optionValue, value)==0);
         
@@ -1882,7 +1936,7 @@ void showFuncControls(const char* dev, const char* key, int lineIndex) {
               break;
             }
             default: {
-              infoText(label, "unknown");
+              infoText(dev, getsetPath, label, "unknown");
               break;
             }
           } // one parameter done
@@ -1912,7 +1966,7 @@ void showFuncControls(const char* dev, const char* key, int lineIndex) {
           break;
         }
         default: {
-          infoText(pi->label, "unknown");
+          infoText(dev, pi->key, pi->label, "unknown");
           break;
         }
       }
@@ -1975,7 +2029,7 @@ void showFuncControls(const char* dev, const char* key, int lineIndex) {
               break;
             }
             default: {
-              infoText(label, "unknown");
+              infoText(dev, getsetPath, label, "unknown");
               break;
             }
           } // one parameter done
@@ -2042,7 +2096,7 @@ void showFuncControls(const char* dev, const char* key, int lineIndex) {
             break;
           }
           default: {
-            infoText(label, "unknown");
+            infoText(dev, getsetPath, label, "unknown");
             break;
           }
         } // one parameter done
@@ -2113,7 +2167,7 @@ void showFuncControls(const char* dev, const char* key, int lineIndex) {
           break;
         }
         default: {
-          infoText(label, "unknown");
+          infoText(dev, getsetPath, label, "unknown");
           break;
         }
       } // end of one parameter
@@ -2154,7 +2208,7 @@ void handleDevice(const char* deviceName) {
       if (!isStatus) { continue; }
       KinoVariant value;
       err = KinoAPI::getProperty(deviceName, pi->key, value);
-      infoText(pi->label, value.toString().c_str());
+      infoText(deviceName, pi->key, pi->label, value.toString().c_str());
     } else if ((!hasValue) && (hasParams)) {  // die Property ist eine Zusammenfassung von Parametern
       groupCardStart(pi->key, pi->label);
       /*String path = pi->key;
@@ -2198,7 +2252,7 @@ void buildSimpleControl(const char* deviceName, const KinoPropertyInfo*& pi) {
           break;
         }
         default:
-          infoText(pi->label, "unknown");
+          infoText(deviceName, pi->key, pi->label, "unknown");
           break;
         }
       }
@@ -2215,7 +2269,6 @@ void buildSelect(const char* deviceName, const KinoPropertyInfo*& pi, bool hasPa
   KinoVariant label;
   KinoError err = KinoAPI::getProperty(deviceName, pi->key, value);
   
-  //String curValue = value.toString();
   const char* curValue = value.c_str();
   
   uint16_t optionCount;
@@ -2264,30 +2317,25 @@ void buildSelect(const char* deviceName, const KinoPropertyInfo*& pi, bool hasPa
 void buildComplexList(const char* deviceName, const KinoPropertyInfo*& pi, bool hasParams) {
   groupCardStart(pi->key, pi->label);
       uint16_t nrOfOptions;
+      KinoVariant option;
+      KinoVariant optLabel;
+      
       KinoError err = KinoAPI::getQueryCount(deviceName,pi->key, nrOfOptions);
       for (int opt=0; opt < nrOfOptions; opt++) {
-        KinoVariant option;
+        //KinoVariant option;
         err = KinoAPI::getQuery(deviceName, pi->key, opt, option);
-        KinoVariant optLabel;
-        /*String path = pi->key;
-        path += "/";
-        path += option.toString();
-        path += "/label";*/
-        snprintf(_pathHelper, _pathHelperLen, "%s/%s/label");
+        
+        //KinoVariant optLabel;
+        snprintf(_pathHelper, _pathHelperLen, "%s/%s/label", pi->key, option.c_str());
         _pathHelper[_pathHelperLen-1] = '\0';
-        //err = KinoAPI::getProperty(deviceName, path.c_str(), optLabel);
+        
         err = KinoAPI::getProperty(deviceName, _pathHelper, optLabel);
         if (err != KinoError::OK) optLabel = option;
         char groupId[32]; snprintf(groupId,32,"%s_%i",pi->label,opt);
         groupCardStart(groupId, optLabel.toString().c_str());
         if (hasParams) {  // hier die Parameter zur jeweiligen Option
-          /*String path = pi->key;
-          path += "/";
-          path += option.toString();
-          path += "/param";*/
           snprintf(_pathHelper, _pathHelperLen, "%s/%s/param", pi->key, option.c_str());
           _pathHelper[_pathHelperLen-1] = '\0';
-          //showParameters(deviceName, path.c_str());
           showParameters(deviceName, _pathHelper);
         }
         groupCardEnd();
@@ -2298,7 +2346,6 @@ void buildComplexList(const char* deviceName, const KinoPropertyInfo*& pi, bool 
 void showParameters(const char* deviceName, const char* paramPath) {
   uint16_t paramCount;
   KinoError err = KinoAPI::getQueryCount(deviceName, paramPath, paramCount);
-  //String path = paramPath; path += "/";
   int pathLen = 128; char path[pathLen];
 
   KinoVariant getsetpath;
@@ -2309,65 +2356,48 @@ void showParameters(const char* deviceName, const char* paramPath) {
   int minvalue, maxvalue, valuestep;
   for (int i=0; i<paramCount; i++) {
     yield();
-    //String subpath = path + String(i);
     snprintf(path, pathLen, "%s/%d", paramPath, i);
     path[pathLen-1] = '\0';
-    //err = KinoAPI::getProperty(deviceName, subpath.c_str(), getsetpath);
     err = KinoAPI::getProperty(deviceName, path, getsetpath);
 
-    //String subsubpath = subpath + "/label";
     snprintf(path, pathLen, "%s/%d/label", paramPath, i);
     path[pathLen-1] = '\0';
-    //err = KinoAPI::getProperty(deviceName, subsubpath.c_str(), label);
     err = KinoAPI::getProperty(deviceName, path, label);
 
     //KinoVariant access;
-    //subsubpath = subpath + "/access";
     snprintf(path, pathLen, "%s/%d/access", paramPath, i);
     path[pathLen-1] = '\0';
-    //err = KinoAPI::getProperty(deviceName, subsubpath.c_str(), access);
     err = KinoAPI::getProperty(deviceName, path, tmp);
     access = tmp.asInt();
 
     //KinoVariant minvalue;
-    //subsubpath = subpath + "/minvalue";
     snprintf(path, pathLen, "%s/%d/minvalue", paramPath, i);
     path[pathLen-1] = '\0';
-    //err = KinoAPI::getProperty(deviceName, subsubpath.c_str(), minvalue);
     err = KinoAPI::getProperty(deviceName, path, tmp);
     minvalue = tmp.asInt();
 
     //KinoVariant maxvalue;
-    //subsubpath = subpath + "/maxvalue";
     snprintf(path, pathLen, "%s/%d/maxvalue", paramPath, i);
     path[pathLen-1] = '\0';
-    //err = KinoAPI::getProperty(deviceName, subsubpath.c_str(), maxvalue);
     err = KinoAPI::getProperty(deviceName, path, tmp);
     maxvalue = tmp.asInt();
 
     //KinoVariant valuestep;
-    //subsubpath = subpath + "/valuestep";
     snprintf(path, pathLen, "%s/%d/valuestep", paramPath, i);
     path[pathLen-1] = '\0';
-    //err = KinoAPI::getProperty(deviceName, subsubpath.c_str(), valuestep);
     err = KinoAPI::getProperty(deviceName, path, tmp);
     valuestep = tmp.asInt();
     
     //KinoVariant value;
-    //if ((access.asInt() == 1) || (access.asInt() == 3)) {
     if ((access == 1) || (access == 3)) {
-      //err = KinoAPI::getProperty(deviceName, getsetpath.toString().c_str(), value);
       err = KinoAPI::getProperty(deviceName, getsetpath.c_str(), value);
     }
-    //if (access.asInt() == 1) {
     if (access == 1) {
-      infoText(label.c_str(), value.c_str());
+      infoText(deviceName, getsetpath.c_str(), label.c_str(), value.c_str());
     }
-    //if (access.asInt() == 2) {
     if (access == 2) {
       button(deviceName, getsetpath.c_str(), label.c_str());
     }
-    //if (access.asInt() == 3) {
     if (access == 3) {
       switch (value.type) {
         case KinoVariant::BOOL: {
@@ -2383,7 +2413,7 @@ void showParameters(const char* deviceName, const char* paramPath) {
           break;
         }
         default: {
-          infoText(label.c_str(), value.c_str());
+          infoText(deviceName, getsetpath.c_str(), label.c_str(), value.c_str());
           break;
         }
       }
@@ -2396,10 +2426,12 @@ void pageStart(const char* title) {
   Serial.print("start serving page: ");
   Serial.println(title);
     _server.setContentLength(CONTENT_LENGTH_UNKNOWN); // Stream-Modus
-    _server.send(200, "text/html", "");
-    _server.sendContent(F("<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"));
-    _server.sendContent_P(HTML_CSS);
-    _server.sendContent_P(HTML_JAVASCRIPT);
+    _server.send(200, "text/html", "<!DOCTYPE html>");
+    _server.sendContent(F("<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"));
+    //_server.sendContent_P(HTML_CSS);
+    //_server.sendContent_P(HTML_JAVASCRIPT);
+    _server.sendContent(F("<link rel='stylesheet' type='text/css' href='/style.css'>"));
+    _server.sendContent(F("<script src='/script.js'></script>"));
         
     _server.sendContent(F("</head><body>"));
     bool isSubPage = false;
@@ -2450,7 +2482,11 @@ void toggleButton(const char* deviceName, const char* func, const char* label, b
     _server.sendContent(F("</h2>"));
 
     _server.sendContent(F("<label class='switch'>"));
-    _server.sendContent(F("<input type='checkbox' "));
+    _server.sendContent(F("<input type='checkbox' data-dev='"));
+    _server.sendContent(deviceName);
+    _server.sendContent(F("' data-path='"));
+    _server.sendContent(func);
+    _server.sendContent(F("' "));
     if (value) _server.sendContent(F("checked "));
     
     _server.sendContent(F("onchange=\"sendCmd('"));
@@ -2468,6 +2504,10 @@ void slider(const char* deviceName, const char* func, const char* label, int val
     _server.sendContent(F("</h2>"));
         
     _server.sendContent(F("<input type='range' id='"));
+    _server.sendContent(func);
+    _server.sendContent(F("' data-dev='"));
+    _server.sendContent(deviceName);
+    _server.sendContent(F("' data-path='"));
     _server.sendContent(func);
     _server.sendContent(F("' "));
 
@@ -2488,6 +2528,10 @@ void slider(const char* deviceName, const char* func, const char* label, int val
     _server.sendContent(F("' data-action='down'>-</button>"));
     _server.sendContent(F("<output for='"));
     _server.sendContent(func);
+    _server.sendContent(F("' data-dev='"));
+    _server.sendContent(deviceName);
+    _server.sendContent(F("' data-path='"));
+    _server.sendContent(func);
     _server.sendContent(F("'>"));
     _server.sendContent(String(value));
     _server.sendContent(F("</output>"));
@@ -2499,7 +2543,12 @@ void slider(const char* deviceName, const char* func, const char* label, int val
 void selectStart(const char* deviceName, const char* func, const char* label) {
     _server.sendContent(F("<div class='card'><h2>"));
     _server.sendContent(label);
-    _server.sendContent(F("</h2><select onchange=\"sendCmd('"));
+    _server.sendContent(F("</h2><select "));
+    _server.sendContent(F("data-dev='"));
+    _server.sendContent(deviceName);
+    _server.sendContent(F("' data-path='"));
+    _server.sendContent(func);
+    _server.sendContent(F("' onchange=\"sendCmd('"));
     _server.sendContent(deviceName);
     _server.sendContent(F("','"));
     _server.sendContent(func);
@@ -2531,12 +2580,16 @@ void button(const char* deviceName, const char* func, const char* label) {
   _server.sendContent(F("</button></div>"));
 }
 
-void infoText(const char* label, const char* value) {
+void infoText(const char* deviceName, const char* func, const char* label, const char* value) {
   _server.sendContent(F("<div class='card'><h2>"));
   _server.sendContent(label);
-  _server.sendContent(F("</h2><p>"));
+  _server.sendContent(F("</h2><output data-dev='"));
+  _server.sendContent(deviceName);
+  _server.sendContent(F("' data-path='"));
+  _server.sendContent(func);
+  _server.sendContent(F("'>"));
   _server.sendContent(value);
-  _server.sendContent(F("</p></div>"));
+  _server.sendContent(F("</output></div>"));
 }
 
 void colorPicker(const char* deviceName, const char* func, const char* label, const char* value){
@@ -2544,7 +2597,11 @@ void colorPicker(const char* deviceName, const char* func, const char* label, co
     _server.sendContent(label);
     _server.sendContent(F("</h2>"));
 
-    _server.sendContent(F("<input type='color' value='"));
+    _server.sendContent(F("<input type='color' data-dev='"));
+    _server.sendContent(deviceName);
+    _server.sendContent(F("' data-path='"));
+    _server.sendContent(func);
+    _server.sendContent(F("' value='"));
     _server.sendContent(value);
     _server.sendContent(F("' onchange=\"sendCmd('"));
 
@@ -2669,7 +2726,7 @@ void macroColorPicker(const char* deviceName, const char* func, const char* labe
 
 
 const char HTML_CSS[] PROGMEM = R"raw(
-<style>
+/*<style>*/
   body{font-family:Arial;background:#121212;color:#eee;margin:0;padding:10px;}
   a{color:#ccc;}a:active,a:visited{color:#ccc;}
   .card{background:#1e1e1e;padding:15px;margin-bottom:15px;border-radius:10px;
@@ -2709,11 +2766,11 @@ const char HTML_CSS[] PROGMEM = R"raw(
   .accordion-content .card { background: #242424; }
   .accordion-content.active, .accordion-content.active .card {background: #303030; }
   a.btn, a.btn:hover, a.btn:active{ background: transparent; width: 200px; text-align: center; text-decoration: none; }
-</style>
+/*</style>*/
 )raw";
 
 const char HTML_JAVASCRIPT[] PROGMEM = R"raw(
-<script>
+/*<script>*/
 const timers = {};
 function sendCmd(device, func, value){
  const timername = device+func;
@@ -2811,10 +2868,107 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
- console.log(`${selects.length} cmdHandler erfolgreich registriert.`);
- console.log(`${devsels.length} devHandler erfolgreich registriert.`);
+  console.log(`${selects.length} cmdHandler erfolgreich registriert.`);
+  console.log(`${devsels.length} devHandler erfolgreich registriert.`);
 });
-</script>
+let socket;
+function decodeHtml(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return doc.documentElement.textContent;
+}
+  function handleUpdate(data) {
+    const dev = data.dev;   // z.B. "hue"
+    const basePath = data.path || ""; // z.B. "sensors/Licht Sensor Theke"
+
+    // Wir iterieren über alle Keys im JSON (außer Metadaten)
+    Object.keys(data).forEach(key => {
+        if (key === 'dev' || key === 'path') return;
+
+        let value = data[key];
+        if (typeof value === 'string') {
+            value = decodeHtml(value);
+        }
+        // Pfad zusammenbauen: Wenn basePath existiert, hängen wir den Key an
+        const fullPath = basePath ? `${basePath}/${key}` : key;
+        // Selektor finden: Element mit passendem data-dev UND data-path
+        const selector = `[data-dev="${dev}"][data-path="${fullPath}"]`;
+        const elements = document.querySelectorAll(selector);
+
+        elements.forEach(el => {
+            // Typspezifische Aktualisierung
+            if (el.tagName === 'OUTPUT') {
+                // Bei Output schreiben wir den Wert als Text
+                el.textContent = value;
+            } 
+            else if (el.tagName === 'SELECT') {
+                // 1. Versuch: Exakter Match (Standard)
+                el.value = value;
+            
+                // 2. Versuch: Falls kein exakter Match gefunden wurde (value ist leer oder unpassend)
+                if (el.selectedIndex === -1 || el.value !== value) {
+                    // Wir suchen die Option, deren Text am besten im empfangenen String vorkommt
+                    const options = Array.from(el.options);
+                    const bestMatch = options.find(opt => 
+                        value.includes(opt.value) || value.includes(opt.text)
+                    );
+            
+                    if (bestMatch) {
+                        el.value = bestMatch.value;
+                    }
+                }
+            }
+            else if (el.tagName === 'INPUT') {
+                switch (el.type) {
+                    case 'checkbox':
+                        el.checked = (value === true || value === 1 || value === "true");
+                        break;
+                    case 'range':
+                    case 'color':
+                    case 'number':
+                    case 'text':
+                        // WICHTIG: Nur aktualisieren, wenn der User nicht gerade schiebt
+                        if (document.activeElement !== el) {
+                            el.value = value;
+                            // Trigger für eventuelle Anzeige-Outputs (z.B. Range-Zahlenwerte)
+                            //el.dispatchEvent(new Event('input'));
+                        }
+                        break;
+                }
+            }
+        });
+    });
+}
+  
+  function initWebSocket() {
+      // Verbindet sich automatisch mit der IP des ESP8266 auf Port 81
+      const gateway = `ws://${window.location.hostname}:81/`;
+      socket = new WebSocket(gateway);
+  
+      socket.onopen = function(e) {
+          console.log("WebSocket verbunden");
+      };
+  
+      socket.onclose = function(e) {
+          console.log("WebSocket getrennt - versuche Reconnect in 2s...");
+          setTimeout(initWebSocket, 2000); // Automatischer Reconnect
+      };
+  
+      socket.onerror = function(e) {
+          console.error("WebSocket Fehler:", e);
+      };
+  
+      socket.onmessage = function(event) {
+          console.log("Daten empfangen:", event.data);
+          const data = JSON.parse(event.data);
+          handleUpdate(data); // Hier kommt deine Update-Logik rein
+      };
+  }
+  
+  // Startet die Verbindung, sobald die Seite geladen ist
+  document.addEventListener('DOMContentLoaded', initWebSocket);
+ 
+
+/*</script>*/
 )raw";
 
 }

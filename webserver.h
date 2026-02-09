@@ -9,6 +9,10 @@ namespace webserver {
     void loop();
     void handleRoot();
     void handle404();
+    void handleCSS();
+    void handleJS();
+
+    void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
 
     void listMacros();
     void createNewMacro();
@@ -72,7 +76,7 @@ namespace webserver {
     void optionItem(const char* value, const char* label, bool selected)                                    ;
     void selectEnd()                                                                                        ;
     void button(const char* deviceName, const char* func, const char* label)                                ;
-    void infoText(const char* label, const char* value)                                          ;
+    void infoText(const char* deviceName, const char* func, const char* label, const char* value)           ;
     void groupCardStart(const char* id, const char* label)                                                  ;
     void groupCardEnd()                                                                                     ;
     void colorPicker(const char* deviceName, const char* func, const char* label, const char* value)        ;

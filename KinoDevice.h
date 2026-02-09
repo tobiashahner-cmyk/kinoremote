@@ -114,7 +114,19 @@ public:
       Serial.println(freeStack);
     }
 
-protected:
+    virtual bool getStatusUpdate(const char* devName, JsonObject& doc) {
+      return false;
+    }
+
+    virtual bool isDirty() {
+      return _dirty;
+    }
+
+    virtual void clearDirty() {
+      _dirty = false;
+    }
+
+ protected:
   bool _refreshing = false;
-      
+  bool _dirty = false;
 };
