@@ -990,22 +990,20 @@ bool HueBridge::getStatusUpdate(const char* devName, JsonObject& root) {
 
     if (l->isDirty()) {
       Serial.print("found light to update: "); Serial.println(l->getName());
-      root["dev"] = devName;
+      root["dev"].set(devName);
       char path[32];
       snprintf(path, sizeof(path), "lights/%s", l->getName());
       path[sizeof(path)-1] = '\0';
-      root["path"] = path;
+      root["path"].set(path);
       root["on"] = l->isOn();
-      if (l->isDimmable()) root["bri"] = l->getBrightness();
-      if (l->hasCTColor()) root["ct"] = l->getCT();
+      if (l->isDimmable()) root["bri"].set(l->getBrightness());
+      if (l->hasCTColor()) root["ct"].set(l->getCT());
       if (l->hasXYColor()) {
         RgbColor c = l->getRGB();
         KinoVariant col = KinoVariant::fromColor(c.r, c.g, c.b);
-        root["col"] = col.c_str();
+        root["col"].set(col.c_str());
       }
       l->clearDirty();
-      nextLight++;
-      if (nextLight == _lights.size()) nextLight = 0;
       return true;
     }
     return false;
@@ -1016,11 +1014,11 @@ bool HueBridge::getStatusUpdate(const char* devName, JsonObject& root) {
     if (nextGroup == _groups.size()) nextGroup = 0;
     if (!g) return false;
     if (g->isDirty()) {
-      root["dev"] = devName;
+      root["dev"].set(devName);
       char path[32];
       snprintf(path, sizeof(path), "groups/%s", g->getName());
       path[sizeof(path)-1] = '\0';
-      root["path"] = path;
+      root["path"].set(path);
       bool anyOn = false;
       int totalBri = 0; size_t lCount = 0;
       for (uint8_t lid : g->getLightIds()) {
@@ -1028,12 +1026,12 @@ bool HueBridge::getStatusUpdate(const char* devName, JsonObject& root) {
         if (!l) continue;
         if (l->isOn()) {
           anyOn = true;
-          totalBri = l->isDimmable() ? l->getBrightness() : 255;
+          totalBri += l->isDimmable() ? l->getBrightness() : 255;
         }
         lCount++;
       }
-      root["on"] = anyOn;
-      root["bri"] = (int)(totalBri/lCount);
+      root["on"].set(anyOn);
+      if (lCount > 0) root["bri"].set((int)(totalBri/lCount));
       g->clearDirty();
       return true;
     }
@@ -1046,14 +1044,14 @@ bool HueBridge::getStatusUpdate(const char* devName, JsonObject& root) {
     if (nextSensor == _sensors.size()) nextSensor = 0;
     if (!s) return false;
     if (s->isDirty()) {
-      root["dev"] = devName;
+      root["dev"].set(devName);
       char path[32];
       snprintf(path, sizeof(path), "sensors/%s", s->getName());
       path[sizeof(path)-1] = '\0';
-      root["path"] = path;
+      root["path"].set(path);
       JsonObjectConst curState = s->getState();
       for (JsonPairConst kv : curState) {
-        root[kv.key()] = kv.value();
+        root[kv.key()].set(kv.value());
       }
       s->clearDirty();
       return true;
@@ -1558,7 +1556,7 @@ bool HueBridge::readLights() {
       //updateOrAddLight(atoi(idStr), doc);
       updateOrAddLight(atoi(idStr), _httpJson);
     } else {
-      Serial.print(F("JSON Error for ID "));
+      Serial.print(F("JSON Error for Light ID "));
       Serial.print(idStr);
       Serial.print(F(": "));
       Serial.println(err.c_str());

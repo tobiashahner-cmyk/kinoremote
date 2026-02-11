@@ -149,33 +149,40 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
         return KinoError::PropertyNotSupported;
     }
     if (strcmp(property,"tickInterval")==0) {
-      out = KinoVariant::fromInt(_tickInterval);
+      //out = KinoVariant::fromInt(_tickInterval);
+      out.setInt(_tickInterval);
       return KinoError::OK;
     }
     if ((strcmp(property,"power")==0)||(strcmp(property,"on")==0)) {
-        out = KinoVariant::fromBool(_powerStatus);
+        //out = KinoVariant::fromBool(_powerStatus);
+        out.setBool(_powerStatus);
         return KinoError::OK;
     }
     if ((strcmp(property,"volume")==0)||(strcmp(property,"vol")==0)) {
-        out = KinoVariant::fromInt(_volume);
+        //out = KinoVariant::fromInt(_volume);
+        out.setInt(_volume);
         return KinoError::OK;
     }
     if (strcmp(property, "mute") == 0) {
-        out = KinoVariant::fromBool(_mute);
+        //out = KinoVariant::fromBool(_mute);
+        out.setBool(_mute);
         return KinoError::OK;
     }
     if ((strcmp(property,"input")==0)||(strcmp(property,"source")==0)) {
-        out = KinoVariant::fromString(_source.c_str());
+        //out = KinoVariant::fromString(_source.c_str());
+        out.setString(_source.c_str());
         return KinoError::OK;
     }
     if (strcmp(property, "station") == 0) {
       if (_source == "NET RADIO") {
         NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
         //String s = nri.station;
-        out = KinoVariant::fromString(nri.station.c_str());
+        //out = KinoVariant::fromString(nri.station.c_str());
+        out.setString(nri.station.c_str());
         return KinoError::OK;
       } else {
-        out = KinoVariant::fromString("");
+        //out = KinoVariant::fromString("");
+        out.setString("");
         return KinoError::OK;
       }
     }
@@ -183,10 +190,12 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
       if (_source == "NET RADIO") {
         NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
         //String s = nri.song;
-        out = KinoVariant::fromString(nri.song.c_str());
+        //out = KinoVariant::fromString(nri.song.c_str());
+        out.setString(nri.song.c_str());
         return KinoError::OK;
       } else {
-        out = KinoVariant::fromString("");
+        //out = KinoVariant::fromString("");
+        out.setString("");
         return KinoError::OK;
       }
     }
@@ -194,49 +203,62 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
       if (_source == "NET RADIO") {
         NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
         //String s = nri.elapsed;
-        out = KinoVariant::fromString(nri.elapsed.c_str());
+        //out = KinoVariant::fromString(nri.elapsed.c_str());
+        out.setString(nri.elapsed.c_str());
         return KinoError::OK;
       } else {
-        out = KinoVariant::fromString("");
+        //out = KinoVariant::fromString("");
+        out.setString("");
         return KinoError::OK;
       }
     }
     if (strcmp(property, "inputname") == 0) {
       InputSource inp = getInputSource();
       String s = inp.custom;
-      out = KinoVariant::fromString(s.c_str());
+      //out = KinoVariant::fromString(s.c_str());
+      out.setString(s.c_str());
       return KinoError::OK;
     }
     if (strcmp(property, "treble") == 0) {
-      out = KinoVariant::fromInt(_treble);
+      //out = KinoVariant::fromInt(_treble);
+      out.setInt(_treble);
       return KinoError::OK;
     }
     if (strcmp(property, "bass") == 0) {
-      out = KinoVariant::fromInt(_bass);
+      //out = KinoVariant::fromInt(_bass);
+      out.setInt(_bass);
       return KinoError::OK;
     }
     if (strcmp(property, "swtrim") == 0) {
-      out = KinoVariant::fromInt(_subwooferTrim);
+      //out = KinoVariant::fromInt(_subwooferTrim);
+      out.setInt(_subwooferTrim);
       return KinoError::OK;
     }
     if (strcmp(property, "ip") == 0) {
-      out = KinoVariant::fromString(_ip.toString().c_str());
+      //out = KinoVariant::fromString(_ip.toString().c_str());
+      char buf[20];
+      snprintf(buf, sizeof(buf), "%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
+      out.setString(buf);
       return KinoError::OK;
     }
     if (strcmp(property, "straight") == 0) {
-      out = KinoVariant::fromBool(_straight);
+      //out = KinoVariant::fromBool(_straight);
+      out.setBool(_straight);
       return KinoError::OK;
     }
     if (strcmp(property, "enhancer") == 0) {
-      out = KinoVariant::fromBool(_enhancer);
+      //out = KinoVariant::fromBool(_enhancer);
+      out.setBool(_enhancer);
       return KinoError::OK;
     }
     if (strcmp(property, "dsp") == 0) {
-      out = KinoVariant::fromString(_soundProgram.c_str());
+      //out = KinoVariant::fromString(_soundProgram.c_str());
+      out.setString(_soundProgram.c_str());
       return KinoError::OK;
     }
     if (strcmp(property,"tickInterval") == 0) {
-      out = KinoVariant::fromInt(_tickInterval);
+      //out = KinoVariant::fromInt(_tickInterval);
+      out.setInt(_tickInterval);
       return KinoError::OK;
     }
   int found;
@@ -245,32 +267,48 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
   int paramIndex;
   found = sscanf(property,"input/%31[^/]/param/%i%31s", inp, &paramIndex, rest);
   if ((found == 2) && (strlen(inp)>0)) {          // path = "input/<inputName>/param/<paramIndex>
-    std::vector<KinoPropertyParam> params = getInputParams(inp);
+    /*std::vector<KinoPropertyParam> params = getInputParams(inp);
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromString(params[paramIndex].getsetPath);
+    //out = KinoVariant::fromString(params[paramIndex].getsetPath);
+    out.setString(params[paramIndex].getsetPath);*/
+    const KinoPropertyParam* p = getInputParam(inp, paramIndex);
+    if (!p) { out.setNone(); return KinoError::OutOfRange; }
+    out.setString(p->getsetPath);
     return KinoError::OK;
   }
   if ((found == 3) && (strlen(inp)>0)) {          // path = "input/<inputName>/param/<paramIndex>/<rest>
-    std::vector<KinoPropertyParam> params = getInputParams(inp);
-    if (paramIndex >= params.size()) return KinoError::OutOfRange;
+    /*std::vector<KinoPropertyParam> params = getInputParams(inp);
+    if (paramIndex >= params.size()) return KinoError::OutOfRange;*/
+    const KinoPropertyParam* p = getInputParam(inp, paramIndex);
+    if (!p) { out.setNone(); return KinoError::OutOfRange; }
     if (strcmp(rest,"/label")==0) {
-      out = KinoVariant::fromString(params[paramIndex].label);
+      /* //out = KinoVariant::fromString(params[paramIndex].label);
+      out.setString(params[paramIndex].label);*/
+      out.setString(p->label);
       return KinoError::OK;
     }
     if (strcmp(rest,"/access")==0) {
-      out = KinoVariant::fromInt(params[paramIndex].access);
+      /*//out = KinoVariant::fromInt(params[paramIndex].access);
+      out.setInt(params[paramIndex].access);*/
+      out.setInt(p->access);
       return KinoError::OK;
     }
     if (strcmp(rest,"/minvalue")==0) {
-      out = KinoVariant::fromInt(params[paramIndex].minvalue.value_or(0));
+      /*//out = KinoVariant::fromInt(params[paramIndex].minvalue.value_or(0));
+      out.setInt(params[paramIndex].minvalue.value_or(0));*/
+      out.setInt(p->minvalue.value_or(0));
       return KinoError::OK;
     }
     if (strcmp(rest,"/maxvalue")==0) {
-      out = KinoVariant::fromInt(params[paramIndex].maxvalue.value_or(100));
+      /*//out = KinoVariant::fromInt(params[paramIndex].maxvalue.value_or(100));
+      out.setInt(params[paramIndex].maxvalue.value_or(100));*/
+      out.setInt(p->maxvalue.value_or(100));
       return KinoError::OK;
     }
     if (strcmp(rest,"/valuestep")==0) {
-      out = KinoVariant::fromInt(params[paramIndex].valuestep.value_or(1));
+      /*//out = KinoVariant::fromInt(params[paramIndex].valuestep.value_or(1));
+      out.setInt(params[paramIndex].valuestep.value_or(1));*/
+      out.setInt(p->valuestep.value_or(1));
       return KinoError::OK;
     }
     return KinoError::PropertyNotSupported;
@@ -305,41 +343,74 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
   
   found = sscanf(property,"audio/param/%i%31s", &paramIndex, rest);
   if ((found == 1) || (strlen(rest) == 0)) {  // path = "audio/param/<paramIndex>"
-    std::vector<KinoPropertyParam> params = getAudioParams();
+    /*std::vector<KinoPropertyParam> params = getAudioParams();
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromString(params[paramIndex].getsetPath);
+    //out = KinoVariant::fromString(params[paramIndex].getsetPath);*/
+    const KinoPropertyParam* p = getAudioParam(paramIndex);
+    if (!p) { out.setNone(); return KinoError::OutOfRange; }
+    out.setString(p->getsetPath);
     return KinoError::OK;
   }
-  if ((found == 2) && (strcmp(rest,"/label")==0)) {
+  if ((found == 2) && (strlen(rest)>0)) {
+    const KinoPropertyParam* p = getAudioParam(paramIndex);
+    if (!p) { out.setNone(); return KinoError::OutOfRange; }
+    if (strcmp(rest,"/label")==0) {
+      out.setString(p->label);
+      return KinoError::OK;
+    }
+    if (strcmp(rest,"/access")==0) {
+      out.setInt(p->access);
+      return KinoError::OK;
+    }
+    if (strcmp(rest,"/minvalue")==0) {
+      out.setInt(p->minvalue.value_or(0));
+      return KinoError::OK;
+    }
+    if (strcmp(rest,"/maxvalue")==0) {
+      out.setInt(p->maxvalue.value_or(100));
+      return KinoError::OK;
+    }
+    if (strcmp(rest,"/valuestep")==0) {
+      out.setInt(p->valuestep.value_or(1));
+      return KinoError::OK;
+    }
+    return KinoError::PropertyNotSupported;
+  }
+  /*if ((found == 2) && (strcmp(rest,"/label")==0)) {
     std::vector<KinoPropertyParam> params = getAudioParams();
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromString(params[paramIndex].label);
+    //out = KinoVariant::fromString(params[paramIndex].label);
+    out.setString(params[paramIndex].label);
     return KinoError::OK;
-  }
-  if ((found == 2) && (strcmp(rest,"/access")==0)) {
+  }*/
+  /*if ((found == 2) && (strcmp(rest,"/access")==0)) {
     std::vector<KinoPropertyParam> params = getAudioParams();
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromInt(params[paramIndex].access);
+    //out = KinoVariant::fromInt(params[paramIndex].access);
+    out.setInt(params[paramIndex].access);
     return KinoError::OK;
-  }
-  if ((found == 2) && (strcmp(rest,"/minvalue")==0)) {
+  }*/
+  /*if ((found == 2) && (strcmp(rest,"/minvalue")==0)) {
     std::vector<KinoPropertyParam> params = getAudioParams();
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromInt(params[paramIndex].minvalue.value_or(0));
+    //out = KinoVariant::fromInt(params[paramIndex].minvalue.value_or(0));
+    out.setInt(params[paramIndex].minvalue.value_or(0));
     return KinoError::OK;
-  }
-  if ((found == 2) && (strcmp(rest,"/maxvalue")==0)) {
+  }*/
+  /*if ((found == 2) && (strcmp(rest,"/maxvalue")==0)) {
     std::vector<KinoPropertyParam> params = getAudioParams();
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromInt(params[paramIndex].maxvalue.value_or(100));
+    //out = KinoVariant::fromInt(params[paramIndex].maxvalue.value_or(100));
+    out.setInt(params[paramIndex].maxvalue.value_or(100));
     return KinoError::OK;
-  }
-  if ((found == 2) && (strcmp(rest,"/valuestep")==0)) {
+  }*/
+  /*if ((found == 2) && (strcmp(rest,"/valuestep")==0)) {
     std::vector<KinoPropertyParam> params = getAudioParams();
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromInt(params[paramIndex].valuestep.value_or(1));
+    //out = KinoVariant::fromInt(params[paramIndex].valuestep.value_or(1));
+    out.setInt(params[paramIndex].valuestep.value_or(1));
     return KinoError::OK;
-  }
+  }*/
 
   char dspname[32];
   //property could be "damaged" by dsp name in multibyte characters:
@@ -347,41 +418,75 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
   sanitize_to_ascii(property, clean_path, sizeof(clean_path));
   found = sscanf(clean_path,"dsp/%31[^/]/param/%i%31s", dspname, &paramIndex, rest);
   if ((found == 2) || (strlen(rest)==0)) {
-    std::vector<KinoPropertyParam> params = getDspParams(dspname);
+    /*std::vector<KinoPropertyParam> params = getDspParams(dspname);
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromString(params[paramIndex].getsetPath);
+    //out = KinoVariant::fromString(params[paramIndex].getsetPath);
+    out.setString(params[paramIndex].getsetPath);*/
+    const KinoPropertyParam* p = getDspParam(dspname, paramIndex);
+    if (!p) { out.setNone(); return KinoError::OutOfRange; }
+    out.setString(p->getsetPath);
     return KinoError::OK;
   }
-  if ((found == 3) && (strcmp(rest,"/label")==0)) {
+  if ((found == 3) && (strlen(rest)>0)) {
+    const KinoPropertyParam* p = getDspParam(dspname, paramIndex);
+    if (!p) { out.setNone(); return KinoError::OutOfRange; }
+    if (strcmp(rest,"/label")==0) {
+      out.setString(p->label);
+      return KinoError::OK;
+    }
+    if (strcmp(rest,"/access")==0) {
+      out.setInt(p->access);
+      return KinoError::OK;
+    }
+    if (strcmp(rest,"/minvalue")==0) {
+      out.setInt(p->minvalue.value_or(0));
+      return KinoError::OK;
+    }
+    if (strcmp(rest,"/maxvalue")==0) {
+      out.setInt(p->maxvalue.value_or(100));
+      return KinoError::OK;
+    }
+    if (strcmp(rest,"/valuestep")==0) {
+      out.setInt(p->valuestep.value_or(1));
+      return KinoError::OK;
+    }
+    return KinoError::PropertyNotSupported;
+  }
+  /*if ((found == 3) && (strcmp(rest,"/label")==0)) {
     std::vector<KinoPropertyParam> params = getDspParams(dspname);
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromString(params[paramIndex].label);
+    //out = KinoVariant::fromString(params[paramIndex].label);
+    out.setString(params[paramIndex].label);
     return KinoError::OK;
-  }
-  if ((found == 3) && (strcmp(rest,"/access")==0)) {
+  }*/
+  /*if ((found == 3) && (strcmp(rest,"/access")==0)) {
     std::vector<KinoPropertyParam> params = getDspParams(dspname);
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromInt(params[paramIndex].access);
+    //out = KinoVariant::fromInt(params[paramIndex].access);
+    out.setInt(params[paramIndex].access);
     return KinoError::OK;
-  }
-  if ((found == 3) && (strcmp(rest,"/minvalue")==0)) {
+  }*/
+  /*if ((found == 3) && (strcmp(rest,"/minvalue")==0)) {
     std::vector<KinoPropertyParam> params = getDspParams(dspname);
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromInt(params[paramIndex].minvalue.value_or(0));
+    //out = KinoVariant::fromInt(params[paramIndex].minvalue.value_or(0));
+    out.setInt(params[paramIndex].minvalue.value_or(0));
     return KinoError::OK;
-  }
-  if ((found == 3) && (strcmp(rest,"/maxvalue")==0)) {
+  }*/
+  /*if ((found == 3) && (strcmp(rest,"/maxvalue")==0)) {
     std::vector<KinoPropertyParam> params = getDspParams(dspname);
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromInt(params[paramIndex].maxvalue.value_or(100));
+    //out = KinoVariant::fromInt(params[paramIndex].maxvalue.value_or(100));
+    out.setInt(params[paramIndex].maxvalue.value_or(100));
     return KinoError::OK;
-  }
-  if ((found == 3) && (strcmp(rest,"/valuestep")==0)) {
+  }*/
+  /*if ((found == 3) && (strcmp(rest,"/valuestep")==0)) {
     std::vector<KinoPropertyParam> params = getDspParams(dspname);
     if (paramIndex >= params.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromInt(params[paramIndex].valuestep.value_or(1));
+    //out = KinoVariant::fromInt(params[paramIndex].valuestep.value_or(1));
+    out.setInt(params[paramIndex].valuestep.value_or(1));
     return KinoError::OK;
-  }
+  }*/
   
   //Serial.println("das war unnötig...");
   return KinoError::PropertyNotSupported;
@@ -409,23 +514,26 @@ KinoError YamahaReceiver::queryCount(const char* property, uint16_t &out) {
     return KinoError::OK;
   }
   if (strcmp(property, "audio/param")==0) {
-    std::vector<KinoPropertyParam> params = getAudioParams();
-    out = params.size();
+    /*std::vector<KinoPropertyParam> params = getAudioParams();
+    out = params.size();*/
+    out = (int)getAudioParamCount();
     return KinoError::OK;
   }
 
   char inputname[32]; char rest[32];
   int found = sscanf(property,"input/%31[^/]/%31s", inputname, rest);
   if ((found==2)&&(strlen(inputname)>0)&&(strcmp(rest,"param")==0)) {   // path = "input/<inputName>/param"
-    std::vector<KinoPropertyParam> params = getInputParams(inputname);
-    out = params.size();
+    /*std::vector<KinoPropertyParam> params = getInputParams(inputname);
+    out = params.size();*/
+    out = (int)getInputParamCount(inputname);
     return KinoError::OK;
   }
   char dspname[32];
   found = sscanf(property,"dsp/%31[^/]/param%31s", dspname, rest);
   if ((found == 1)&&(strlen(dspname)>0)) {
-    std::vector<KinoPropertyParam> params = getDspParams(dspname);
-    out = params.size();
+    /*std::vector<KinoPropertyParam> params = getDspParams(dspname);
+    out = params.size();*/
+    out = (int)getDspParamCount(dspname);
     return KinoError::OK;
   }
   
@@ -437,14 +545,16 @@ KinoError YamahaReceiver::query(const char* property, uint16_t index, KinoVarian
   if ((strcmp(property, "favorites") == 0) || (strcmp(property,"station") == 0)) {
     std::vector<String> favorites = readNetRadioFavorites();
     if (index >= favorites.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromString(favorites[index].c_str());
+    //out = KinoVariant::fromString(favorites[index].c_str());
+    out.setString(favorites[index].c_str());
     return KinoError::OK;
   }
   if (strcmp(property, "input") == 0) {
     initInputSources();
     if (index >= _InputSources.size()) return KinoError::OutOfRange;
     String tmp = FPSTR(_InputSources[index].internal);
-    out = KinoVariant::fromString(tmp.c_str());
+    //out = KinoVariant::fromString(tmp.c_str());
+    out.setString(tmp.c_str());
     return KinoError::OK;
   }
   if (strcmp(property, "inputname") == 0) {
@@ -453,19 +563,22 @@ KinoError YamahaReceiver::query(const char* property, uint16_t index, KinoVarian
     String tmpInternal = FPSTR(_InputSources[index].internal);
     String tmpCustom   = _InputSources[index].custom;
     if (tmpCustom.length() == 0) tmpCustom = tmpInternal;
-    out = KinoVariant::fromString(tmpCustom.c_str());
+    //out = KinoVariant::fromString(tmpCustom.c_str());
+    out.setString(tmpCustom.c_str());
     return KinoError::OK;
   }
   if (strcmp(property, "inputskip") == 0) {
     initInputSources();
     if (index >= _InputSources.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromBool(_InputSources[index].skip);
+    //out = KinoVariant::fromBool(_InputSources[index].skip);
+    out.setBool(_InputSources[index].skip);
     return KinoError::OK;
   }
   if (strcmp(property, "dsp") == 0) {
     std::vector<String> dsps = readDspNames();
     if (index >= dsps.size()) return KinoError::OutOfRange;
-    out = KinoVariant::fromString(dsps[index].c_str());
+    //out = KinoVariant::fromString(dsps[index].c_str());
+    out.setString(dsps[index].c_str());
     return KinoError::OK;
   }
   
@@ -513,6 +626,33 @@ const KinoPropertyInfo* YamahaReceiver::getPropertyInfo(size_t index) const {
   return &_props[index];
 }
 
+const KinoPropertyParam YamahaReceiver::_AudioParams[] = {
+  {"enhancer","Sound Enhancer",3},
+  {"treble","Hoehen",3,-60,60,5},
+  {"bass","Tiefen",3,-60,60,5},
+  {"swtrim","Subwoofer Trim",3,-60-60,5}
+};
+
+size_t YamahaReceiver::getAudioParamCount() {
+  return 4;
+}
+
+const KinoPropertyParam YamahaReceiver::_InputParams[] = {
+  {"station","Sender",1},
+  {"song","Song",1},
+  {"elapsed","Spielzeit",1}
+};
+
+const KinoPropertyParam YamahaReceiver::_DspParams[] = {
+  {"straight", "Pure Straight",3}
+};
+
+size_t YamahaReceiver::getDspParamCount(const char* dspname) {
+  return sizeof(_DspParams) / sizeof(_DspParams[0]);
+}
+
+
+/*
 // helper function for getting the parameters for audio settings
 std::vector<KinoPropertyParam> YamahaReceiver::getAudioParams() {
   std::vector<KinoPropertyParam> params;
@@ -521,8 +661,16 @@ std::vector<KinoPropertyParam> YamahaReceiver::getAudioParams() {
   params.push_back({"bass","Tiefen",3,-60,60,5});
   params.push_back({"swtrim","Subwoofer Trim",3,-60-60,5});
   return params;
+}*/
+
+
+
+const KinoPropertyParam* YamahaReceiver::getAudioParam(size_t index) {
+  if (index >= getAudioParamCount()) return nullptr;
+  return &_AudioParams[index];
 }
 
+/*
 // helper function for getting additional parameters for input
 std::vector<KinoPropertyParam> YamahaReceiver::getInputParams(const char* inp) {
   std::vector<KinoPropertyParam> params;
@@ -531,12 +679,31 @@ std::vector<KinoPropertyParam> YamahaReceiver::getInputParams(const char* inp) {
   params.push_back({"song","Song",1});
   params.push_back({"elapsed","Spielzeit",1});
   return params;
+}*/
+
+size_t YamahaReceiver::getInputParamCount(const char* inp) {
+  if (strcmp(inp, "NET RADIO")==0) return (sizeof(_InputParams) / sizeof(_InputParams[0]));
+  return 0;
 }
 
+const KinoPropertyParam* YamahaReceiver::getInputParam(const char* inp, size_t index) {
+  if (strcmp(inp, "NET RADIO")==0) {
+    if (index >= getInputParamCount(inp)) return nullptr;
+    return &_InputParams[index];
+  }
+  return nullptr;
+}
+
+/*
 std::vector<KinoPropertyParam> YamahaReceiver::getDspParams(const char* dspname) {
   std::vector<KinoPropertyParam> params;
   params.push_back({"straight", "Pure Straight",3});
   return params;
+}*/
+
+const KinoPropertyParam* YamahaReceiver::getDspParam(const char* dspname, size_t index) {
+  if (index >= getDspParamCount(dspname)) return nullptr;
+  return &_DspParams[index];
 }
 
 void YamahaReceiver::sanitize_to_ascii(const char* input, char* output, size_t out_size) {
@@ -582,6 +749,7 @@ String YamahaReceiver::getSource()    const { return _source; }
 String YamahaReceiver::getSoundProgram() const { return _soundProgram; }
 bool YamahaReceiver::getMute()        const { return _mute; }
 
+/* bool YamahaReceiver::getStatus() V1
 bool YamahaReceiver::getStatus() {
     //Serial.println(F("Yamaha: Start Request..."));
     WiFiClient client;
@@ -660,6 +828,121 @@ bool YamahaReceiver::getStatus() {
 
     if (_powerStatus && (_source=="NET RADIO")) _dirty = true;    // forces refresh of play info
     return true;
+}*/
+
+/* bool YamahaReceiver::getStatus() V2: 2026-02-10 Strings entfernt */
+bool YamahaReceiver::getStatus() {
+  WiFiClient client;
+  if (!sendXMLRequest(client, FPSTR(XML_GET_STATUS))) {
+    Serial.println(F("could not get status from yamaha"));
+    client.stop();
+    return false;
+  }
+
+  // 1. Power
+  if (client.find("<Power>")) {
+    bool val = readIsOn(client);
+    if (_powerStatus != val) { _powerStatus = val; _dirty = true; }
+  }
+  
+  // 2. Volume
+  if (client.find("<Val>")) {
+    int val = readIntUntil(client);
+    if (_volume != val) { _volume = val; _dirty = true; }
+  }
+
+  // 5. Mute
+  if (client.find("<Mute>")) {
+    bool val = readIsOn(client);
+    if (_mute != val) { _mute = val; _dirty = true; }
+  }
+
+  // 2a. Subwoofer Trim
+  if (client.find("<Val>")) {
+    int val = readIntUntil(client);
+    if (_subwooferTrim != val) { _subwooferTrim = val; _dirty = true; }
+  }
+
+  // 3. Input (Beispiel mit festem Puffer statt dynamischem String)
+  if (client.find("<Input_Sel>")) {
+    char buf[32];
+    readSanitizedUntil(client, '<', buf, sizeof(buf));
+    if (_source != buf) { _source = buf; _dirty = true; }
+  }
+
+  // Straight / Enhancer
+  if (client.find("<Straight>")) {
+    bool val = readIsOn(client);
+    if (_straight != val) { _straight = val; _dirty = true; }
+  }
+  if (client.find("<Enhancer>")) {
+    bool val = readIsOn(client);
+    if (_enhancer != val) { _enhancer = val; _dirty = true; }
+  }
+
+  // 4. Sound Program
+  if (client.find("<Sound_Program>")) {
+    char buf[32];
+    readSanitizedUntil(client, '<', buf, sizeof(buf));
+    if (_soundProgram != buf) { _soundProgram = buf; _dirty = true; }
+  }
+
+  // Bass / Treble
+  if (client.find("<Val>")) {
+    int val = readIntUntil(client);
+    if (_bass != val) { _bass = val; _dirty = true; }
+  }
+  if (client.find("<Val>")) {
+    int val = readIntUntil(client);
+    if (_treble != val) { _treble = val; _dirty = true; }
+  }
+
+  // Rest verwerfen
+  while(client.available() > 0) { client.read(); yield(); }
+  client.stop();
+
+  if (_powerStatus && (_source == "NET RADIO")) _dirty = true;
+  return true;
+}
+
+/* bool YamahaReceiver::readIsOn(Stream& s) V1  2026-02-10 */
+bool YamahaReceiver::readIsOn(Stream& s) {
+  // Liest bis '<', gibt true zurück wenn der Inhalt "On" ist
+  char buf[10]; // Reicht locker für "On", "Off", "Standby"
+  size_t len = s.readBytesUntil('<', buf, sizeof(buf) - 1);
+  buf[len] = '\0';
+  return (strcmp(buf, "On") == 0);
+}
+
+/* bool YamahaReceiver::readIntUntil(Stream& s) V1  2026-02-10 */
+int YamahaReceiver::readIntUntil(Stream& s) {
+  // Liest bis '<' und wandelt direkt in Integer um
+  int val = s.parseInt();
+  s.find("<"); 
+  return val;
+}
+
+/* bool YamahaReceiver::readSanitizedUntil(...) V1  2026-02-10 */
+size_t YamahaReceiver::readSanitizedUntil(Stream& s, char terminator, char* buffer, size_t maxLen) {
+  // Liest aus dem Stream bis zum Trenner, filtert aber direkt Non-ASCII / UTF-8
+  size_t count = 0;
+  while (count < maxLen - 1) {
+    int c = s.read();
+    if (c < 0 || c == terminator) break; // Timeout oder Ende
+    
+    // UTF-8 / Special Character Handling:
+    // Wir behalten nur druckbare ASCII-Zeichen (32-126)
+    if (c >= 32 && c <= 126) {
+      buffer[count++] = (char)c;
+    } else if (c == 0xC3 || c == 0xC2) {
+      // Einfaches UTF-8 Prefix (z.B. für Umlaute) ignorieren wir hier
+      // oder mappen es auf ein ASCII-Ersatzzeichen
+      buffer[count++] = '_'; 
+    }
+    // Alles andere (Steuerzeichen, High-Bytes) wird einfach verworfen
+  }
+  buffer[count] = '\0';
+  return count;
 }
 
 void YamahaReceiver::initInputSources() {

@@ -106,9 +106,26 @@ class YamahaReceiver : public KinoDevice {
     std::vector<InputSource> _InputSources;
     bool _gotInputSources = false;
 
-    std::vector<KinoPropertyParam> getAudioParams();
-    std::vector<KinoPropertyParam> getInputParams(const char* inp);
-    std::vector<KinoPropertyParam> getDspParams(const char* dspname);
+    /*std::vector<KinoPropertyParam> getAudioParams();*/
+    static const KinoPropertyParam _AudioParams[];
+    size_t getAudioParamCount();
+    const KinoPropertyParam* getAudioParam(size_t index);
+    
+    /*std::vector<KinoPropertyParam> getInputParams(const char* inp);*/
+    static const KinoPropertyParam _InputParams[];
+    size_t getInputParamCount(const char* inp);
+    const KinoPropertyParam* getInputParam(const char* inp, size_t index);
+    
+    /*std::vector<KinoPropertyParam> getDspParams(const char* dspname);*/
+    static const KinoPropertyParam _DspParams[];
+    size_t getDspParamCount(const char* dspname);
+    const KinoPropertyParam* getDspParam(const char* dspname, size_t index);
+
+    // getStatus()-helper:
+    bool readIsOn(Stream& s);
+    int readIntUntil(Stream& s);
+    size_t readSanitizedUntil(Stream& s, char terminator, char* buffer, size_t maxLen);
+    
     void initInputSources();                                                                // init- Helper für InputSources
     InputSource* getInputSourceByKey(const String&keyname);
     String readNetRadioList(WiFiClient& client);                                                              // Helper für readNetRadioFavorites()

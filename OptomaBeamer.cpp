@@ -71,13 +71,15 @@ KinoError OptomaBeamer::set(const char* prop, const KinoVariant& value) {
     return KinoError::OK;
   }
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
-    if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
-    if (!setPower(value.b)) return KinoError::InternalError;
+    /*if(value.type != KinoVariant::BOOL) return KinoError::InvalidType;
+    if (!setPower(value.b)) return KinoError::InternalError;*/
+    if (!setPower(value.asBool())) return KinoError::InvalidValue;
     return KinoError::OK;
   }
   if (strcmp(prop,"input")==0) {
-    if(value.type != KinoVariant::STRING) return KinoError::InvalidType;
-    if (!setSource(String(value.s))) return KinoError::InvalidValue;
+    //if(value.type != KinoVariant::STRING) return KinoError::InvalidType;
+    /*if (!setSource(String(value.s))) return KinoError::InvalidValue;*/
+    if (!setSource(value.c_str())) return KinoError::InvalidValue;
     return KinoError::OK;
   }
   return KinoError::PropertyNotSupported;

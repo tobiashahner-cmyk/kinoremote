@@ -199,7 +199,7 @@ bool HyperionDevice::isBroadcasting() const {
 bool HyperionDevice::setBroadcast(bool onoff) {
   StaticJsonDocument<192> req;
   req["command"]  = "componentstate";
-  req["tan"]      = 1;
+  req["tan"]      = 0;
 
   JsonObject params = req.createNestedObject("componentstate");
   params["component"] = "LEDDEVICE";
@@ -299,13 +299,26 @@ bool HyperionDevice::httpPOST(const char* path, const JsonDocument& request) {
   }
 
   size_t len = measureJson(request);
+  char ipbuf[20];
+  snprintf(ipbuf, 20, "%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
 
   // Header senden
-  client.print(F("POST ")); client.print(path); client.println(F(" HTTP/1.1"));
+  /*client.print(F("POST ")); client.print(path); client.println(F(" HTTP/1.1"));
   client.print(F("Host: ")); client.println(_ip);
   client.print(F("Content-Type: application/json\r\n"));
   client.print(F("Content-Length: ")); client.println(len);
-  client.println(F("Connection: close\r\n")); // Wichtig: Leerzeile folgt durch println
+  client.println(F("Connection: close")); // Wichtig: Leerzeile folgt durch println
+  client.println();*/
+  client.printf(
+    "POST %s HTTP/1.1\r\n"
+    "Host: %s\r\n"
+    "Content-Type: application/json\r\n"
+    "Content-Length: %d\r\n"
+    "Connection: close\r\n\r\n",
+    path,
+    ipbuf,
+    len
+  );
 
   // Payload direkt streamen
   serializeJson(request, client);
@@ -317,7 +330,10 @@ bool HyperionDevice::httpPOST(const char* path, const JsonDocument& request) {
   if (!NetworkHelper::skipHeader(client)) return false;
 
   // Jetzt direkt parsen (wir nutzen die Funktion von vorhin)
-  return parseComponentsFromStream(client);
+  // nach POST bekommt man keine vollständige Json- Antwort über den Status zurück!
+  // Trotzdem versuchen wir es, damit wenigstens der client sauber zurückgelassen wird.
+  /*return */parseComponentsFromStream(client); 
+  return true;
 }
 
 /* waitForClientData  V1  */
@@ -362,7 +378,7 @@ bool HyperionDevice::parseComponentsFromStream(WiFiClient& client) {
     return false;
   }
   
-  //serializeJson(doc, Serial);
+  //serializeJson(_doc, Serial);
 
   // 4. Daten extrahieren (Hyperion liefert info -> components)
   JsonArray components = _doc["info"]["components"];
