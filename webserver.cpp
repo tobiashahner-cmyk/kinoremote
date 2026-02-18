@@ -60,7 +60,8 @@ void loop() {
   if (KinoAPI::getJsonUpdates(_parseContainer) == KinoError::OK) {
     char buf[512];
     serializeJson(_parseContainer, buf);
-    Serial.println(buf);
+    //Serial.println(buf);
+    delay(10);
     _socket.broadcastTXT(buf);
   }
 }
@@ -109,7 +110,7 @@ void handleCmd() {
   if ((ok)&&(_server.arg("dev")=="macro")) {
     String macroName = _server.arg("f");
     macroName.replace("run/","");
-    bool err = KinoAPI::executeMacro(macroName);
+    bool err = KinoAPI::executeMacro(macroName.c_str());
     Serial.println((err)?F("Makro gestartet"):F("Fehler beim Starten des Makros"));
     _server.send(200, "text/plain", (err)?"OK":"Fehler");
     return;
@@ -168,11 +169,11 @@ void handleMacroRename() {
   if (newName == "") POSTOK = false;
   bool ok = false;
   if (POSTOK) {
-    ok = KinoAPI::renameMacro(macroName, newName);
+    ok = KinoAPI::renameMacro(macroName.c_str(), newName.c_str());
   }
   if (ok) {
     size_t newMacroIndex;
-    err = KinoAPI::getMacroIndexByName(newName, newMacroIndex);
+    err = KinoAPI::getMacroIndexByName(newName.c_str(), newMacroIndex);
     pageStart("Erfolg");
     _server.sendContent(F("<div class='card'><h2>Makro wurde umbenannt</h2>"));
     _server.sendContent(F("<p><a href='/macroEdit?m="));
@@ -224,7 +225,7 @@ void handleMacroDelete() {
     return;
   }
   if (POSTOK && _server.hasArg("confirm")) {
-    bool ok = KinoAPI::deleteMacro(macroName);
+    bool ok = KinoAPI::deleteMacro(macroName.c_str());
     if (ok) {
       pageStart("Erfolg");
       _server.sendContent(F("<div class='card'><p>Makro "));
@@ -287,8 +288,8 @@ void createNewMacro() {
   bool ok = POSTOK;
   size_t macroIndex = -1;
   if(POSTOK) {
-    ok = KinoAPI::createMacro(newname);
-    KinoError e = KinoAPI::getMacroIndexByName(newname, macroIndex);
+    ok = KinoAPI::createMacro(newname.c_str());
+    KinoError e = KinoAPI::getMacroIndexByName(newname.c_str(), macroIndex);
     ok = (macroIndex != -1);
   }
 
@@ -431,7 +432,7 @@ bool deleteMacroLine() {
   String macroName; macroName.reserve(32); macroName = mName.toString();
   macroName.replace(".macro","");
   int linenr = _server.arg("linenr").toInt();
-  bool ok = KinoAPI::deleteMacroCommand(macroName, linenr);
+  bool ok = KinoAPI::deleteMacroCommand(macroName.c_str(), linenr);
   return ok;
 }
 
@@ -489,7 +490,7 @@ bool updateMacroSetLine() {
 
   String out;
   serializeJson(tmpSettings, out);
-  return KinoAPI::updateMacroCommand(macroName, linenr, out);
+  return KinoAPI::updateMacroCommand(macroName.c_str(), linenr, out.c_str());
 }
 
 bool updateMacroDelayLine() {
@@ -503,7 +504,7 @@ bool updateMacroDelayLine() {
   tmpSettings["seconds"] = _server.arg("seconds").toInt();
   String out;
   serializeJson(tmpSettings, out);
-  return KinoAPI::updateMacroCommand(macroName, linenr, out);
+  return KinoAPI::updateMacroCommand(macroName.c_str(), linenr, out.c_str());
 }
 
 void insertMacroLine() {
@@ -583,7 +584,7 @@ bool insertMacroSetLine() {
 
   String out;
   serializeJson(tmpSettings, out);
-  return KinoAPI::addMacroCommand(macroName, linenr, out);
+  return KinoAPI::addMacroCommand(macroName.c_str(), linenr, out.c_str());
 }
 
 bool insertMacroDelayLine() {
@@ -598,12 +599,11 @@ bool insertMacroDelayLine() {
   String out;
   serializeJson(tmpSettings, out);
   //_server.sendContent (out);
-  return KinoAPI::addMacroCommand(macroName, linenr, out);
+  return KinoAPI::addMacroCommand(macroName.c_str(), linenr, out.c_str());
 }
 
 void showMacro(const char* macroName) {
   _settings.clear();
-  size_t lineCount;
   char tmpLine[256];
   char mName[32]; 
   strncpy(mName, macroName, sizeof(mName) - 1);
@@ -611,9 +611,10 @@ void showMacro(const char* macroName) {
   char* dot = strstr(mName, ".macro");
   if (dot) *dot = '\0'; 
   
-  KinoError err = KinoAPI::getMacroLineCount(mName, lineCount);
+  size_t lineCount = KinoAPI::getMacroLineCount(mName);
 
   char indexBuffer[5];
+  KinoError err;
   for (int i=0; i < lineCount; i++) {
     _lineSettings.clear();
     itoa((i+1), indexBuffer, 10);
@@ -2886,6 +2887,7 @@ function decodeHtml(html) {
 
         let value = data[key];
         if (typeof value === 'string') {
+            value.replace("&amp;","&");
             value = decodeHtml(value);
         }
         // Pfad zusammenbauen: Wenn basePath existiert, hängen wir den Key an

@@ -30,10 +30,26 @@ struct stateBackup {
 
 class WLEDDevice : public KinoDevice {
   public:
+    enum DirtyBit : uint16_t {
+      NONE  = 0,
+      ON    = 1<<1,
+      BRI   = 1<<2,
+      FX    = 1<<3,
+      SX    = 1<<4,
+      IX    = 1<<5,
+      FGCOL = 1<<6,
+      BGCOL = 1<<7,
+      FXCOL = 1<<8,
+      LOR   = 1<<9,
+      C1X   = 1<<10,
+      C2X   = 1<<11,
+      C3X   = 1<<12,
+      PAL   = 1<<13
+    };
     const char* deviceType() const override {
         return "wled";
     }
-    
+
     // Konstruktoren
     explicit WLEDDevice(const IPAddress& ip);
     explicit WLEDDevice(const String& ip);
@@ -47,10 +63,8 @@ class WLEDDevice : public KinoDevice {
     bool commit() override;
     size_t getPropertyCount() const override;
     const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
+    bool getStatusUpdate(const char* devName, JsonObject& root) override;
 
-    KinoError getEffectMetadata(int effectnr, KinoVariant& out);
-    KinoError getEffectParamName(const KinoVariant& in, int paramIndex, KinoVariant& out);
-    std::vector<KinoPropertyParam> getPaletteParams(int palnr);
     KinoPropertyParam* getPaletteParam(int palnr, int paramIndex);
   
     // Lifecycle
@@ -70,7 +84,6 @@ class WLEDDevice : public KinoDevice {
     uint16_t getEffect() const;
     uint8_t getSpeed() const;
     uint8_t getIntensity() const;
-    String getLiveSource() const;
     void getLiveSource(char* src, size_t srcLen);
     uint8_t getPalette() const;
     bool inAlarm() const;
@@ -113,7 +126,6 @@ class WLEDDevice : public KinoDevice {
     bool _lazyActive = false;
     // Chunk-Streaming Cache
     File   _chunkFile;
-    //String _chunkPath;
     char _chunkPath[64];
     
     static constexpr size_t CHUNK_SIZE = 1024;
@@ -126,15 +138,10 @@ class WLEDDevice : public KinoDevice {
     void   closeChunkStream();
     void   copyAndTrim(char* dest, const char* src, size_t srcLen, size_t destSize);
     
-    void closeLazyStream();
-    bool ensureLazyStream(const String& path, int index);
-    //bool readLineSmart(const String& path, int index, String& out);
     bool readLineSmart(const char* path, int index, char* out, size_t outLen);
-    static void stripAfterAt(String& s);
     static void stripAfterAt(char* s);
   
     IPAddress _ip;
-    //WiFiClient& _client;
     int  _tickInterval  = 0;
     unsigned long _lastTick = 0;
     void EnsureTimeoutBeforeRequest(unsigned long timeout);
@@ -146,18 +153,16 @@ class WLEDDevice : public KinoDevice {
     stateBackup _bkp;
     bool _alarm = false;
     bool _pause = false;
+    uint16_t _dirty = NONE;
+    uint16_t _pendingDirty = NONE;
   
     void initFilter();
     bool readEffects(bool forceRefresh = false);
     bool readPalettes(bool forceRefresh= false);
-    String effectsFile();
     void effectsFile(char* filename, size_t filenameLen);
-    String paletteFile();
     void paletteFile(char* filename, size_t filenameLen);
     int countParams(size_t linenr);
-    bool getParamLabel(size_t linenr, size_t paramnr, String& out);
     bool getParamLabel(size_t linenr, size_t paramnr, char* out, size_t outLen);
-    bool getParamField(size_t linenr, size_t paramnr, String& out);
     bool getParamField(size_t linenr, size_t paramnr, char* out, size_t outLen);
     static StaticJsonDocument<512> _jsonFilter; 
 };

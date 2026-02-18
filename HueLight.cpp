@@ -33,8 +33,8 @@ HueLight::HueLight(uint8_t id,
 // --- Getter ---
 uint8_t HueLight::getId() const { return _id; }
 const char* HueLight::getName() const { return _name; }
-bool HueLight::isDirty() { return _dirty; }
-void HueLight::clearDirty() { _dirty = false; }
+bool HueLight::isDirty() { return _dirty > 0; }
+void HueLight::clearDirty() { _dirty = NONE; }
 
 bool HueLight::isOn() const { return _on; }
 uint8_t HueLight::getBrightness() const { return _bri; }
@@ -68,19 +68,19 @@ bool HueLight::setRGB(uint8_t r, uint8_t g, uint8_t b) {
 
 // --- spezielle Setter für direkten Zugriff ohne "pending"
 void HueLight::forceOn(bool value) {
-  if (_on != value) _dirty = true;
+  if (_on != value) _dirty |= ON;
   _on = value; 
 }
 
 void HueLight::forceBri(uint8_t value) { 
   if (_hasBri) {
-    if (_bri != value) _dirty = true;
+    if (_bri != value) _dirty |= BRI;
     _bri = value; 
   }
 }
 void HueLight::forceCT(uint16_t value) { 
   if (_hasCT) {
-    if (_ct != value) _dirty = true;
+    if (_ct != value) _dirty |= CT;
     _ct = value;
   }
 }
@@ -89,61 +89,36 @@ void HueLight::forceCT(uint16_t value) {
 void HueLight::updateValues(const char* name, bool on, bool hasBri, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, uint16_t minct, uint16_t maxct) {
   //_name = name;
   strlcpy(_name, name, sizeof(_name));
-  if (on != _on) _dirty = true;
+  if (on != _on) _dirty |= ON;
   _on = on;
   _hasBri = hasBri;
-  if (_hasBri && (_bri != bri)) _dirty = true;
+  if (_hasBri && (_bri != bri)) _dirty |= BRI;
   _bri = bri;
   _hasXY = hasXY;
-  if (_hasXY && ((_x != x)||(_y != y))) _dirty = true;
+  if (_hasXY && ((_x != x)||(_y != y))) _dirty |= COL;
   _x = x;
   _y = y;
   _hasCT = hasCT;
-  if (_hasCT && (_ct != ct)) _dirty = true;
+  if (_hasCT && (_ct != ct)) _dirty |= CT;
   _ct = ct;
   _minct = minct;
   _maxct = maxct;
 }
 
+bool HueLight::getStatusUpdate(JsonObject& root) {
+  if (_dirty & ON)    root["on"].set(_on);
+  if (_dirty & BRI)   root["bri"].set(_bri);
+  if (_dirty & CT)    root["ct"].set(_ct);
+  if (_dirty & COL)   {
+    RgbColor c = getRGB();
+    KinoVariant col = KinoVariant::fromColor(c.r, c.g, c.b);
+    root["col"].set(col.c_str());
+  }
+  clearDirty();
+  return true;
+}
+
 // --- applyChanges ---
-/* applyChanges() V1
-bool HueLight::applyChanges(HueBridge* bridge) {
-    // Prüfen, ob überhaupt Änderungen vorliegen
-    bool hasChanges = pending.on.has_value() || 
-                      pending.bri.has_value() || 
-                      pending.ct.has_value() || 
-                      pending.xy.has_value();
-    if (!hasChanges) return true;
-
-    StaticJsonDocument<256> doc;
-
-    if(pending.on.has_value()) doc["on"] = pending.on.value();
-    if(pending.bri.has_value()) doc["bri"] = pending.bri.value();
-    if(pending.ct.has_value()) doc["ct"] = pending.ct.value();
-    if(pending.tt.has_value())  doc["transitiontime"] = pending.tt.value();
-    if(pending.xy.has_value()) {
-        JsonArray xyArr = doc.createNestedArray("xy");
-        xyArr.add(pending.xy->first);
-        xyArr.add(pending.xy->second);
-    }
-
-    char payload[128];
-    serializeJson(doc, payload);
-
-    if(!bridge->sendLightState(_id, payload)) return false;
-
-    // Lokale Werte aktualisieren
-    if(pending.on.has_value()) _on = pending.on.value();
-    if(pending.bri.has_value()) _bri = pending.bri.value();
-    if(pending.ct.has_value()) _ct = pending.ct.value();
-    if(pending.xy.has_value()) { 
-      _x = pending.xy->first; 
-      _y = pending.xy->second; 
-    }
-
-    clearPending();
-    return true;
-}*/
 
 /* applyChanges() V2 : 2026-02-02 JsonDocument entfernt und char-Puffer direkt gebaut */
 bool HueLight::applyChanges(HueBridge* bridge) {
@@ -171,23 +146,21 @@ bool HueLight::applyChanges(HueBridge* bridge) {
 
     if(!bridge->sendLightState(_id, payload)) return false;
     // Lokale Werte aktualisieren
-    if(pending.on.has_value()) _on = pending.on.value();
-    if(pending.bri.has_value()) _bri = pending.bri.value();
-    if(pending.ct.has_value()) _ct = pending.ct.value();
+    if(pending.on.has_value())  { _on = pending.on.value(); _dirty |= ON; }
+    if(pending.bri.has_value()) { _bri = pending.bri.value(); _dirty |= BRI; }
+    if(pending.ct.has_value())  { _ct = pending.ct.value(); _dirty |= CT; }
     if(pending.xy.has_value()) { 
       _x = pending.xy->first; 
-      _y = pending.xy->second; 
+      _y = pending.xy->second;
+      _dirty |= COL;
     }
 
     clearPending();
-    _dirty = true;
     return true;
 }
 
 
 // Umrechnung von RGB nach XY
-// Struktur zum Halten der RGB-Werte (0-255)
-
 
 // --- Hilfsfunktionen ---
 

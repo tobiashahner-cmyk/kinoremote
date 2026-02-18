@@ -25,12 +25,14 @@ public:
     Unknown
   };
 
-  static bool labelByIndex(int index, String& out);
-  static bool setParameterByIndex(int index, String& out);
+  //static bool labelByIndex(int index, String& out);
+  static bool labelByIndex(int index, char* out, size_t outLen);
   static InputSource fromReadCode(uint8_t code);
-  static bool toSetParameter(InputSource src, String& outParam);
+  //static bool toSetParameter(InputSource src, String& outParam);
+  static bool toSetParameter(InputSource src, uint8_t& outParam);
   static const char* toString(InputSource src);
-  static InputSource fromString(const String& name);
+  //static InputSource fromString(const String& name);
+  static InputSource fromString(const char* name);
   static size_t getTableSize();
 
 private:

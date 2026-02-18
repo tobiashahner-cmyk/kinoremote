@@ -10,14 +10,6 @@
 // ==== Externe Geräte (existieren im Sketch) ====
 
 // Externe Geräte aus dem Sketch
-/*
-extern YamahaReceiver* _yamaha;
-extern WLEDDevice* _canvas;
-extern WLEDDevice* _sound;
-extern OptomaBeamer* _beamer;
-extern HyperionDevice* _hyperion;
-extern HueBridge* _hue;
-*/
 
 // ==== Hilfsfunktionen ====
 
@@ -154,6 +146,7 @@ bool kino_memory(String* p, uint8_t n);
 bool kino_help(String* p, uint8_t n);
 bool kino_init(String* p, uint8_t n);
 bool kino_startTest(String* p, uint8_t n);
+bool kino_stopTest(String*p, uint8_t n);
 bool kino_disconnect(String* p, uint8_t n);
 
 bool kinoGet(String* p, uint8_t n);
@@ -177,7 +170,8 @@ bool hue_showSensors(String *p, uint8_t n);
 // ==== Tabelle ====
 static const CommandEntry commandTable[] = {
   {"kino",   "disconnect",0, kino_disconnect,           "trennt die WiFi- Verbindung (Re-Connect Test)"},
-  {"kino",   "startTest", 0, kino_startTest,            "startet TickInterval- Test"},
+  {"kino",   "startTest", 1, kino_startTest,            "startet TickInterval- Test. Parameter gibt das Zeit-Intervall für einen gesamten Gerätezyklus in Millisekunden"},
+  {"kino",   "stopTest",  0, kino_stopTest,             "stoppt TickInterval- Test."},
   {"macro",  "run",       1, kino_executeMacro,         "lädt Makro und führt es aus"},
   {"macro",  "test",      1, kino_testMacro,            "lädt Makro und führt Tests aus"},
   {"macro",  "list",      0, kino_listMacros,           "zeigt eine Liste aller gespeicherten Makros"},
@@ -320,46 +314,59 @@ bool showError(KinoError e) {
 // SERIAL ONLY, for Debugging:
 
 bool kino_memory(String* p, uint8_t n) {
-  /*unsigned long freeHeap = ESP.getFreeHeap();
-  uint16_t maxFreeBlockSize = ESP.getMaxFreeBlockSize();
-  uint8_t heapFragmentation = ESP.getHeapFragmentation();
-  unsigned long freeStack = ESP.getFreeContStack();
-  Serial.print(F("FreeHeap: "));
-  Serial.print(freeHeap);
-  Serial.print(F(" | MaxBlock: "));
-  Serial.print(maxFreeBlockSize);
-  Serial.print(F(" | Fragmentation: "));
-  Serial.println(heapFragmentation);
-  Serial.print(F(" | Stack: "));
-  Serial.print(freeStack);
-  if (freeHeap < 15000) return false;
-  if (maxFreeBlockSize < 15000) return false;
-  if (heapFragmentation > 30) return false;*/
   KinoAPI::showMemory();
   return true;
 }
 
 bool kino_startTest(String*p, uint8_t n) {
+  int totalInterval = p[0].toInt();
+  if (totalInterval == 0) return false;
   size_t devCount;
   KinoError e = KinoAPI::getDeviceCount(devCount);
+  int waitInterval = totalInterval  / devCount;
+  if (waitInterval < 1000) {
+    Serial.print(F("Das Intervall ist zu klein. Es sollten mindestens 1000ms Puffer zwischen den einzelnen Geräteabfragen liegen, mit dem gegebenen Intervall sind es aber nur "));
+    Serial.print(waitInterval);
+    Serial.println(F("ms"));
+    return false;
+  }
   bool ok = true;
+  KinoVariant devName;
   for (int i=0; i < devCount; i++) {
-    int randNumber = random(5000, 10001);
-    KinoVariant devName;
     e = KinoAPI::getDeviceName(i, devName);
-    e = KinoAPI::setProperty(devName.c_str(), "tickInterval", KinoVariant::fromInt(randNumber));
+    e = KinoAPI::setProperty(devName.c_str(), "tickInterval", KinoVariant::fromInt(totalInterval));
     if (e == KinoError::OK) {
       Serial.print(F("TickInterval for "));
       Serial.print(devName.c_str());
       Serial.print(F(" is now "));
-      Serial.println(randNumber);
+      Serial.println(totalInterval);
     } else {
       Serial.print(F("could not set tickInterval for device "));
       Serial.println(devName.c_str());
       ok = false;
     }
-    randNumber = random(100,501);
-    delay(randNumber);
+    delay(waitInterval);
+  }
+  return ok;
+}
+
+bool kino_stopTest(String*p, uint8_t n) {
+  size_t devCount;
+  KinoError e = KinoAPI::getDeviceCount(devCount);
+  KinoVariant devName;
+  bool ok = true;
+  for (int i=0; i < devCount; i++) {
+    e = KinoAPI::getDeviceName(i, devName);
+    e = KinoAPI::setProperty(devName.c_str(), "tickInterval", KinoVariant::fromInt(0));
+    if (e == KinoError::OK) {
+      Serial.print(F("TickInterval for "));
+      Serial.print(devName.c_str());
+      Serial.print(F(" is now 0"));
+    } else {
+      Serial.print(F("could not set tickInterval for device "));
+      Serial.println(devName.c_str());
+      ok = false;
+    }
   }
   return ok;
 }
@@ -1536,7 +1543,10 @@ bool kino_showProperties(String* p, uint8_t n) {
 // helper function for showing macro errors
 void showMacroErrors() {
   size_t errCount = KinoAPI::getMacroErrorCount();
-  Serial.print(KinoAPI::getCurrentMacroName());
+  //Serial.print(KinoAPI::getCurrentMacroName());
+  char mName[32];
+  KinoAPI::getCurrentMacroName(mName, sizeof(mName));
+  Serial.print(mName);
   Serial.print(F(" : "));
   Serial.print(errCount); Serial.println(F(" Errors:"));
   for (size_t i=0; i<errCount; i++) {
@@ -1552,14 +1562,14 @@ void showMacroErrors() {
 
 // helper function for showing actions inside a macro
 bool showMacroListing(const String& macroName) {
-  std::vector<String> lines;
-  bool ok = KinoAPI::getMacroLines(macroName, lines);
-  if (!ok) {
-    showMacroErrors();
-    return false;
+  size_t mlcount = KinoAPI::getMacroLineCount(macroName.c_str());
+  if (mlcount == 0) {
+    Serial.println(F("Der Makro hat keinen Inhalt"));
+    return true;
   }
-  for (auto& l : lines) {
-    Serial.print(F("\t"));
+  char l[256];
+  for (size_t i=0; i<mlcount; i++) {
+    KinoAPI::getMacroLineByIndex(macroName.c_str(), i, l, sizeof(l));
     Serial.println(l);
   }
   return true;
@@ -1567,12 +1577,20 @@ bool showMacroListing(const String& macroName) {
 
 bool kino_listMacros(String* p, uint8_t n) {
   Serial.println(F("Gespeicherte Makros:"));
-  size_t i=0;
-  for (auto& macroname : KinoAPI::listMacros()) {
-    Serial.print(F("\t")); Serial.println(macroname);
-    i++;
+  size_t mc;
+  if (KinoAPI::getMacroCount(mc) != KinoError::OK) {
+    Serial.println(F("Konnte Makros nicht lesen"));
+    return false;
   }
-  Serial.print(i); Serial.println(F(" Makros total"));
+  Serial.print(mc); Serial.println(F("Makros insgesamt:"));
+  KinoVariant mName;
+  for (size_t i = 0; i < mc; i++) {
+    if (KinoAPI::getMacroNameByIndex(i, mName) != KinoError::OK) {
+      Serial.print(F("\tFehler beim Auslesen von Makro Nr ")); Serial.println(i);
+      return false;
+    }
+    Serial.print(F("\t")); Serial.println(mName.c_str());
+  }
   return true;
 }
 
@@ -1586,10 +1604,10 @@ bool kino_showMacro(String* p, uint8_t n) {
 bool kino_addCommandToMacro(String* p, uint8_t n) {
   bool ok = false;
   if (n==3) {
-    ok = KinoAPI::addMacroCommand(p[0], p[1].toInt(), p[2]);
+    ok = KinoAPI::addMacroCommand(p[0].c_str(), p[1].toInt(), p[2].c_str());
   } else if (n == 6) {
     KinoVariant val = prepareForJson(p[5]);
-    ok = KinoAPI::addMacroCommand(p[0], p[1].toInt(), p[2], p[3], p[4], val);
+    ok = KinoAPI::addMacroCommand(p[0].c_str(), p[1].toInt(), p[2].c_str(), p[3].c_str(), p[4].c_str(), val);
   }
   if (!ok) {
     Serial.print(F("got ")); Serial.print(n); Serial.println(F("parameters"));
@@ -1604,7 +1622,7 @@ bool kino_deleteCommandFromMacro(String* p, uint8_t n) {
   Serial.print(p[1].toInt());
   Serial.print(F(" aus Makro "));
   Serial.println(p[0]);
-  bool ok = KinoAPI::deleteMacroCommand(p[0], p[1].toInt());
+  bool ok = KinoAPI::deleteMacroCommand(p[0].c_str(), p[1].toInt());
   if (!ok) {
     showMacroErrors();
     return false;
@@ -1615,10 +1633,10 @@ bool kino_deleteCommandFromMacro(String* p, uint8_t n) {
 bool kino_updateCommandInMacro(String* p, uint8_t n) {
   bool ok = false;
   if (n == 3) {
-    bool ok = KinoAPI::updateMacroCommand(p[0], p[1].toInt(), p[2]);
+    bool ok = KinoAPI::updateMacroCommand(p[0].c_str(), p[1].toInt(), p[2].c_str());
   } else if (n == 6) {
-    KinoVariant val = prepareForJson(p[5]);
-    ok = KinoAPI::updateMacroCommand(p[0], p[1].toInt(), p[2], p[3], p[4], val);
+    KinoVariant val = prepareForJson(p[5].c_str());
+    ok = KinoAPI::updateMacroCommand(p[0].c_str(), p[1].toInt(), p[2].c_str(), p[3].c_str(), p[4].c_str(), val);
   }
   if (!ok) {
     showMacroErrors();
@@ -1628,7 +1646,7 @@ bool kino_updateCommandInMacro(String* p, uint8_t n) {
 }
 
 bool kino_createMacro(String*p, uint8_t n) {
-  if (!KinoAPI::createMacro(p[0])) {
+  if (!KinoAPI::createMacro(p[0].c_str())) {
     Serial.println(F("could not create macro file"));
     showMacroErrors();
     return false;
@@ -1648,18 +1666,18 @@ bool kino_createMacro(String*p, uint8_t n) {
       showMacroErrors();
     }
   }
-  return showMacroListing(p[0]);
+  return showMacroListing(p[0].c_str());
 }
 
 
 bool kino_addOrUpdateMacro(String* p, uint8_t n) {
-  bool ok = KinoAPI::addOrUpdateMacro(p[0]);
+  bool ok = KinoAPI::addOrUpdateMacro(p[0].c_str());
   if (!ok) showMacroErrors();
   return ok;
 }
 
 bool kino_deleteMacro(String*p, uint8_t n) {
-  bool ok = KinoAPI::deleteMacro(p[0]);
+  bool ok = KinoAPI::deleteMacro(p[0].c_str());
   if (!ok) showMacroErrors();
   return ok;
 }
@@ -1670,13 +1688,15 @@ void serial_macroFinished(bool success) {
     return;
   }
   Serial.print(F("Makro \""));
-  Serial.print(KinoAPI::getCurrentMacroName());
+  char mName[32];
+  KinoAPI::getCurrentMacroName(mName, sizeof(mName));
+  Serial.print(mName);
   Serial.println(F("\" sauber abgearbeitet\n"));
 }
 
 bool kino_executeMacro(String* p, uint8_t n) {
   //return KinoAPI::executeMacro(p[0]);
-  if (!KinoAPI::executeMacro(p[0], serial_macroFinished)) {
+  if (!KinoAPI::executeMacro(p[0].c_str(), serial_macroFinished)) {
     // Diese Fehler werden direkt beim Starten gefangen:
     showMacroErrors();
   }
@@ -1684,7 +1704,7 @@ bool kino_executeMacro(String* p, uint8_t n) {
 }
 
 bool kino_testMacro(String* p, uint8_t n) {
-  if (!KinoAPI::testMacro(p[0], serial_macroFinished)) {
+  if (!KinoAPI::testMacro(p[0].c_str(), serial_macroFinished)) {
     // Diese Fehler werden direkt beim Starten gefangen:
     showMacroErrors();
   }

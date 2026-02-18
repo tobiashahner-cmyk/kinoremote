@@ -25,24 +25,19 @@ const uint8_t OptomaSourceLookup::_tableSize =
 
 size_t OptomaSourceLookup::getTableSize() { return _tableSize; }
 
-bool OptomaSourceLookup::labelByIndex(int index, String& out) {
-  if (index >= _tableSize) return false;
+bool OptomaSourceLookup::labelByIndex(int index, char* out, size_t outLen) {
+  if (index >= _tableSize) {
+    if (outLen > 0) out[0] = '\0';
+    return false;
+  }
   Entry e;
   memcpy_P(&e, &_table[index], sizeof(Entry));
-  out = String(e.name);
+  strncpy(out, e.name, outLen);
+  out[outLen-1] = '\0';
   return true;
 }
 
-bool OptomaSourceLookup::setParameterByIndex(int index, String& out) {
-  if (index > _tableSize) return false;
-  Entry e;
-  memcpy_P(&e, &_table[index], sizeof(Entry));
-  out = String(e.setParam);
-  return true;
-}
-
-OptomaSourceLookup::InputSource
-OptomaSourceLookup::fromReadCode(uint8_t code) {
+OptomaSourceLookup::InputSource OptomaSourceLookup::fromReadCode(uint8_t code) {
   for (uint8_t i = 0; i < _tableSize; ++i) {
     Entry e;
     memcpy_P(&e, &_table[i], sizeof(Entry));
@@ -53,12 +48,12 @@ OptomaSourceLookup::fromReadCode(uint8_t code) {
   return InputSource::Unknown;
 }
 
-bool OptomaSourceLookup::toSetParameter(InputSource src, String& outParam) {
-  for (uint8_t i = 0; i < _tableSize; ++i) {
-    Entry e;
+bool OptomaSourceLookup::toSetParameter(InputSource src, uint8_t& outParam) {
+  Entry e;
+  for (uint8_t i=0; i<_tableSize; ++i) {
     memcpy_P(&e, &_table[i], sizeof(Entry));
     if (e.src == src) {
-      outParam = String(e.setParam);
+      outParam = e.setParam;
       return true;
     }
   }
@@ -80,24 +75,20 @@ const char* OptomaSourceLookup::toString(InputSource src) {
   return "Unknown";
 }
 
-OptomaSourceLookup::InputSource
-OptomaSourceLookup::fromString(const String& name) {
-  String s = name;
-  s.trim();
-  s.toUpperCase();
+OptomaSourceLookup::InputSource OptomaSourceLookup::fromString(const char* name) {
+  if (!name) return InputSource::Unknown;
+
+  // Trim-Ersatz: Führende Leerzeichen überspringen
+  while (isspace((unsigned char)*name)) {
+    name++;
+  }
 
   for (uint8_t i = 0; i < _tableSize; ++i) {
     Entry e;
     memcpy_P(&e, &_table[i], sizeof(Entry));
 
-    char buf[24];
-    strncpy_P(buf, e.name, sizeof(buf));
-    buf[sizeof(buf) - 1] = '\0';
-
-    String tableName(buf);
-    tableName.toUpperCase();
-
-    if (s == tableName) {
+    // Vergleiche den RAM-String 'name' direkt mit dem Flash-String 'e.name'
+    if (strcasecmp_P(name, e.name) == 0) {
       return e.src;
     }
   }

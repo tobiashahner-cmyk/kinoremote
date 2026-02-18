@@ -6,6 +6,9 @@
 #include <LittleFS.h>
 #include <functional>
 #include <vector>
+#include "KinoError.h"
+#include "KinoVariant.h"
+#include "FileHelper.h"
 #include "KinoMacroActions.h"
 
 
@@ -29,36 +32,37 @@ bool isReady() const;
 
 
 // execution
-bool startMacro(const String& name, MacroFinishedCallback cb=nullptr);
-bool testMacro(const String& name, MacroFinishedCallback cb=nullptr);
+bool startMacro(const char* name, MacroFinishedCallback cb=nullptr);
+bool testMacro(const char* name, MacroFinishedCallback cb=nullptr);
 void tick();
 bool isRunning() const;
 bool isPausing() const { return _pausing; }
-String getName() const;
+//String getName() const;
+void getName(char* out, size_t outLen);
 
 // macro management
-std::vector<String> listMacros();
 size_t getMacroCount();
-String getMacroName(size_t index);
-size_t getMacroIndex(const String& macroName);
+KinoError getMacroNameByIndex(size_t index, KinoVariant& out);
+size_t getMacroIndex(const char* macroName);
 
-//std::vector<String> getAvailableMacroCommands();
-std::vector<const char*> getAvailableMacroCommands();
+//std::vector<const char*> getAvailableMacroCommands();
 size_t getMacroCommandCount();
 bool getMacroCommand(size_t index, char* out, size_t outLen);
 
-bool createMacro(const String& name);
-bool addOrUpdateMacro(const String& json); // compatibility shim
-bool deleteMacro(const String& macroName);
-bool renameMacro(const String& oldName,const String& newName);
+bool createMacro(const char* name);
+bool addOrUpdateMacro(const char* json); // compatibility shim
+bool deleteMacro(const char* macroName);
+bool renameMacro(const char* oldName,const char* newName);
 
 // line based API (unchanged externally)
-bool getMacroLines(const String& macroName, std::vector<String>& outLines);
-bool getMacroLineCount(const String& macroName, size_t& out);
-bool getMacroLineByIndex(const String& macroName, size_t index, String& out);
-bool addCommand(const String& macroName, size_t index, const String& jsonActionElement); // 1-based
-bool deleteCommand(const String& macroName, size_t index); // 1-based
-bool updateCommand(const String& macroName, size_t index, const String& jsonActionElement); // 1-based
+//bool getMacroLines(const String& macroName, std::vector<String>& outLines);
+//bool getMacroLineCount(const String& macroName, size_t& out);
+size_t getMacroLineCount(const char* macroName);
+//bool getMacroLineByIndex(const String& macroName, size_t index, String& out);
+bool getMacroLineByIndex(const char* macroName, size_t index, char* out, size_t outLen);
+bool addCommand(const char* macroName, size_t index, const char* jsonActionElement); // 1-based
+bool deleteCommand(const char* macroName, size_t index); // 1-based
+bool updateCommand(const char* macroName, size_t index, const char* jsonActionElement); // 1-based
 
 
 // error handling
@@ -79,7 +83,7 @@ bool _ready = false;
 bool _pausing = false;
 unsigned long _pauseStart = 0;
 unsigned long _pauseDuration = 0;
-String _currentMacroName;
+char _currentMacroName[32];
 
 std::vector<MacroError> _errors;
 MacroFinishedCallback _onFinished;
@@ -93,4 +97,5 @@ void _clearErrors();
 
 // filesystem helpers
 String _macroPath(const String& name) const;
+void getMacroPath(const char* macroName, char* out, size_t outLen);
 };

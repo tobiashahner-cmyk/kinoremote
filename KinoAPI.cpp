@@ -21,10 +21,6 @@ namespace KinoAPI {
     return macroEngine.begin();
   }
 
-  std::vector<String> listMacros() {
-    return macroEngine.listMacros();
-  }
-
   KinoError getMacroCount(size_t& out) {
     size_t ct = macroEngine.getMacroCount();
     out = ct;
@@ -32,58 +28,28 @@ namespace KinoAPI {
   }
   
   KinoError getMacroNameByIndex(size_t index, KinoVariant& out) {
-    //String KinoMacroEngine::getMacroName(size_t index)
-    String mName = macroEngine.getMacroName(index);
-    if (mName == "") return KinoError::OutOfRange;
-    out = KinoVariant::fromString(mName.c_str());
-    return KinoError::OK;
+    return macroEngine.getMacroNameByIndex(index, out);
   }
 
-  KinoError getMacroIndexByName(const String& macroName, size_t& out) {
+  KinoError getMacroIndexByName(const char* macroName, size_t& out) {
     out = macroEngine.getMacroIndex(macroName);
     if (out >= 0) return KinoError::OK;
     return KinoError::OutOfRange;
   }
 
-  bool getMacroLines(const String& macroName, std::vector<String>& lines) {
-    return macroEngine.getMacroLines(macroName, lines);
-  }
-
-  KinoError getMacroLineCount(const String& macroName, size_t &out) {
-    //bool getMacroLineCount(const String& macroName, size_t& out);
-    //bool getMacroLineByIndex(const String& macroName, size_t index, String& out);
-    size_t ct;
-    if (macroEngine.getMacroLineCount(macroName, ct)) {
-      out = ct;
-      return KinoError::OK;
-    }
-    out = 0;
-    return KinoError::DeviceNotReady;
+  size_t getMacroLineCount(const char* macroName) {
+    return macroEngine.getMacroLineCount(macroName);
   }
   
-  KinoError getMacroLineByIndex(const String& macroName, size_t index, String& out) {
-    String tmpline;
-    if (macroEngine.getMacroLineByIndex(macroName, index, tmpline)) {
-      out = tmpline;
-      return KinoError::OK;
-    }
-    out = "";
-    return KinoError::OutOfRange;
-  }
-
   KinoError getMacroLineByIndex(const char* macroName, size_t index, char* buf, size_t bufLen) {
-    String tmpLine;
-    if (macroEngine.getMacroLineByIndex(macroName, index, tmpLine)) {
-      //out = tmpline;
-      strncpy(buf, tmpLine.c_str(), bufLen);
-      buf[bufLen-1] = '\0';
+    if (macroEngine.getMacroLineByIndex(macroName, index, buf, bufLen)) {
       return KinoError::OK;
     }
-    //buf = "";
-    buf[0] = '\0';
+    if (bufLen > 0) buf[0] = '\0';
     return KinoError::OutOfRange;
   }
 
+/*
   bool prepareMacroJsonString(const String& cmd, const String& deviceName, const String& action, const KinoVariant& value, String& jsonString) {
     char jsonActionString[128];
     String valStr;
@@ -101,15 +67,32 @@ namespace KinoAPI {
                     valStr.c_str());
     jsonString = String(jsonActionString);
     return true;
-  }
+  }*/
+  bool prepareMacroJsonString(const char* cmd, const char* deviceName, const char* action, const KinoVariant& value, char* json, size_t jsonLen) {
+    char valStr[64]; // Puffer etwas vergrößert für Sicherheit bei RGB/Strings
+
+    if      (value.type == KinoVariant::BOOL)       snprintf(valStr, sizeof(valStr), "%s", (value.b) ? "true" : "false");
+    else if (value.type == KinoVariant::INT)        snprintf(valStr, sizeof(valStr), "%d", value.i);
+    else if (value.type == KinoVariant::FLOAT)      snprintf(valStr, sizeof(valStr), "%.2f", value.f);
+    else if (value.type == KinoVariant::STRING)     snprintf(valStr, sizeof(valStr), "\"%s\"", value.s);
+    else if (value.type == KinoVariant::RGB_COLOR)  snprintf(valStr, sizeof(valStr), "[%d,%d,%d]", value.color.r, value.color.g, value.color.b);
+    else return false;
+
+    int written = snprintf(json, jsonLen, "{\"cmd\":\"%s\",\"dev\":\"%s\",\"val\":{\"%s\":%s}}",
+                           cmd, deviceName, action, valStr);
+    
+    // Prüfen, ob der String in den Zielpuffer gepasst hat
+    return (written > 0 && (size_t)written < jsonLen);
+}
 
   /*std::vector<String> getAvailableMacroCommands() {
     return macroEngine.getAvailableMacroCommands();
   }*/
+  /*
   std::vector<const char*> getAvailableMacroCommands() {
     return macroEngine.getAvailableMacroCommands();
   }
-
+*/
   size_t getMacroCommandCount() {
     return macroEngine.getMacroCommandCount();
   }
@@ -118,42 +101,49 @@ namespace KinoAPI {
     return macroEngine.getMacroCommand(index, out, outLen) ? KinoError::OK : KinoError::OutOfRange;
   }
 
-  bool addMacroCommand(const String& macroName, size_t index, const String& jsonActionElement) {
+  bool addMacroCommand(const char* macroName, size_t index, const char* jsonActionElement) {
     return macroEngine.addCommand(macroName, index, jsonActionElement);
   }
 
+  /*
   bool addMacroCommand(const String& macroName, size_t index, const String& cmd, const String& deviceName, const String& action, const KinoVariant& value) {
     String jsonActionString;
     jsonActionString.reserve(128);
     if (!prepareMacroJsonString(cmd, deviceName, action, value, jsonActionString)) return false;
     return macroEngine.addCommand(macroName, index, String(jsonActionString));
   }
+  */
+  bool addMacroCommand(const char* macroName, size_t linenr, const char* cmd, const char* devName, const char* action, const KinoVariant& value) {
+    char json[128];
+    if (!prepareMacroJsonString(cmd, devName, action, value, json, sizeof(json))) return false;
+    return macroEngine.addCommand(macroName, linenr, json);
+  }
 
-  bool deleteMacroCommand(const String& macroName, size_t index) {
+  bool deleteMacroCommand(const char* macroName, size_t index) {
     return macroEngine.deleteCommand(macroName, index);
   }
 
-  bool updateMacroCommand(const String& macroName, size_t index, const String& jsonActionElement) {
+  bool updateMacroCommand(const char* macroName, size_t index, const char* jsonActionElement) {
     return macroEngine.updateCommand(macroName, index, jsonActionElement);
   }
 
-  bool updateMacroCommand(const String& macroName, size_t index, const String& cmd, const String& deviceName, const String& action, const KinoVariant& value) {
-    String jsonActionString;
-    jsonActionString.reserve(128);
-    if (!prepareMacroJsonString(cmd, deviceName, action, value, jsonActionString)) return false;
-    return macroEngine.updateCommand(macroName, index, String(jsonActionString));
+  bool updateMacroCommand(const char* macroName, size_t index, const char* cmd, const char* deviceName, const char* action, const KinoVariant& value) {
+    char jsonActionString[128];
+    if (!prepareMacroJsonString(cmd, deviceName, action, value, jsonActionString, sizeof(jsonActionString))) return false;
+    return macroEngine.updateCommand(macroName, index, jsonActionString);
   }
   
-  bool executeMacro(const String& name,MacroFinishedCallback cb/*=nullptr*/) {
+  bool executeMacro(const char* name,MacroFinishedCallback cb/*=nullptr*/) {
     return macroEngine.startMacro(name, cb);
   }
 
-  bool testMacro(const String& name, MacroFinishedCallback cb/*=nullptr*/) {
+  bool testMacro(const char* name, MacroFinishedCallback cb/*=nullptr*/) {
     return macroEngine.testMacro(name, cb);
   }
 
-  String getCurrentMacroName() {
-    return macroEngine.getName();
+  bool getCurrentMacroName(char* out, size_t outLen) {
+    macroEngine.getName(out, outLen);
+    return (strlen(out)>0);
   }
 
   bool handleMacroTicks() {
@@ -161,19 +151,19 @@ namespace KinoAPI {
     return (macroEngine.errorCount() == 0);
   }
 
-  bool createMacro(const String& macroName) {
+  bool createMacro(const char* macroName) {
     return macroEngine.createMacro(macroName);
   }
 
-  bool renameMacro(const String& oldName, const String& newName) {
+  bool renameMacro(const char* oldName, const char* newName) {
     return macroEngine.renameMacro(oldName, newName);
   }
 
-  bool addOrUpdateMacro(const String& json) {
+  bool addOrUpdateMacro(const char* json) {
     return macroEngine.addOrUpdateMacro(json);
   }
 
-  bool deleteMacro(const String& macroName) {
+  bool deleteMacro(const char* macroName) {
     return macroEngine.deleteMacro(macroName);
   }
 
@@ -209,9 +199,14 @@ namespace KinoAPI {
   }
 
   KinoError initDevice(const char* deviceName) {
+    Serial.print(F("trying to initialize device "));
+    Serial.println(deviceName);
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
-    if (!d) return KinoError::DeviceNotReady;
+    delay(500);
+    yield();
+    if (!d) { Serial.println("device not found"); return KinoError::DeviceNotReady;}
     KinoError e = d->init();
+    Serial.println(kinoErrorToString(e));
     return e;
   }
 
@@ -267,7 +262,7 @@ namespace KinoAPI {
         if (!KinoDeviceFactory::getDeviceNameByIndex(idx, devName, sizeof(devName))) return KinoError::InternalError;
         JsonObject root = doc.to<JsonObject>();
         if (d && d->getStatusUpdate(devName, root)) {
-          Serial.print("KinoAPI::getJsonUpdates : got update from device "); Serial.println(devName);
+          //Serial.print("KinoAPI::getJsonUpdates : got update from device "); Serial.println(devName);
             lastIdx = (idx + 1) % total;
             return KinoError::OK;
         }

@@ -41,6 +41,7 @@ bool KinoDeviceFactory::initDevices() {
       continue;
     }
 
+    Serial.print(F("DeviceFactory: creating ")); Serial.print(e.className); Serial.print(F(" ")); Serial.println(e.name);
     e.device = createDeviceFromJson(e.className, d);
     if (!e.device) {
       Serial.printf("DeviceFactory: unknown class '%s'\n",
@@ -69,6 +70,8 @@ KinoDevice* KinoDeviceFactory::getDeviceByName(const char* name) {
     if (d.name == name) {
       if (!d.initOk && d.device) {
         // Lazy re-init
+        Serial.print(F("re-initializing preciously unsuccessful "));
+        Serial.println(name);
         d.initOk = (d.device->init() == KinoError::OK);
       }
       return d.device;

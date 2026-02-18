@@ -19,48 +19,6 @@ const std::vector<uint8_t>& HueScene::getLightIds() const { return _lightIds; }
 
 bool HueScene::setTT(uint16_t value) { _tt = (uint16_t)value/100; if (_tt==0) _tt=1; return true;}
 
-/*
-bool HueScene::setActive(HueBridge& bridge) {
-
-    // 1️⃣ Szene aktivieren (Group 0!)
-    StaticJsonDocument<64> doc;
-    doc["scene"] = _id;
-
-    String payload;
-    serializeJson(doc, payload);
-
-    if (!bridge.sendGroupState(0, payload))
-        return false;
-
-    // 2️⃣ Powerstates aus Szene lesen
-    std::map<uint8_t, bool> states = bridge.getScenePowerStates(_id);
-
-    // 3️⃣ Workaround für On/Off-Lampen
-    for (uint8_t id : _lightIds) {
-        HueLight* l = bridge.getLightById(id);
-        if (!l) continue;
-
-        if (!l->isDimmable()) {
-            auto it = states.find(id);
-            if (it == states.end()) continue;
-
-            StaticJsonDocument<32> lightDoc;
-            lightDoc["on"] = it->second;
-
-            String lightPayload;
-            serializeJson(lightDoc, lightPayload);
-
-            bridge.sendLightState(id, lightPayload);
-            l->forceOn(it->second);
-        }
-    }
-    // ziemlich hässlich: Alle Lampen neu einlesen, weil sich die States
-    // auf brutale Art geändert haben
-    bridge.readLights();
-    return true;
-}
-*/
-
 bool HueScene::setActive(HueBridge* bridge) {
 
     // 1️⃣ Szene aktivieren (Group 0)

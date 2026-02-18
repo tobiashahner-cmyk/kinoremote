@@ -4,13 +4,17 @@
 #include <vector>
 #include "KinoDevice.h"
 
+#define MAX_STATIONS 20
+#define MAX_DSP 20
+#define INPUTNAME_MAXLEN 20
+
 struct NetRadioTrackInfo {
-    String elapsed;                                   // aktuelle Spielzeit des Streams
-    String station;                                   // Sendername
-    String album;                                     // Album (meist leer)
-    String song;                                      // Songtitel (wie auf Radio angezeigt)
-    String albumArt;                                  // Thumbnail des Senders
-    unsigned long created;                            // Erstellungs-/Aktualisierungszeitpunkt
+  char elapsed[20];
+  char station[32];
+  char song[64];
+  unsigned long created;
+  // char album[32];
+  // char albumArt[128];
 };
 
 /*
@@ -21,17 +25,39 @@ struct InputSource {
   bool skip = false;                                  // skip=true heisst "nicht auswählbar". Liste kann in den Einstellungen des Receivers (des echten Geräts!) bearbeitet werden
 };
 */
+
+/* InputSource  V2  2026-02-16  Verzicht auf String, Konstruktor hinzugefügt (nötig wegen char) */
 struct InputSource {
   const __FlashStringHelper* key;      // Liegt im Flash (0 Byte RAM)
   const __FlashStringHelper* internal; // Liegt im Flash (0 Byte RAM)
-  String custom;                       // Nur der benutzerdefinierte Name belegt RAM
+  char custom[INPUTNAME_MAXLEN];       // Nur der benutzerdefinierte Name belegt RAM
   bool skip;
+  InputSource(const __FlashStringHelper* k, const __FlashStringHelper* i, bool s) 
+    : key(k), internal(i), skip(s) {
+    custom[0] = '\0'; // Initialisiere den Namen als leer
+  }
 };
 
 
 
 class YamahaReceiver : public KinoDevice {
   public:
+    enum DirtyBit : uint16_t {
+      NONE      = 0,
+      POWER     = 1 << 0,  // 00000001
+      VOLUME    = 1 << 1,  // 00000010
+      MUTE      = 1 << 2,  // 00000100
+      SOURCE    = 1 << 3,
+      DSP       = 1 << 4,
+      STRAIGHT  = 1 << 5,
+      ENHANCER  = 1 << 6,
+      BASS      = 1 << 7,
+      TREBLE    = 1 << 8,
+      SWTRIM    = 1 << 9,
+      TRACK     = 1 << 10, // Für Station/Song/Elapsed
+      ALL       = 0xFFFF   // Alles dirty (z.B. für ersten Connect)
+    };
+
     const char* deviceType() const override {
         return "yamahareceiver";
     }
@@ -47,46 +73,37 @@ class YamahaReceiver : public KinoDevice {
     IPAddress getIp() const;
     bool begin();
     KinoError init();
-    bool getPowerStatus() const;
     bool setPower(bool on);
-    int  getVolume() const;                           // liefert aktuelle Lautstärke für Main_Zone, als 3stelligen int. z.B.: -35.5dB ist -355
     bool setVolume(int vol);                          // setzt gewünschte Lautstärke für Main_Zone. Param als 3stelligen int. z.B. -420 für -42.0dB. -800 < param < -200
     bool setVolumeAlexa(int vol);                     // übersetzt gewählte Lautstärke von 0 < vol < 255 in gültige Lautstärke -800 < vol < -200 und setzt diese
     bool setVolumePercent(int vol);                   // übersetzt gewählte LS von 0 < vol < 100 in gültige LS -800 < vol < -200 und setzt diese
-    int  getTreble() const;                           // liefert aktuelle Treble- Einstellung von -60 bis +60, bedeutend -6.0dB bis +6.0dB
     bool setTreble(int treb);                         // setzt neue Treble. Param -60 bis +60 setzt -6.0dB bis +6.0dB
-    int  getBass() const;                             // liefert aktuelle Bass-Einstellung von -60 bis +60, entsprechend -6.0dB bis +6.0dB
     bool setBass(int bas);                            // setzt neuen Bass. Param -60 bis +60 setzt -6.0dB bis +6.0dB
-    int  getSubTrim() const;                          // liefert aktuellen Subwoofer Trim von -60 bis +60, entsprechend -6.0dB bis +6.0dB
     bool setSubwooferTrim(int val);                   // setzt neuen Subwoofer Trim. Param -60 bis +60 setzt -6.0dB bis +6.0dB
-    bool getStraight() const;                         // liefert Einstellung für "Straight"
     bool setStraight(bool onoff);                     // schaltet "Straight" ein oder aus
-    bool getEnhancer() const;                         // liefert Einstellung für "Enhancer"
-    bool setEnhancer(bool onoff);                     // schaltet "Enhancer" ein oder aus
-    String getSource() const;                         // liefert aktuelle Input-Quelle als String ("HDMI1", "HDMI2",..."NET RADIO", "AUX"...)
-    InputSource getInputSource();                     // liefert aktuelle Input-Quelle als InputSource struct
-    std::vector<InputSource> readInputSources();      // liefert eine Liste aller möglichen Input-Quellen, siehe oben
-    bool setSource(const String& srcName);            // setzt Input-Quelle. Als srcName kann jeder InputSources.internal genutzt werden (solange InputSources.skip = false)
-    String getSoundProgram() const;                   // liefert aktuellen DSP als String
-    std::vector<String> readDspNames(bool reload=false);               // liefert eine Liste aller verfügbaren DSPs
-    bool setSoundProgram(const String& dspname);      // setzt den DSP
+    bool setEnhancer(bool onoff);                     // schaltet "Enhancer" ein oder aus                         
+    
+    InputSource* getInputSource();                    // liefert aktuelle Input-Quelle als InputSource struct
+    bool readInputSources();                          // liest alle verfügbaren InputSources aus dem Receiver und speichert sie in _InputSources
+                
+    bool setSource(const char* srcName);              // setzt Input-Quelle. Als srcName kann jeder InputSources.internal genutzt werden (solange InputSources.skip = false)
+    const char* getSoundProgram() const;              // liefert aktuellen DSP als char array
+    bool setSoundProgram(const char* dspname);        // setzt den DSP
     bool getMute() const;                             // liefert aktuellen Stand des Mutings
     bool setMute(bool onoff);                         // schaltet Muting ein oder aus
     bool getStatus();                                 // liest den BasicStatus aus
-    std::vector<String> readNetRadioFavorites(bool reload=false);      // liefert eine Liste der NETRADIO- Favoriten als Strings
-    bool selectNetRadioFavorite(const String& radioname); // wählt den übergebenen NETRADIO- Favoriten aus
+    bool readNetRadioFavorites(bool reload=false);    // liest die Liste der NETRADIO- Favoriten in _stations ein
+    bool getNetRadioFavorite(size_t index, char* buf, int buflen); // gibt NETRADIO- Favoriten Nr index in buf zurück
+    bool selectNetRadioFavorite(const char* radioname); // wählt den übergebenen NETRADIO- Favoriten aus (checkt die ersten 10 Zeichen des Namens)
     NetRadioTrackInfo readCurrentlyPlayingNetRadio(); // liefert Infos über den aktuellen NETRADIO Tracks
     KinoError tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
     bool setTickInterval(int ms);                     // setzt das Intervall für tick() in Millisekunden. Erlaubt: 0 oder 2000 bis unendlich
-    int getTickInterval();                            // gibt das Intervall für tick() in Millisekunden zurück
     bool isDirty();
     void clearDirty();
     bool getStatusUpdate(const char* devName, JsonObject& root);
   private:
-    bool _dirty;
+    uint16_t _dirty = NONE;
     IPAddress _ip;
-    //WiFiClient& _client;
-    // KinoDevice:: properties
     static const KinoPropertyInfo _props[];
     // ticker
     unsigned long _tickInterval  = 0;
@@ -99,24 +116,31 @@ class YamahaReceiver : public KinoDevice {
     int  _subwooferTrim  = 0;
     bool _straight       = false;
     bool _enhancer       = false;
-    String _soundProgram = "";
-    String _source       = "";
+    char _soundProgram[32];
+    char _source[INPUTNAME_MAXLEN] = {};
     bool _mute           = false;
+    
     // Liste aller auswählbaren Sources
     std::vector<InputSource> _InputSources;
     bool _gotInputSources = false;
+    // Liste aller verfügbaren NETRADIO Favoriten
+    char _stations[MAX_STATIONS][48];
+    size_t _stationCount = 0;
+    
+    char _dsps[MAX_DSP][32];
+    size_t _dspCount;
+    bool readDspNames(bool reload=false);             // liest alle verfügbaren DSP in _dsps
+    void sanitizeDspName(char* dspname);              // Helperfunktion für readDspNames: ersetzt "_" durch " " und entfernt Leerzeichen
+    bool getDspName(size_t index, char* buf, size_t bufLen);
 
-    /*std::vector<KinoPropertyParam> getAudioParams();*/
     static const KinoPropertyParam _AudioParams[];
     size_t getAudioParamCount();
     const KinoPropertyParam* getAudioParam(size_t index);
     
-    /*std::vector<KinoPropertyParam> getInputParams(const char* inp);*/
     static const KinoPropertyParam _InputParams[];
     size_t getInputParamCount(const char* inp);
     const KinoPropertyParam* getInputParam(const char* inp, size_t index);
     
-    /*std::vector<KinoPropertyParam> getDspParams(const char* dspname);*/
     static const KinoPropertyParam _DspParams[];
     size_t getDspParamCount(const char* dspname);
     const KinoPropertyParam* getDspParam(const char* dspname, size_t index);
@@ -127,24 +151,19 @@ class YamahaReceiver : public KinoDevice {
     size_t readSanitizedUntil(Stream& s, char terminator, char* buffer, size_t maxLen);
     
     void initInputSources();                                                                // init- Helper für InputSources
-    InputSource* getInputSourceByKey(const String&keyname);
-    String readNetRadioList(WiFiClient& client);                                                              // Helper für readNetRadioFavorites()
-    bool moveToFavorites(WiFiClient& client);                                                                 // Helper für readNetRadioFavorites()
+    
+    InputSource* getInputSourceByKey(const char* keyname);
+                                                         
+    bool waitForNetRadioList(WiFiClient& client, bool keepalive);     // Helper für readNetRadioFavorites()
+    bool moveToFavorites(WiFiClient& client);                         // Helper für readNetRadioFavorites()
     bool moveToNextPage(WiFiClient& client);
-    // String sendXML ist nur noch wegen Abwärtskompatibilität hier. Das fliegt bald raus, sobald
-    // alle internen Methoden auf sendXMLRequest umgebaut sind!
-    String sendXML(WiFiClient& client, const String& xml);                                                      // Helper für das Senden von XML an den Yamaha
-    // Sendet den Request und lässt den Client am Header-Ende stehen
-    bool sendXMLRequest(WiFiClient& client,const String& xml, int len=0);
-    int extractTagInt(const String& xml, const String& tag);                                // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
-    int extractTagInt(const String& xml, const String& parent, const String& child);        // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
-    String extractTagString(const String& xml, const String& tag);                          // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
-    String extractTagString(const String& xml, const String& parent, const String& child);  // Helper für das Auslesen von Werten aus der Antwort vom Yamaha
-    bool isOk(const String& resp);                                                          // Helper für Fehlerbehandlung nach PUT-Anfragen
-    bool executeSetCommand(WiFiClient& client, const __FlashStringHelper* start, const String& val, const __FlashStringHelper* end);
+    bool sendXMLRequest(WiFiClient& client, const __FlashStringHelper* xml);
+    bool sendXMLRequest(WiFiClient& client, const char* xml);
+    bool executeSetCommand(WiFiClient& client, const __FlashStringHelper* start, const char* val, const __FlashStringHelper* end);
+    bool executeSetCommand(WiFiClient& client, const char* start, const char* val, const char* end);
+    bool executeSetCommand(WiFiClient& client, const char* start, int val, const char* end);
     void EnsureDelayBeforeRequest(unsigned long timeout);
 
-    void sanitize_to_ascii(const char* input, char* output, size_t out_size);
     // ----------------------------------------------------
     // XML Templates in PROGMEM
     // ----------------------------------------------------

@@ -7,6 +7,12 @@
 
 class OptomaBeamer : public KinoDevice {
   public:
+    enum dirtyBit : uint16_t {
+      NONE    = 0,
+      ON      = 1 << 0,
+      SOURCE  = 1 << 1,
+      UPTIME  = 1 << 2
+    };
     using InputSource = OptomaSourceLookup::InputSource;
     
     const char* deviceType() const override {
@@ -35,6 +41,7 @@ class OptomaBeamer : public KinoDevice {
     KinoError queryCount(const char* property, uint16_t& out) override;
     KinoError query(const char* property, uint16_t index, KinoVariant &out) override;
     KinoError init() override;    // wie begin, nur andere Semantik
+    bool getStatusUpdate(const char* devName, JsonObject& root) override;
   
     // Lifecycle
     bool begin();
@@ -52,7 +59,7 @@ class OptomaBeamer : public KinoDevice {
     // Setter
     bool setPower(bool onoff);
     bool setSource(InputSource src);
-    bool setSource(const String& srcName);
+    bool setSource(const char* srcName);
     bool setDisplayMode(DisplayMode dm);
     bool freeze(bool onoff);
     bool setTickInterval(int ms);
@@ -61,9 +68,8 @@ class OptomaBeamer : public KinoDevice {
     // Verbindung / Identität
     IPAddress _ip;
     uint8_t _id;
-    //WiFiClient& _client;
   
-    // Status
+    // Status refresh
     unsigned long _tickInterval  = 0;
     unsigned long _lastTick = 0;
     
@@ -71,15 +77,14 @@ class OptomaBeamer : public KinoDevice {
     InputSource _source = InputSource::Unknown;
     DisplayMode _displayMode = DisplayMode::Unknown;
     int _lampHours = 0;
+    uint16_t _dirty;
   
     // Helper
     void EnsureTimeoutBeforeRequest(unsigned long timeout);
-    bool sendCommand(const String& command,
-                     const String& parameter,
-                     String& response);
-  
-    bool isOkResponse(const String& response);
-    bool parseStatusResponse(const String& response);
-    String encodeDisplayMode(DisplayMode dm) const;
+    bool sendCommand(const char* command, const int parameter, char* response, size_t responseLen);
+    bool isOkResponse(const char* response);
+    bool parseStatusResponse(const char* response);
+    int parseFixedInt(const char* str, size_t start, size_t length);
+    uint8_t encodeDisplayMode(DisplayMode dm) const;
     static const KinoPropertyInfo _properties[];
 };

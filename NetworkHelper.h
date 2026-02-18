@@ -8,19 +8,21 @@ namespace NetworkHelper {
     inline bool resetClient(WiFiClient& c) {
       while(c.available()>0) { c.read(); yield();} // Leere den Puffer
       c.stop();
+      delay(10);
       return true;
     }
   
     // Überspringt den HTTP-Header, damit wir direkt beim XML/JSON landen
     inline bool skipHeader(WiFiClient& client) {
-        // find() ist effizient, da es nicht den ganzen Text puffert
-        client.setTimeout(1000);
-        bool ok = client.find((char*)"\r\n\r\n");
-        if (!ok) {
-          Serial.println(F("NetworkHelper::skipHeader failed"));
-        }
-        return ok;
+      // find() ist effizient, da es nicht den ganzen Text puffert
+      client.setTimeout(1000);
+      bool ok = client.find((char*)"\r\n\r\n");
+      if (!ok) {
+        Serial.println(F("NetworkHelper::skipHeader failed"));
+      }
+      return ok;
     }
+    
 
     // Liest einen Wert zwischen zwei Tags, ohne das XML zu speichern
     // Beispiel: <Val>-350</Val> -> liefert "-350"

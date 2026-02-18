@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <optional>
 #include <utility>
+#include <ArduinoJson.h>
 
 struct RgbColor {
     uint8_t r;
@@ -20,18 +21,25 @@ class HueBridge;
 
 class HueLight {
 public:
-    HueLight(uint8_t id,
-             const char* name,
-             bool on,
-             bool hasBri,
-             uint8_t bri,
-             bool hasXY,
-             float x,
-             float y,
-             bool hasCT,
-             uint16_t ct,
-             uint16_t minct,
-             uint16_t maxct);
+  enum dirtyBit : uint16_t {
+    NONE  = 0,
+    ON    = 1 << 0,
+    BRI   = 1 << 1,
+    CT    = 1 << 2,
+    COL   = 1 << 3
+  };
+  HueLight(uint8_t id,
+           const char* name,
+           bool on,
+           bool hasBri,
+           uint8_t bri,
+           bool hasXY,
+           float x,
+           float y,
+           bool hasCT,
+           uint16_t ct,
+           uint16_t minct,
+           uint16_t maxct);
 
     bool isDirty();
     void clearDirty();
@@ -74,9 +82,10 @@ public:
     void updateValues(const char* name, bool on, bool hasBri, uint8_t bri, bool hasXY, float x, float y, bool hasCT, uint16_t ct, uint16_t minct, uint16_t maxct);
     // --- Änderungen anwenden ---
     bool applyChanges(HueBridge* bridge);
+    bool getStatusUpdate(JsonObject& root);
 
 private:
-    bool _dirty;
+    uint16_t _dirty = NONE;
     uint8_t _id;
     char _name[32];
 

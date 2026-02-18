@@ -22,7 +22,8 @@ public:
     JsonObjectConst getState() const;
 
     // Schreiben (nur für CLIPGenericStatus)
-    bool setValue(const String& key, int value);
+    //bool setValue(const String& key, int value);
+    bool setValue(const char* key, int value);
 
     // intern
     void updateState(const JsonObject& state);

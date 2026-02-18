@@ -29,6 +29,7 @@ bool KinoMacroEngine::isReady() const {
 // execution
 // --------------------------------------------------
 
+/*
 bool KinoMacroEngine::startMacro(const String& name, MacroFinishedCallback cb) {
   if (runtime.running) {
     _addError(0, "runtime", "macro already running");
@@ -48,10 +49,39 @@ bool KinoMacroEngine::startMacro(const String& name, MacroFinishedCallback cb) {
   _currentMacroName = name;
   return true;
 }
+*/
 
+bool KinoMacroEngine::startMacro(const char* mName, MacroFinishedCallback cb) {
+  if (runtime.running) {
+    _addError(0, "runtime", "macroEngine busy");
+    return false;
+  }
+  char path[48];
+  getMacroPath(mName, path, sizeof(path));
+  File f = LittleFS.open(path, "r");
+  if (!f) {
+    _addError(0, "FS", "could not open macro file");
+    return false;
+  }
+  _clearErrors();
+  runtime.file = f;
+  runtime.line = 1;
+  runtime.running = true;
+  runtime.testing = true;
+  _onFinished = cb;
+  strlcpy(_currentMacroName, mName, sizeof(_currentMacroName));
+  return true;
+}
 
+/*
 bool KinoMacroEngine::testMacro(const String& name, MacroFinishedCallback cb) {
   if (!startMacro(name, cb)) return false;
+  runtime.testing = true;
+  return true;
+}
+*/
+bool KinoMacroEngine::testMacro(const char* mName, MacroFinishedCallback cb) {
+  if (!startMacro(mName, cb)) return false;
   runtime.testing = true;
   return true;
 }
@@ -71,15 +101,26 @@ void KinoMacroEngine::tick() {
       _onFinished(_errors.empty());
       _onFinished = nullptr;
     }
-    _currentMacroName = "";
+    //_currentMacroName[0] = '\0';
+    memset(_currentMacroName, 0, sizeof(_currentMacroName));
     return;
   }
+  /*
   String line = runtime.file.readStringUntil('\n');
   line.trim();
   if (line.isEmpty()) {
     runtime.line++;
     return;
+  }*/
+  char line[256];
+  int bytesRead = runtime.file.readBytesUntil('\n', line, sizeof(line)-1);
+  line[bytesRead] = '\0';
+  if (bytesRead > 0 && line[bytesRead-1] == '\r') line[bytesRead-1] = '\0';
+  if (strlen(line)==0) {
+    runtime.line++;
+    return;
   }
+  
   DynamicJsonDocument actionDoc(1024);
   DeserializationError err = deserializeJson(actionDoc, line);
   if (err) {
@@ -102,8 +143,13 @@ bool KinoMacroEngine::isRunning() const {
   return runtime.running;
 }
 
+/*
 String KinoMacroEngine::getName() const {
   return _currentMacroName;
+}
+*/
+void KinoMacroEngine::getName(char* out, size_t outLen) {
+  strlcpy(out, _currentMacroName, outLen);
 }
 
 // --------------------------------------------------
@@ -130,7 +176,7 @@ bool KinoMacroEngine::_executeAction(const JsonObject& a, uint16_t index) {
 // --------------------------------------------------
 // macro manipulation (line based)
 // --------------------------------------------------
-
+/*
 bool KinoMacroEngine::getMacroLines(const String& macroName, std::vector<String>& outLines) {
   _clearErrors();
   outLines.clear();
@@ -152,7 +198,14 @@ bool KinoMacroEngine::getMacroLines(const String& macroName, std::vector<String>
   f.close();
   return true;
  }
+ */
+size_t KinoMacroEngine::getMacroLineCount(const char* macroName) {
+  char path[48];
+  getMacroPath(macroName, path, sizeof(path));
+  return FileHelper::countLines(path);
+}
 
+/*
 bool KinoMacroEngine::getMacroLineCount(const String& macroName, size_t& out) {
   File f = LittleFS.open(_macroPath(macroName), "r");
   if (!f) {out = 0; return false;}
@@ -165,7 +218,9 @@ bool KinoMacroEngine::getMacroLineCount(const String& macroName, size_t& out) {
   out = linecount;
   return true;
 }
+*/
 
+/*
 bool KinoMacroEngine::getMacroLineByIndex(const String& macroName, size_t index, String& out) {
   File f = LittleFS.open(_macroPath(macroName), "r");
   if (!f) { Serial.println("no file handle"); out = ""; return false; }
@@ -182,20 +237,11 @@ bool KinoMacroEngine::getMacroLineByIndex(const String& macroName, size_t index,
   f.close();
   out = "";
   return false;
-}
-
-/*
-std::vector<String> KinoMacroEngine::getAvailableMacroCommands() {
-  std::vector<String> commands;
-  commands.push_back("set");
-  commands.push_back("delay");
-  return commands;
 }*/
-
-std::vector<const char*> KinoMacroEngine::getAvailableMacroCommands() {
-  // Wir geben nur Pointer auf statische Strings zurück. 
-  // Diese liegen im Flash und belegen keinen Heap/Stack für Kopien.
-  return { "set", "delay" }; 
+bool KinoMacroEngine::getMacroLineByIndex(const char* macroName, size_t index, char* out, size_t outLen) {
+  char path[48];
+  getMacroPath(macroName, path, sizeof(path));
+  return FileHelper::readLineAt(path, index, out, outLen);
 }
 
 size_t KinoMacroEngine::getMacroCommandCount() {
@@ -213,6 +259,7 @@ bool KinoMacroEngine::getMacroCommand(size_t index, char* out, size_t outLen) {
   return true;
 }
 
+/*
 bool KinoMacroEngine::addCommand(const String& macroName, size_t index, const String& jsonAction) {
   String src = _macroPath(macroName);
   String tmp = src + ".tmp";
@@ -242,7 +289,65 @@ bool KinoMacroEngine::addCommand(const String& macroName, size_t index, const St
   LittleFS.rename(tmp, src);
   return true;
 }
+*/
+bool KinoMacroEngine::addCommand(const char* macroName, size_t index, const char* jsonAction) {
+  char src[48];
+  char tmp[48];
+  
+  getMacroPath(macroName, src, sizeof(src));
+  snprintf(tmp, sizeof(tmp), "%s.tmp", src);
+  
+  File in = LittleFS.open(src, "r");
+  if (!in) return false;
+  File out = LittleFS.open(tmp, "w");
+  if (!out) {
+    in.close();
+    return false;
+  }
+  
+  size_t line = 1;
+  bool inserted = false;
+  char tmpLine[256]; // Ausreichend für ein JSON aus prepareMacroJsonString
+  bool hasError = false;
+  
+  while (in.available()) {
+    int bytesRead = in.readBytesUntil('\n', tmpLine, sizeof(tmpLine) - 1);
+    tmpLine[bytesRead] = '\0'; // Korrekte Null-Terminierung
 
+    // Hatten bis '\n' gelesen, davor war evtl '\r'
+    if (bytesRead > 0 && tmpLine[bytesRead - 1] == '\r') {
+      tmpLine[bytesRead - 1] = '\0';
+    }
+
+    if (line == index) {
+      if (out.println(jsonAction) == 0) hasError = true;
+      inserted = true;
+    }
+
+    if (out.println(tmpLine) == 0) hasError = true;
+    
+    line++;
+    if (hasError) break;
+  }
+
+  // Falls der Index größer war als die Datei lang ist
+  if (!inserted && !hasError) {
+    if (out.println(jsonAction) == 0) hasError = true;
+  }
+  
+  in.close();
+  out.close();
+
+  if (hasError) {
+    LittleFS.remove(tmp);
+    return false;
+  }
+
+  LittleFS.remove(src);
+  return LittleFS.rename(tmp, src);
+}
+
+/*
 bool KinoMacroEngine::deleteCommand(const String& macroName, size_t index) {
   String src = _macroPath(macroName);
   String tmp = src + ".tmp";
@@ -264,7 +369,49 @@ bool KinoMacroEngine::deleteCommand(const String& macroName, size_t index) {
   LittleFS.rename(tmp, src);
   return true;
 }
+*/
+bool KinoMacroEngine::deleteCommand(const char* macroName, size_t index) {
+  char src[48];
+  getMacroPath(macroName, src, sizeof(src));
+  char tmp[54];
+  snprintf(tmp, sizeof(tmp), "%s.tmp", src);
+  
+  File in = LittleFS.open(src, "r");
+  if (!in) return false;
+  File out = LittleFS.open(tmp, "w");
+  if (!out) {
+    in.close();
+    return false;
+  }
 
+  char tmpLine[256];
+  bool hasError = false;
+  size_t line = 1;
+  while (in.available()) {
+    int bytesRead = in.readBytesUntil('\n', tmpLine, sizeof(tmpLine) - 1);
+    tmpLine[bytesRead] = '\0';
+
+    if (bytesRead > 0 && tmpLine[bytesRead - 1] == '\r') {
+      tmpLine[bytesRead - 1] = '\0';
+    }
+    if (line != index) {
+      if (out.println(tmpLine)==0) hasError = true;
+    }
+    if (hasError) break;
+    line++;
+  }
+  
+  in.close();
+  out.close();
+  if (hasError) {
+    LittleFS.remove(tmp);
+    return false;
+  }
+  LittleFS.remove(src);
+  return LittleFS.rename(tmp, src);
+}
+
+/*
 bool KinoMacroEngine::updateCommand(const String& macroName,
                                     size_t index,
                                     const String& jsonAction) {
@@ -309,7 +456,65 @@ bool KinoMacroEngine::updateCommand(const String& macroName,
   LittleFS.rename(tmp, src);
   return true;
 }
+*/
 
+bool KinoMacroEngine::updateCommand(const char* macroName, size_t index, const char* jsonAction) {
+  char src[48];
+  char tmp[54];
+  getMacroPath(macroName, src, sizeof(src));
+  snprintf(tmp, sizeof(tmp), "%s.tmp", src);
+
+  File in = LittleFS.open(src, "r");
+  if (!in) {
+    Serial.print(F("KinoMacroEngine::updateCommand : Could not open source file "));
+    Serial.println(src);
+    return false;
+  }
+  File out = LittleFS.open(tmp, "w");
+  if (!out) {
+    in.close();
+    Serial.print(F("KinoMacroEngine::updateCommand : Could not open temp file "));
+    Serial.println(tmp);
+    return false;
+  }
+
+  size_t line = 1;
+  bool replaced = false;
+
+  char tmpLine[256];
+  bool hasError = false;
+  while (in.available()) {
+    int bytesRead = in.readBytesUntil('\n', tmpLine, sizeof(tmpLine) - 1);
+    tmpLine[bytesRead] = '\0';
+
+    if (bytesRead > 0 && tmpLine[bytesRead - 1] == '\r') {
+      tmpLine[bytesRead - 1] = '\0';
+    }
+    if (line == index) {
+      if (out.println(jsonAction)==0) hasError = true;
+      replaced = true;
+    } else {
+      if (out.println(tmpLine)==0) hasError = true;
+    }
+    if (hasError) break;
+    line++;
+  }
+
+  in.close();
+  out.close();
+
+  if (!replaced || hasError) {
+    Serial.println("KinoMacroEngine::updateCommand(): Did not replace anything");
+    LittleFS.remove(tmp);
+    return false;
+  }
+
+  LittleFS.remove(src);
+  LittleFS.rename(tmp, src);
+  return true;
+}
+
+/*
 bool KinoMacroEngine::createMacro(const String& name) {
   String path = _macroPath(name);
   if (LittleFS.exists(path)) return false;
@@ -318,7 +523,23 @@ bool KinoMacroEngine::createMacro(const String& name) {
   f.close();
   return true;
 }
+*/
 
+bool KinoMacroEngine::createMacro(const char* mName) {
+  char path[48];
+  getMacroPath(mName, path, sizeof(path));
+  if (LittleFS.exists(path)) {
+    Serial.println(F("Macro already exists"));
+    Serial.println(path);
+    return false;
+  }
+  File f = LittleFS.open(path, "w");
+  if (!f) return false;
+  f.close();
+  return true;
+}
+
+/*
 bool KinoMacroEngine::addOrUpdateMacro(const String& json) {
   DynamicJsonDocument doc(512);
   if (deserializeJson(doc, json)) return false;
@@ -335,25 +556,69 @@ bool KinoMacroEngine::addOrUpdateMacro(const String& json) {
   f.close();
   return true;
 }
+*/
 
+bool KinoMacroEngine::addOrUpdateMacro(const char* json) {
+  DynamicJsonDocument doc(512);
+  if (!deserializeJson(doc, json)) return false;
+  if (!doc.containsKey("name") || !doc.containsKey("actions")) return false;
+
+  const char* mName = doc["name"].as<const char*>();
+  char path[48];
+  getMacroPath(mName, path, sizeof(path));
+  File f = LittleFS.open(path, "w");
+  if (!f) {
+    Serial.print(F("KinoMacroEnging::addOrUpdateMacro : could not open file "));
+    Serial.println(path);
+    return false;
+  }
+  for (JsonObject a : doc["actions"].as<JsonArray>()) {
+    serializeJson(a, f);
+    f.println();
+  }
+  f.close();
+  return true;
+}
+
+/*
 bool KinoMacroEngine::deleteMacro(const String& macroName) {
   String path = _macroPath(macroName);
   if (!LittleFS.exists(path)) return false;
   return LittleFS.remove(path);
 }
+*/
 
+bool KinoMacroEngine::deleteMacro(const char* macroName) {
+  char path[48];
+  getMacroPath(macroName, path, sizeof(path));
+  if (!LittleFS.exists(path)) {
+    Serial.print(F("File does not exist: "));
+    Serial.println(path);
+    return false;
+  }
+  return LittleFS.remove(path);
+}
+
+/*
 bool KinoMacroEngine::renameMacro(const String& oldName,const String& newName) {
   String onm = _macroPath(oldName);
   String nnm = _macroPath(newName);
   if (nnm.length() > 31) return false;
   return LittleFS.rename(onm, nnm);
 }
+*/
 
-std::vector<String> KinoMacroEngine::listMacros() {
-  std::vector<String> names;
-  Dir dir = LittleFS.openDir("/macros");
-  while (dir.next()) names.push_back(dir.fileName());
-  return names;
+bool KinoMacroEngine::renameMacro(const char* oldName, const char* newName) {
+  char oldPath[48];
+  char newPath[48];
+  getMacroPath(oldName, oldPath, sizeof(oldPath));
+  getMacroPath(newName, newPath, sizeof(newPath));
+  if (strlen(newPath)>31) {
+    Serial.print(F("new path is too long for file system (max 32 chars): "));
+    Serial.println(newPath);
+    return false;
+  }
+  return LittleFS.rename(oldPath, newPath);
 }
 
 size_t KinoMacroEngine::getMacroCount() {
@@ -362,7 +627,7 @@ size_t KinoMacroEngine::getMacroCount() {
   while (dir.next()) ct++;
   return ct;
 }
-
+/*
 String KinoMacroEngine::getMacroName(size_t index) {
   size_t ct = 0;
   String mname = "";
@@ -376,14 +641,59 @@ String KinoMacroEngine::getMacroName(size_t index) {
   }
   mname.replace(".macro","");
   return mname;
+}*/
+
+KinoError KinoMacroEngine::getMacroNameByIndex(size_t index, KinoVariant& out) {
+  size_t ct = 0;
+  bool found = false;
+  char mname[32];
+  Dir dir = LittleFS.openDir("/macros");
+
+  while (dir.next()) {
+    if (ct == index) {
+      // fileName() liefert leider einen String, den wir sofort in unseren Buffer kopieren
+      strncpy(mname, dir.fileName().c_str(), sizeof(mname)-1);
+      mname[sizeof(mname)-1] = '\0'; // Sicher terminieren
+      found = true;
+      break;
+    }
+    ct++;
+  }
+
+  if (found) {
+    // Entspricht mname.replace(".macro", "");
+    // Wir suchen den Punkt der Dateiendung
+    char* dot = strstr(mname, ".macro");
+    if (dot) {
+      *dot = '\0'; // Wir setzen den Null-Terminator einfach auf die Position des Punktes
+    }
+    out.setString(mname);
+    return KinoError::OK;
+  }
+  out.setNone();
+  return KinoError::OutOfRange;
 }
 
+/*
 size_t KinoMacroEngine::getMacroIndex(const String& macroName) {
   String cmp = macroName+String(".macro");
   size_t index = -1;
   Dir dir = LittleFS.openDir("/macros");
   while(dir.next()) {
     if (cmp == dir.fileName()) return (index+1);
+    index++;
+  }
+  return index;
+}
+*/
+
+size_t KinoMacroEngine::getMacroIndex(const char* mName) {
+  char cmpPath[48];
+  getMacroPath(mName, cmpPath, sizeof(cmpPath));
+  size_t index = -1;
+  Dir dir = LittleFS.openDir("/macros");
+  while(dir.next()) {
+    if (strcmp(dir.fileName().c_str(), cmpPath)==0) return (index+1);
     index++;
   }
   return index;
@@ -421,4 +731,8 @@ void KinoMacroEngine::_addError(uint16_t index, const String& cmd, const String&
 
 String KinoMacroEngine::_macroPath(const String& name) const {
   return "/macros/" + name + ".macro";
+}
+
+void KinoMacroEngine::getMacroPath(const char* macroName, char* out, size_t outLen) {
+  snprintf(out, outLen, "/macros/%s.macro", macroName);
 }

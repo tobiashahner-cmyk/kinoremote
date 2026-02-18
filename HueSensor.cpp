@@ -47,11 +47,10 @@ JsonObjectConst HueSensor::getState() const {
 }
 
 bool HueSensor::isWritable() const {
-    //return _type == "CLIPGenericStatus";
     return (strcmp(_type, "CLIPGenericStatus")==0);
 }
 
-bool HueSensor::setValue(const String& key, int value) {
+bool HueSensor::setValue(const char* key, int value) {
     if (!isWritable()) return false;
     _pending[key] = value;
     return true;

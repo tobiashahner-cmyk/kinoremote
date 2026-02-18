@@ -31,34 +31,9 @@ size_t FileHelper::countLines(const char* path) {
   return count;
 }
 
-// deprecated: char* version below!
-bool FileHelper::readLineAt(const char* path, size_t index, String& out) {
-  if (!_ready) begin();
-  File f = LittleFS.open(path, "r");
-  if (!f) return false;
-
-  size_t current = 0;
-  out = "";
-
-  while (f.available()) {
-    String line = f.readStringUntil('\n');
-    if (current == index) {
-      line.trim();
-      out = line;
-      f.close();
-      return true;
-    }
-    current++;
-  }
-
-  f.close();
-  return false;
-}
-
 // Bestimmte Zeile (0-basiert) lesen
 bool FileHelper::readLineAt(const char* path, size_t index, char* out, size_t outLen) {
   if (!_ready) begin();
-  //File f = [LittleFS.open](https://arduino-esp8266.readthedocs.io)(path, "r");
   File f = LittleFS.open(path, "r");
   if (!f) return false;
 
@@ -85,26 +60,12 @@ bool FileHelper::readLineAt(const char* path, size_t index, char* out, size_t ou
   return found;
 }
 
-// Eine Zeile anhängen (newline wird automatisch ergänzt)
-bool FileHelper::writeLine(const char* path, const String& line) {
+bool FileHelper::writeLine(const char* path, const char* line) {
   if (!_ready) begin();
   File f = LittleFS.open(path, "a");
   if (!f) return false;
 
   f.println(line);
-  f.close();
-  return true;
-}
-
-// Datei komplett überschreiben (praktisch für Refresh)
-bool FileHelper::writeAllLines(const char* path, const std::vector<String>& lines) {
-  if (!_ready) begin();
-  File f = LittleFS.open(path, "w");
-  if (!f) return false;
-
-  for (const auto& l : lines) {
-    f.println(l);
-  }
   f.close();
   return true;
 }

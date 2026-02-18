@@ -39,6 +39,7 @@ public:
     bool needsCommit() override;
     bool commit() override;
     KinoError init() override;    // wie begin, nur andere Semantik
+    bool getStatusUpdate(const char* devName, JsonObject& root) override;
 
 
     // Initialisierung
@@ -54,7 +55,6 @@ public:
     KinoError tick();
     int getTickInterval();
     bool setTickInterval(int ms);
-    bool getStatusUpdate(const char* devName, JsonObject& root) override;
 
     // Lights
     bool readLights();
@@ -95,7 +95,6 @@ public:
 private:
     IPAddress _ip;
     char _user[64];
-    //WiFiClient& _client;
     std::vector<HueLight*> _lights;
     std::vector<HueGroup*> _groups;
     std::vector<HueScene*> _scenes;
@@ -107,9 +106,6 @@ private:
     
     // getter und setter - helper    
     bool splitPath(const char* input, char* dev, size_t devLen, char* name, size_t nameLen, char* act, size_t actLen);
-    std::vector<String> getLightParams(const HueLight* l);
-    std::vector<String> getGroupParams(const HueGroup* g);
-    std::vector<String> getSensorParams(const HueSensor* s);
 
     // read* helper
     void updateOrAddLight(int id, JsonVariant doc);
@@ -122,7 +118,6 @@ private:
     bool findNextKey(WiFiClient& client, char* out, size_t outSize, bool numericOnly);
     size_t _globalDepth;
     // HTTP helper
-    bool httpError(WiFiClient& client, const char* cause);
     bool waitForData(WiFiClient& client, uint32_t timeout = 2000);
     bool skipHttpHeader();
     bool httpGET(WiFiClient& client, const char* path);

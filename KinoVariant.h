@@ -32,17 +32,23 @@ struct KinoVariant {
     }
   }
 
+/*
   KinoVariant(const KinoVariant& other) {
+    *this = other;
+  }
+*/
+  KinoVariant(const KinoVariant& other) : type(NONE), s(nullptr) {
     *this = other;
   }
 
   KinoVariant& operator=(const KinoVariant& other) {
     if (this == &other) return *this;
 
-    if (type == STRING && s) {
+    /*if (type == STRING && s) {
       free(s);
       s = nullptr;
-    }
+    }*/
+    prepareSet();
 
     type = other.type;
 
@@ -140,6 +146,24 @@ struct KinoVariant {
     prepareSet();
     type = STRING;
     s = v ? strdup(v) : nullptr;
+  }
+
+  void setString(const __FlashStringHelper* f) {
+    prepareSet();
+    if (!f) {
+        s = nullptr;
+        return;
+    }
+    
+    type = STRING;
+    PGM_P p = reinterpret_cast<PGM_P>(f);
+    size_t len = strlen_P(p);
+    
+    // Speicher reservieren (+1 für \0)
+    s = (char*)malloc(len + 1);
+    if (s) {
+        strcpy_P(s, p); // Direkt vom Flash in den neuen RAM-Speicher kopieren
+    }
   }
 
   void setInt(int32_t v) {

@@ -7,6 +7,12 @@
 
 class HyperionDevice : public KinoDevice {
 public:
+    enum diryBit : uint16_t {
+      NONE  = 0,
+      ON    = 1 << 0,
+      LIVE  = 1 << 1
+    };
+    
     const char* deviceType() const override {
         return "hyperion";
     }
@@ -26,6 +32,7 @@ public:
   KinoError set(const char* property, const KinoVariant& value) override;
   
   KinoError init() override;  // wie begin, nur andere Semantik
+  bool getStatusUpdate(const char* devName, JsonObject& root) override;
 
   // ===== Public API =====
   bool begin();
@@ -48,6 +55,7 @@ private:
 
   bool _powerStatus = false;
   bool _ledDeviceStatus = false;
+  uint16_t _dirty;
 
   int  _tickInterval  = 0;
   unsigned long _lastTick = 0;
@@ -58,14 +66,8 @@ private:
 
   // ===== JSON-RPC / HTTP Helper =====
   void EnsureTimeoutBeforeRequest(unsigned long timeout);
-  //bool sendJsonRpc(const JsonDocument& request, String& response);
   bool sendJsonRpc(const JsonDocument& request);
-  //bool parseServerInfo(const String& json);
 
-  //bool parseComponents(const String& jsonArray);
-  //bool readComponentsArray(WiFiClient& client, String& out);
-
-  //bool httpPOST(const char* path, const String& payload, String& response);
   bool httpPOST(const char* path, const JsonDocument& request);
   bool waitForClientData(WiFiClient& client);
   bool parseComponentsFromStream(WiFiClient& client);
