@@ -689,14 +689,14 @@ size_t KinoMacroEngine::getMacroIndex(const String& macroName) {
 
 size_t KinoMacroEngine::getMacroIndex(const char* mName) {
   char cmpPath[48];
-  getMacroPath(mName, cmpPath, sizeof(cmpPath));
-  size_t index = -1;
-  Dir dir = LittleFS.openDir("/macros");
+  snprintf(cmpPath, sizeof(cmpPath), "%s.macro", mName);
+  size_t index = 0;
+  Dir dir = LittleFS.openDir(F("/macros"));
   while(dir.next()) {
-    if (strcmp(dir.fileName().c_str(), cmpPath)==0) return (index+1);
+    if (strcmp(dir.fileName().c_str(), cmpPath)==0) return index;
     index++;
   }
-  return index;
+  return (size_t)-1;
 }
 
 

@@ -9,10 +9,7 @@ namespace KinoAPI {
   KinoError getMacroNameByIndex(size_t index, KinoVariant& out);
   KinoError getMacroIndexByName(const char* macroName, size_t& out);
   size_t getMacroLineCount(const char* macroName);
-  //KinoError getMacroLineByIndex(const String& macroName, size_t index, String& out);
   KinoError getMacroLineByIndex(const char* macroName, size_t index, char* buf, size_t bufLen);
-  //std::vector<String> getAvailableMacroCommands();
-  //std::vector<const char*> getAvailableMacroCommands();
   size_t getMacroCommandCount();
   KinoError getMacroCommand(size_t index, char* out, size_t outLen);
   bool startMacroEngine();
@@ -24,8 +21,6 @@ namespace KinoAPI {
   bool addOrUpdateMacro(const char* json);
   bool deleteMacro(const char* macroName);
   bool renameMacro(const char* oldName, const char* newName);
-  //std::vector<String> listMacros();
-  //bool getMacroLines(const String& macroName, std::vector<String>& lines);
   bool prepareMacroJsonString(const char* cmd, const char* devName, const char* action, const KinoVariant& value, char* json, size_t jsonLen);
   bool addMacroCommand(const char* macroName, size_t index, const char* jsonActionElement);
   bool addMacroCommand(const char* macroName, size_t index, const char* cmd, const char* deviceName, const char* action, const KinoVariant& value);

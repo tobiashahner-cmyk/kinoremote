@@ -33,7 +33,7 @@ namespace KinoAPI {
 
   KinoError getMacroIndexByName(const char* macroName, size_t& out) {
     out = macroEngine.getMacroIndex(macroName);
-    if (out >= 0) return KinoError::OK;
+    if (out != (size_t)-1) return KinoError::OK;
     return KinoError::OutOfRange;
   }
 

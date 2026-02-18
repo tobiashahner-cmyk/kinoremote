@@ -37,7 +37,6 @@ bool testMacro(const char* name, MacroFinishedCallback cb=nullptr);
 void tick();
 bool isRunning() const;
 bool isPausing() const { return _pausing; }
-//String getName() const;
 void getName(char* out, size_t outLen);
 
 // macro management
@@ -55,10 +54,7 @@ bool deleteMacro(const char* macroName);
 bool renameMacro(const char* oldName,const char* newName);
 
 // line based API (unchanged externally)
-//bool getMacroLines(const String& macroName, std::vector<String>& outLines);
-//bool getMacroLineCount(const String& macroName, size_t& out);
 size_t getMacroLineCount(const char* macroName);
-//bool getMacroLineByIndex(const String& macroName, size_t index, String& out);
 bool getMacroLineByIndex(const char* macroName, size_t index, char* out, size_t outLen);
 bool addCommand(const char* macroName, size_t index, const char* jsonActionElement); // 1-based
 bool deleteCommand(const char* macroName, size_t index); // 1-based
