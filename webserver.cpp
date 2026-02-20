@@ -54,13 +54,11 @@ void handleJS() {
 void loop() {
   _socket.loop();
   _server.handleClient();
-  //StaticJsonDocument<512> pushJson;
   _parseContainer.clear();
   if (!WSConnected) return;
   if (KinoAPI::getJsonUpdates(_parseContainer) == KinoError::OK) {
     char buf[512];
     serializeJson(_parseContainer, buf);
-    //Serial.println(buf);
     delay(10);
     _socket.broadcastTXT(buf);
   }
@@ -85,9 +83,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 }
 
 void handle404() {
-  std::vector<String> deviceNames = KinoAPI::getDeviceNames();
-  for (String dev : deviceNames) {
-    if (_server.uri().substring(1) == dev) {
+  size_t devCount = 0;
+  KinoError e = KinoAPI::getDeviceCount(devCount);
+  KinoVariant dev;
+  for (int i=0; i<devCount; i++) {
+    KinoAPI::getDeviceName(i, dev);
+    if (_server.uri().substring(1) == dev.c_str()) {
       handleDevice(dev.c_str());
       return;
     }
@@ -108,16 +109,15 @@ void handleCmd() {
   if (!_server.hasArg("v")) ok = false;
   // first, check if "dev" is "macro"
   if ((ok)&&(_server.arg("dev")=="macro")) {
-    String macroName = _server.arg("f");
-    macroName.replace("run/","");
-    bool err = KinoAPI::executeMacro(macroName.c_str());
+    if (_server.arg("f").length() < 4) { _server.send(200, "text/plain", "Fehler"); return; }
+    bool err = KinoAPI::executeMacro(_server.arg("f").c_str()+4); // überspringe die ersten 4 Zeichen, also "run/"
     Serial.println((err)?F("Makro gestartet"):F("Fehler beim Starten des Makros"));
     _server.send(200, "text/plain", (err)?"OK":"Fehler");
     return;
   }
   if(ok) {
     KinoVariant value = KinoVariant::fromString(_server.arg("v").c_str());
-    Serial.print(F("setting ")); Serial.print(_server.arg("dev")); Serial.print(F(".")); Serial.print(_server.arg("f")); Serial.print(F(" to ")); Serial.println(value.toString());
+    Serial.print(F("setting ")); Serial.print(_server.arg("dev")); Serial.print(F(".")); Serial.print(_server.arg("f")); Serial.print(F(" to ")); Serial.println(value.c_str());
     KinoError err = KinoAPI::setProperty(_server.arg("dev").c_str(), _server.arg("f").c_str(), value);
     Serial.println(kinoErrorToString(err));
     _server.send(200, "text/plain", kinoErrorToString(err));
@@ -136,7 +136,7 @@ void handleRoot() {
   size_t devCount;
   err = KinoAPI::getDeviceCount(devCount);
   char cardName[32];
-  snprintf(cardName, 32, "%d Ger&auml;te", devCount);
+  snprintf(cardName, sizeof(cardName), "%d Ger&auml;te", devCount);
   cardName[31] = '\0';
   groupCardStart("devices",cardName);
   KinoVariant devName;
@@ -155,29 +155,30 @@ void handleRoot() {
 }
 
 void handleMacroRename() {
+  bool POSTOK = true;
   int macroIndex = _server.arg("macronr").toInt();
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(macroIndex, mName);
-  String macroName; macroName.reserve(32);
-  macroName = mName.toString();
-  macroName.replace(".macro","");
-  bool POSTOK = true;
-  if (macroName == "") POSTOK = false;
-  String newName; newName.reserve(32);
-  newName = "";
-  if (_server.hasArg("newname")) newName = _server.arg("newname");
-  if (newName == "") POSTOK = false;
+  if (err != KinoError::OK) POSTOK = false;
+  char* rawS = mName.s;
+  char* fileEnding = strstr(rawS, ".macro");
+  if (fileEnding) *fileEnding = '\0';
+  if (strlen(rawS)==0) POSTOK = false;
+  
+  if (!_server.hasArg("newname") || strlen(_server.arg("newname").c_str())==0) POSTOK = false; 
   bool ok = false;
   if (POSTOK) {
-    ok = KinoAPI::renameMacro(macroName.c_str(), newName.c_str());
+    ok = KinoAPI::renameMacro(mName.c_str(), _server.arg("newname").c_str());
   }
   if (ok) {
     size_t newMacroIndex;
-    err = KinoAPI::getMacroIndexByName(newName.c_str(), newMacroIndex);
+    err = KinoAPI::getMacroIndexByName(_server.arg("newname").c_str(), newMacroIndex);
+    char indexbuf[12];
+    snprintf(indexbuf, sizeof(indexbuf), "%d", newMacroIndex);
     pageStart("Erfolg");
     _server.sendContent(F("<div class='card'><h2>Makro wurde umbenannt</h2>"));
     _server.sendContent(F("<p><a href='/macroEdit?m="));
-    _server.sendContent(String(newMacroIndex));
+    _server.sendContent(indexbuf);
     _server.sendContent(F("'>zur&uuml;ck zum Makro</a></p></div>"));
   } else {
     pageStart("Fehler!");
@@ -185,14 +186,14 @@ void handleMacroRename() {
       _server.sendContent(F("<div class='card'><h2>Filesystem meldet Fehler</h2>"));
       _server.sendContent(F("<p>Checken Sie den Dateinamen und versuchen Sie es erneut.<br>(Vielleicht zu lang?)</p>"));
       _server.sendContent(F("<p><a href='/macroEdit?m="));
-      _server.sendContent(_server.arg("macronr"));
+      _server.sendContent(_server.arg("macronr").c_str());
       _server.sendContent(F("#ma'>zur&uuml;ck zum Makro</a></p></div>"));
     } else {
       _server.sendContent(F("<div class='card'><h2>Probleme mit den Parametern</h2>"));
-      if (macroName == "")  _server.sendContent(F("<p>Makro wurde nicht gefunden.</p>"));
-      if (newName == "")    _server.sendContent(F("<p>Der Name darf nicht leer sein.</p>"));
+      if (strlen(rawS)==0)  _server.sendContent(F("<p>Makro wurde nicht gefunden.</p>"));
+      if (strlen(_server.arg("newname").c_str())==0) _server.sendContent(F("<p>Der Name darf nicht leer sein.</p>"));
       _server.sendContent(F("<p><a href='/macroEdit?m="));
-      _server.sendContent(_server.arg("macronr"));
+      _server.sendContent(_server.arg("macronr").c_str());
       _server.sendContent(F("#ma'>zur&uuml;ck zum Makro</a></p>"));
     }
   }
@@ -201,31 +202,32 @@ void handleMacroRename() {
 }
 
 void handleMacroDelete() {
+  bool POSTOK = true;
   int macroIndex = _server.arg("macronr").toInt();
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(macroIndex, mName);
-  String macroName; macroName.reserve(32);
-  macroName = mName.toString();
-  macroName.replace(".macro","");
-  bool POSTOK = true;
-  if (macroName == "") POSTOK = false;
-
+  if (err != KinoError::OK) POSTOK = false;
+  char* macroName = mName.s;
+  char* fileEnding = strstr(macroName, ".macro");
+  if (fileEnding) *fileEnding = '\0';
+  if (strlen(macroName)==0) POSTOK = false;
+  
   if (POSTOK && !_server.hasArg("confirm")) {
     pageStart("Wirklich?");
     _server.sendContent(F("<div class='card'><p>Soll der Makro "));
     _server.sendContent(macroName);
     _server.sendContent(F(" wirklich gel&ouml;scht werden?</p></div>"));
     _server.sendContent(F("<div class='card'><form action='' method='POST'><input type='hidden' name='macronr' value='"));
-    _server.sendContent(_server.arg("macronr"));
+    _server.sendContent(_server.arg("macronr").c_str());
     _server.sendContent(F("'><button class='btn' name='confirm' value='1'>L&ouml;schen</button><form><div>"));
     _server.sendContent(F("<div class='card'><p><a class='btn' href='/macroEdit?m="));
-    _server.sendContent(_server.arg("macronr"));
+    _server.sendContent(_server.arg("macronr").c_str());
     _server.sendContent(F("'>zur&uuml;ck zum Makro</a></p><p><a class='btn' href='/'>zur&uuml;ck zur Startseite</a></p></div>"));
     pageEnd();
     return;
   }
   if (POSTOK && _server.hasArg("confirm")) {
-    bool ok = KinoAPI::deleteMacro(macroName.c_str());
+    bool ok = KinoAPI::deleteMacro(macroName);
     if (ok) {
       pageStart("Erfolg");
       _server.sendContent(F("<div class='card'><p>Makro "));
@@ -240,7 +242,7 @@ void handleMacroDelete() {
       _server.sendContent(macroName);
       _server.sendContent(F(" konnte aufgrund eines unbekannten Fehlers nicht gelöscht werden.</p>"));
       _server.sendContent(F("<a class='btn' href='/macroEdit?m="));
-      _server.sendContent(_server.arg("macronr"));
+      _server.sendContent(_server.arg("macronr").c_str());
       _server.sendContent(F("#ma'>zur&uuml;ck zum Makro</a></p><p><a class='btn' href='/'>zur&uuml;ck zur Startseite</a></p></div>"));
       pageEnd();
       return;
@@ -264,16 +266,16 @@ void handleMacroEdit() {
   }
   KinoVariant macroName;
   KinoError err = KinoAPI::getMacroNameByIndex(_server.arg("m").toInt(), macroName);
-  pageStart(macroName.toString().c_str());
-  showMacro(macroName.toString().c_str());
+  pageStart(macroName.c_str());
+  showMacro(macroName.c_str());
   groupCardStart("ma","Makro Aktionen");
   _server.sendContent(F("<div class='card'><h2>Umbenennen</h2><form action='/macroRename'><input type='hidden' name='macronr' value='"));
-  _server.sendContent(_server.arg("m"));
+  _server.sendContent(_server.arg("m").c_str());
   _server.sendContent(F("'><input type='text' name='newname' placeholder='newName' value='"));
-  _server.sendContent(macroName.toString());
+  _server.sendContent(macroName.c_str());
   _server.sendContent(F("'><button>Umbenennen</button></form></div>"));
   _server.sendContent(F("<div class='card'><h2>L&ouml;schen</h2><form action='/macroDelete' method='POST'><button name='macronr' value='"));
-  _server.sendContent(_server.arg("m"));
+  _server.sendContent(_server.arg("m").c_str());
   _server.sendContent(F("'>Makro l&ouml;schen</button></form></div>"));
   groupCardEnd();
   pageEnd();
@@ -281,31 +283,31 @@ void handleMacroEdit() {
 
 void createNewMacro() {
   bool POSTOK = true;
-  String newname; newname.reserve(32); newname = "";
-  if (_server.hasArg("newmacroname")) newname = _server.arg("newmacroname");
-  if (newname == "") POSTOK = false;
+  if ( (!_server.hasArg("newmacroname")) || (strlen(_server.arg("newmacroname").c_str())==0) ) POSTOK = false;
 
   bool ok = POSTOK;
-  size_t macroIndex = -1;
+  size_t macroIndex;
   if(POSTOK) {
-    ok = KinoAPI::createMacro(newname.c_str());
-    KinoError e = KinoAPI::getMacroIndexByName(newname.c_str(), macroIndex);
-    ok = (macroIndex != -1);
+    if (!KinoAPI::createMacro(_server.arg("newmacroname").c_str())) ok = false;
+    KinoError e = KinoAPI::getMacroIndexByName(_server.arg("newmacroname").c_str(), macroIndex);
+    if (e != KinoError::OK) ok = false;
   }
 
   if (ok) {
+    char macroIndexBuffer[12];
+    snprintf(macroIndexBuffer, sizeof(macroIndexBuffer), "%d", macroIndex);
     pageStart("Erfolg");
     _server.sendContent(F("<div class='card'><h2>Neues Makro</h2>"));
     _server.sendContent(F("<p>Makro mit dem Namen "));
-    _server.sendContent(newname);
+    _server.sendContent(_server.arg("newmacroname").c_str());
     _server.sendContent(F(" wurde angelegt.</p>"));
     _server.sendContent(F("<p><a href='/macroEdit?m="));
-    _server.sendContent(String(macroIndex));
+    _server.sendContent(macroIndexBuffer);
     _server.sendContent(F("'>Makro bearbeiten</a></p>"));
   } else {
     pageStart("Fehler");
     _server.sendContent(F("<p>Makro mit dem Namen "));
-    _server.sendContent(newname);
+    _server.sendContent(_server.arg("newmacroname").c_str());
     _server.sendContent(F(" konnte nicht angelegt werden.</p>"));
   }
   _server.sendContent(F("<p><a href='/'>zur&uuml;ck zur Startseite</a></p>"));
@@ -325,14 +327,15 @@ void listMacros() {
   KinoVariant mName;
   for (int i=0; i<macroCount; i++) {
     err = KinoAPI::getMacroNameByIndex(i, mName);
-    String realMacroName; realMacroName.reserve(32);
-    realMacroName = mName.toString().substring(0,mName.toString().indexOf("."));
+    if (err != KinoError::OK) continue;
+    char* realMacroName = mName.s;
+    char* fileEnding = strstr(realMacroName, ".macro");
+    if (fileEnding) *fileEnding = '\0';
     char id[20];
     snprintf(id,20,"macroname_%d", i);
-    groupCardStart(id, realMacroName.c_str());
-    //String func; func.reserve(40);
+    groupCardStart(id, realMacroName);
     char func[40];
-    snprintf(func,40, "run/%s", realMacroName.c_str());
+    snprintf(func,40, "run/%s", realMacroName);
     func[39] = '\0';
     button(dev,func, "Execute");
     _server.sendContent(F("<div class='card'><a href='macroEdit?m="));
@@ -350,64 +353,69 @@ void listMacros() {
   groupCardEnd();
 }
 
+bool abortCheckPostParameters(const __FlashStringHelper* reason) {
+  pageStart("Fehler beim Aktualisieren");
+  _server.sendContent(reason);
+  _server.sendContent(F("<p>Der Makro wurde nicht aktualisiert</p>"));
+  return false;
+}
+
 bool checkMacroPostParameters() {
   int macroIndex = _server.arg("macronr").toInt();
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(macroIndex, mName);
-  String macroName; macroName.reserve(32);
-  macroName = mName.toString();
-  macroName.replace(".macro","");
-  bool POSTOK = true;
+  if (err != KinoError::OK) return abortCheckPostParameters(F("Makro wurde nicht gefunden"));
+  char* macroName = mName.s;
+  char* fileEnding = strstr(macroName, ".macro");
+  if (fileEnding) *fileEnding = '\0';
+  if (strlen(macroName)==0) return abortCheckPostParameters(F("Makroname kann nicht leer sein"));
   
-  if (macroName == "") POSTOK = false;
-  
-  String cmd; cmd.reserve(32); cmd = "";
-  if (_server.hasArg("cmd")) cmd = _server.arg("cmd");
-  if (cmd == "") POSTOK = false;
+  if ( (!_server.hasArg("cmd")) || (strlen(_server.arg("cmd").c_str())==0) ) {
+    return abortCheckPostParameters(F("cmd missing"));
+  }
 
   int lineIndex = -1;
   if (_server.hasArg("linenr")) lineIndex = _server.arg("linenr").toInt();
-  if (lineIndex == -1) POSTOK = false;
+  if (lineIndex == -1) {
+    return abortCheckPostParameters(F("line nr missing"));
+  }
 
-  String deviceName; deviceName.reserve(32); deviceName = "";
-  if (cmd == "set") {
-    if (_server.hasArg("dev")) deviceName = _server.arg("dev");
-    if (deviceName == "") POSTOK = false;
+  if (strcmp(_server.arg("cmd").c_str(),"set")==0) {
+    if ( (!_server.hasArg("dev")) || (strlen(_server.arg("dev").c_str())==0) ) {
+      return abortCheckPostParameters(F("set selected, but dev missing"));
+    }
   }
 
   int delaySeconds = -1;
-  if (cmd == "delay") {
+  if (strcmp(_server.arg("cmd").c_str(), "delay")==0) {
     if (_server.hasArg("seconds")) delaySeconds = _server.arg("seconds").toInt();
-    if (delaySeconds == -1) POSTOK = false;
+    if (delaySeconds == -1) {
+      return abortCheckPostParameters(F("delay selected, but seconds missing"));
+    }
   }
 
-  if (!POSTOK) {
-    pageStart("Fehler beim Aktualisieren");
-    _server.sendContent(F("<h2>Es gab Probleme mit den gelieferten Parametern.</h2>"));
-    if (macroName == "") _server.sendContent(F("<p>macro name missing</p>"));
-    if (!_server.hasArg("linenr")) _server.sendContent(F("<p>Line Nr Missing!</p>"));
-    if (cmd == "") _server.sendContent(F("<p>cmd missing</p>"));
-    if ((cmd == "set")&&(deviceName=="")) _server.sendContent(F("<p>device name missing for set cmd</p>"));
-    if ((cmd == "delay")&&(delaySeconds == -1)) _server.sendContent(F("<p>seconds missing for delay cmd</p>"));
-    _server.sendContent(F("<p>Der Makro wurde nicht aktualisiert</p>"));
-  }
-  return POSTOK;
+  return true;
 }
 
 
 void updateMacro() {
   int macroIndex = _server.arg("macronr").toInt();
-  KinoVariant mName;
-  KinoError err = KinoAPI::getMacroNameByIndex(macroIndex, mName);
-  String macroName; macroName.reserve(32); macroName = mName.toString();
-  macroName.replace(".macro","");
 
   bool POSTOK = checkMacroPostParameters();
   
   bool ok = false;
-  if ((POSTOK)&&(_server.hasArg("delete"))&&(_server.arg("delete")=="yesplease")) { ok = deleteMacroLine(); POSTOK = false; /*damit Nichts weiter gemacht wird */}
-  if ((POSTOK)&&(_server.arg("cmd") == "set")) ok = updateMacroSetLine();
-  if ((POSTOK)&&(_server.arg("cmd") == "delay")) ok = updateMacroDelayLine();
+  if (  (POSTOK)&& (_server.hasArg("delete"))&& (strcmp(_server.arg("delete").c_str(), "yesplease")==0) ) { 
+    ok = deleteMacroLine(); 
+    POSTOK = false; //damit Nichts weiter gemacht wird
+  }
+  
+  if (  (POSTOK)&&(strcmp(_server.arg("cmd").c_str(),"set")==0) ) {
+    ok = updateMacroSetLine();
+  }
+  
+  if (  (POSTOK)&&(strcmp(_server.arg("cmd").c_str(),"delay")==0) ) {
+    ok = updateMacroDelayLine();
+  }
 
   
   if (ok) {
@@ -415,13 +423,13 @@ void updateMacro() {
     _server.sendContent(F("<p>Der Makro wurde aktualisiert</p>"));
   } else {
     pageStart("Fehler");
-    _server.sendContent(F("<p>Der Makro konnte nicht aktualisiert werden, KinoAPI::updateMacroCommand gab false zur&uuml;ck</p>"));
+    _server.sendContent(F("<p>Der Makro konnte nicht aktualisiert werden</p>"));
   }
   
   _server.sendContent(F("<p><a href='/macroEdit?m="));
-  _server.sendContent(_server.arg("macronr"));
+  _server.sendContent(_server.arg("macronr").c_str());
   _server.sendContent(F("#line_"));
-  _server.sendContent(_server.arg("linenr"));
+  _server.sendContent(_server.arg("linenr").c_str());
   _server.sendContent(F("'>zur&uuml;ck zum Listing</a></p>"));
   pageEnd();
 }
@@ -429,96 +437,119 @@ void updateMacro() {
 bool deleteMacroLine() {
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(_server.arg("macronr").toInt(), mName);
-  String macroName; macroName.reserve(32); macroName = mName.toString();
-  macroName.replace(".macro","");
+  //String macroName; macroName.reserve(32); macroName = mName.toString();
+  if (err != KinoError::OK) return false;
+  //macroName.replace(".macro","");
+  char* macroName = mName.s;
+  char* fileEnding = strstr(macroName, ".macro");
+  if (fileEnding) *fileEnding = '\0';
   int linenr = _server.arg("linenr").toInt();
-  bool ok = KinoAPI::deleteMacroCommand(macroName.c_str(), linenr);
+  //bool ok = KinoAPI::deleteMacroCommand(macroName.c_str(), linenr);
+  bool ok = KinoAPI::deleteMacroCommand(macroName, linenr);
   return ok;
 }
 
 bool updateMacroSetLine() {
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(_server.arg("macronr").toInt(), mName);
-  String macroName; macroName.reserve(32); macroName = mName.toString();
-  macroName.replace(".macro","");
-  StaticJsonDocument<256> tmpSettings;
+  if (err != KinoError::OK) return false;
+  // macroName.replace(".macro","");
+  char* macroName = mName.s;
+  if (strlen(macroName)==0) return false;
+  char* fileEnding = strstr(macroName, ".macro");
+  if (fileEnding) *fileEnding = '\0';
+  if (strlen(macroName)==0) return false;
+  
+  _parseContainer.clear();
   int linenr = _server.arg("linenr").toInt();
-  String deviceName; deviceName.reserve(32); deviceName = _server.arg("dev");
-  tmpSettings["cmd"] = _server.arg("cmd");
-  tmpSettings["dev"] = _server.arg("dev");
-  if ((_server.hasArg("commit")) && (_server.arg("commit")=="on")) tmpSettings["commit"] = true;
+  _parseContainer["cmd"].set(_server.arg("cmd").c_str());
+  _parseContainer["dev"].set(_server.arg("dev").c_str());
+  if ( (_server.hasArg("commit")) && (strcmp(_server.arg("commit").c_str(), "on")==0) ) _parseContainer["commit"].set(true);
   int n = _server.args();
 
-  String key; key.reserve(64);
-  String value; value.reserve(32);
-  String newKey; newKey.reserve(64);
-  String chkVal; chkVal.reserve(64);
+  char key[64];
+  char value[64];
 
   for (int i = 0; i < n; i++) {
-    /*String */key   = _server.argName(i);
-    /*String */value = _server.arg(i);
+    strlcpy(key, _server.argName(i).c_str(), sizeof(key));
+    strlcpy(value, _server.arg(i).c_str(), sizeof(value));
 
-    if ((key.startsWith("inc_"))&&(value == "on")) {
-      /*String */newKey = key;
-      newKey.replace("inc_","");
-      /*String *//*chkVal = String("val_")+newKey;*/
-      chkVal = key; chkVal.replace("inc_","val_");
-      KinoVariant newVal = KinoVariant::fromString("off");  // Fallback für checkboxen, die wegen "off" nicht mitgesendet wurden
-      if (_server.hasArg(chkVal)) newVal = KinoVariant::fromString(_server.arg(chkVal).c_str());
-      KinoVariant curVal;
-      KinoError err = KinoAPI::getProperty(deviceName.c_str(), newKey.c_str(), curVal);
+    //if ((key.startsWith("inc_"))&&(value == "on")) {
+    char incChk[5];
+    strlcpy(incChk, key, sizeof(incChk));
+    if ( (strcmp(incChk,"inc_")==0) && (strcmp(value,"on")==0) ) {  // Wenn die inc_<key> checkbox checked ist
+      char* newKey = key+4; // überspringe "inc_"
+      char chkVal[64];
+      snprintf(chkVal, sizeof(chkVal), "val_%s", newKey);           // ersetze "inc_" durch "val_". Unter diesem Namen wurde der Wert gepostet
+      KinoVariant newVal = KinoVariant::fromString("off");          // Fallback für checkboxen, die wegen "off" nicht mitgesendet wurden
+      if (_server.hasArg(chkVal)) newVal.setString(_server.arg(chkVal).c_str());
+      KinoVariant curVal;                                           // hole den aktuellen Wert der Eigenschaft <key>, damit wir den Typen wissen
+      KinoError err = KinoAPI::getProperty(_server.arg("dev").c_str(), newKey, curVal);
       switch(curVal.type) {
         case KinoVariant::BOOL: {
-          tmpSettings["val"][newKey] = newVal.asBool();
+          _parseContainer["val"][newKey].set(newVal.asBool());
           break;
         }
         case KinoVariant::INT: {
-          tmpSettings["val"][newKey] = newVal.asInt();
+          _parseContainer["val"][newKey].set(newVal.asInt());
           break;
         }
         case KinoVariant::RGB_COLOR: {
-          tmpSettings["val"][newKey] = newVal.toString();
+          _parseContainer["val"][newKey].set(newVal.c_str());
           break;
         }
         default: {
-          tmpSettings["val"][newKey] = newVal.toString();
+          _parseContainer["val"][newKey].set(newVal.c_str());
           break;
         }
       }
     }
   }
 
-  String out;
-  serializeJson(tmpSettings, out);
-  return KinoAPI::updateMacroCommand(macroName.c_str(), linenr, out.c_str());
+  char out[256];    // das sollte reichen für den Json-String
+  serializeJson(_parseContainer, out);
+  Serial.println(out);
+  return KinoAPI::updateMacroCommand(macroName, linenr, out);
 }
 
 bool updateMacroDelayLine() {
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(_server.arg("macronr").toInt(), mName);
-  String macroName = mName.toString();
-  macroName.replace(".macro","");
-  StaticJsonDocument<256> tmpSettings;
+  if (err != KinoError::OK) return false;
+  char* macroName = mName.s;
+  if (strlen(macroName)==0) return false;
+  char* fileEnding = strstr(macroName, ".macro");
+  if (fileEnding) *fileEnding = '\0';
+  
+  _parseContainer.clear();
+  
   int linenr = _server.arg("linenr").toInt();
-  tmpSettings["cmd"] = _server.arg("cmd");
-  tmpSettings["seconds"] = _server.arg("seconds").toInt();
-  String out;
-  serializeJson(tmpSettings, out);
-  return KinoAPI::updateMacroCommand(macroName.c_str(), linenr, out.c_str());
+  _parseContainer["cmd"].set(_server.arg("cmd").c_str());
+  _parseContainer["seconds"].set(_server.arg("seconds").toInt());
+  
+  char out[256];
+  serializeJson(_parseContainer, out);
+  return KinoAPI::updateMacroCommand(macroName, linenr, out);
 }
 
 void insertMacroLine() {
+  bool POSTOK = checkMacroPostParameters();
   int macroIndex = _server.arg("macronr").toInt();
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(macroIndex, mName);
-  String macroName = mName.toString();
-  macroName.replace(".macro","");
-
-  bool POSTOK = checkMacroPostParameters();
+  
+  if (err != KinoError::OK) POSTOK = false;
+  char* macroName = nullptr;
+  if (POSTOK) {
+    macroName = mName.s;
+    char* fileEnding = strstr(macroName, ".macro");
+    if (fileEnding) *fileEnding = '\0';
+  }
+  
   
   bool ok = false;
-  if ((POSTOK)&&(_server.arg("cmd") == "set")) ok = insertMacroSetLine();
-  if ((POSTOK)&&(_server.arg("cmd") == "delay")) ok = insertMacroDelayLine();
+  if ((POSTOK)&&(strcmp(_server.arg("cmd").c_str(),"set")   ==0)) ok = insertMacroSetLine();
+  if ((POSTOK)&&(strcmp(_server.arg("cmd").c_str(),"delay") ==0)) ok = insertMacroDelayLine();
 
   
   if (ok) {
@@ -530,9 +561,9 @@ void insertMacroLine() {
   }
   
   _server.sendContent(F("<p><a href='/macroEdit?m="));
-  _server.sendContent(String(macroIndex));
+  _server.sendContent(_server.arg("macronr").c_str());
   _server.sendContent(F("#line_"));
-  _server.sendContent(_server.arg("linenr"));
+  _server.sendContent(_server.arg("linenr").c_str());
   _server.sendContent(F("'>zur&uuml;ck zum Listing</a></p>"));
   pageEnd();
 }
@@ -540,66 +571,77 @@ void insertMacroLine() {
 bool insertMacroSetLine() {
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(_server.arg("macronr").toInt(), mName);
-  String macroName = mName.toString();
-  macroName.replace(".macro","");
-  StaticJsonDocument<256> tmpSettings;
+  if(err != KinoError::OK) return false;
+  char* macroName = mName.s;
+  if (strlen(macroName)==0) return false;
+  char* fileEnding = strstr(macroName, ".macro");
+  if (fileEnding) *fileEnding = '\0';
+  
+  _parseContainer.clear();
   int linenr = _server.arg("linenr").toInt();
-  String deviceName = _server.arg("dev");
-  tmpSettings["cmd"] = _server.arg("cmd");
-  tmpSettings["dev"] = _server.arg("dev");
-  if ((_server.hasArg("commit")) && (_server.arg("commit")=="on")) tmpSettings["commit"] = true;
+  _parseContainer["cmd"].set(_server.arg("cmd").c_str());
+  _parseContainer["dev"].set(_server.arg("dev").c_str());
+  
+  if ((_server.hasArg("commit")) && (strcmp(_server.arg("commit").c_str(),"on")==0)) _parseContainer["commit"].set(true);
   int n = _server.args();
+  char key[64];
+  char value[64];
   for (int i = 0; i < n; i++) {
-    String key   = _server.argName(i);
-    String value = _server.arg(i);
+    strlcpy(key,  _server.argName(i).c_str(), sizeof(key));
+    strlcpy(value,_server.arg(i).c_str(),     sizeof(value));
 
-    if ((key.startsWith("inc_"))&&(value=="on")) {
-      String newKey = key;
-      newKey.replace("inc_","");
-      String chkVal = String("val_")+newKey;
+    char incChk[5];
+    strlcpy(incChk, key, sizeof(incChk));
+    if ( (strcmp(incChk,"inc_")==0) && (strcmp(value,"on")==0) ) {
+      char* newKey = key+4; // schneidet "inc_" vorne ab
+      char chkVal[64];
+      snprintf(chkVal, sizeof(chkVal), "val_%s", newKey);
       KinoVariant newVal = KinoVariant::fromString("off");  // Fallback für checkboxen, die wegen "off" nicht mitgesendet wurden
-      if (_server.hasArg(chkVal)) newVal = KinoVariant::fromString(_server.arg(chkVal).c_str());
+      if (_server.hasArg(chkVal)) newVal.setString(_server.arg(chkVal).c_str());
       KinoVariant curVal;
-      KinoError err = KinoAPI::getProperty(deviceName.c_str(), newKey.c_str(), curVal);
+      KinoError err = KinoAPI::getProperty(_server.arg("dev").c_str(), newKey, curVal);
       switch(curVal.type) {
         case KinoVariant::BOOL: {
-          tmpSettings["val"][newKey] = newVal.asBool();
+          _parseContainer["val"][newKey].set(newVal.asBool());
           break;
         }
         case KinoVariant::INT: {
-          tmpSettings["val"][newKey] = newVal.asInt();
+          _parseContainer["val"][newKey].set(newVal.asInt());
           break;
         }
         case KinoVariant::RGB_COLOR: {
-          tmpSettings["val"][newKey] = newVal.toString();
+          _parseContainer["val"][newKey].set(newVal.c_str());
           break;
         }
         default: {
-          tmpSettings["val"][newKey] = newVal.toString();
+          _parseContainer["val"][newKey].set(newVal.c_str());
           break;
         }
       }
     }
   }
 
-  String out;
-  serializeJson(tmpSettings, out);
-  return KinoAPI::addMacroCommand(macroName.c_str(), linenr, out.c_str());
+  char out[256];
+  serializeJson(_parseContainer, out);
+  return KinoAPI::addMacroCommand(macroName, linenr, out);
 }
 
 bool insertMacroDelayLine() {
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(_server.arg("macronr").toInt(), mName);
-  String macroName = mName.toString();
-  macroName.replace(".macro","");
-  StaticJsonDocument<256> tmpSettings;
+  if (err != KinoError::OK) return false;
+  char* macroName = mName.s;
+  if (strlen(macroName)==0) return false;
+  char* fileEnding = strstr(macroName, ".macro");
+  if (fileEnding) *fileEnding = '\0';
+  
+  _parseContainer.clear();
   int linenr = _server.arg("linenr").toInt();
-  tmpSettings["cmd"] = _server.arg("cmd");
-  tmpSettings["seconds"] = _server.arg("seconds").toInt();
-  String out;
-  serializeJson(tmpSettings, out);
-  //_server.sendContent (out);
-  return KinoAPI::addMacroCommand(macroName.c_str(), linenr, out.c_str());
+  _parseContainer["cmd"].set(_server.arg("cmd").c_str());
+  _parseContainer["seconds"].set(_server.arg("seconds").toInt());
+  char out[256];
+  serializeJson(_parseContainer, out);
+  return KinoAPI::addMacroCommand(macroName, linenr, out);
 }
 
 void showMacro(const char* macroName) {
@@ -608,8 +650,8 @@ void showMacro(const char* macroName) {
   char mName[32]; 
   strncpy(mName, macroName, sizeof(mName) - 1);
   mName[sizeof(mName) - 1] = '\0';
-  char* dot = strstr(mName, ".macro");
-  if (dot) *dot = '\0'; 
+  char* fileEnding = strstr(mName, ".macro");
+  if (fileEnding) *fileEnding = '\0'; 
   
   size_t lineCount = KinoAPI::getMacroLineCount(mName);
 
@@ -791,7 +833,6 @@ void getMacroValue(const char* dev, const char* key, const char* apikey, KinoVar
   mVal.setNone();
 }
 
-//void webserver::showDelayInput(const String& curSecs, int lineIndex) {
 void showDelayInput(int curSecs, int lineIndex) {
   char buf[10];
   itoa(curSecs, buf, 10);
@@ -804,11 +845,9 @@ void showDelayInput(int curSecs, int lineIndex) {
 
 void showMacroCommandSelect(const char* curCmd, int lineIndex) {
   _server.sendContent(F("<select name='cmd' class='cmdselect'>"));
-  //std::vector<const char*> availableCommands = KinoAPI::getAvailableMacroCommands();
   int cmdCount = KinoAPI::getMacroCommandCount();
   
   _server.sendContent(F("<option value=''>Kommando</option>"));
-  //for (const char* cmd : availableCommands) {
   char cmd[20];
   for (int i=0; i<cmdCount; i++) {
     KinoAPI::getMacroCommand(i, cmd, sizeof(cmd));
@@ -840,10 +879,6 @@ void sendFuncControls() {
   bool nc = false;
   bool commit = false;
   KinoError e = KinoAPI::needsCommit(dev, nc);
-  if (e != KinoError::OK) {
-    //Serial.print("KinoAPI gab Fehler zurück: ");
-    //Serial.println(kinoErrorToString(e));
-  }
   if (nc) {
     _server.sendContent(F("<br><input type='checkbox' name='commit'"));
     if (commit) _server.sendContent(F(" checked"));
@@ -853,7 +888,6 @@ void sendFuncControls() {
     
 }
 
-//void webserver::showMacroDeviceSelect(const String& curDevice, int lineIndex) {
 void showMacroDeviceSelect(const char* curDevice, int lineIndex) {
   size_t deviceCount = 0;
   KinoError e = KinoAPI::getDeviceCount(deviceCount);
@@ -874,6 +908,7 @@ void showMacroDeviceSelect(const char* curDevice, int lineIndex) {
   _server.sendContent(F("</select>"));
 }
 
+/*
 // deprecated, const char* version below!
 String getSelectedKeyForFuncSelect(const String& dev, const String& key) {
   Serial.println(F("using string version of getSelectedKeyForFuncSelect!"));
@@ -979,7 +1014,7 @@ String getSelectedKeyForFuncSelect(const String& dev, const String& key) {
     }
   }
   return "Nuescht";
-}
+}*/
 
 void getSelectedKeyForFuncSelect(const char* dev, const char* key, char* buf, size_t bufLen) {
   size_t propCount = 0;
@@ -1108,9 +1143,9 @@ void getSelectedKeyForFuncSelect(const char* dev, const char* key, char* buf, si
   return;
 }
 
-
+/*
 // deprecated, const char* version below!
-void showFuncSelect(const String& dev, const String& key, /*const String& value,*/ int lineIndex) {
+void showFuncSelect(const String& dev, const String& key, int lineIndex) {
   Serial.println(F("using string version of showFuncSelect!"));
   // hole alle verfügbaren Properties für das device
   //Serial.print("webserver::showFuncSelect: "); Serial.print(dev); Serial.print(", "); Serial.print(key); Serial.print(", "); Serial.println(lineIndex);
@@ -1270,12 +1305,11 @@ void showFuncSelect(const String& dev, const String& key, /*const String& value,
     }
   }
   _server.sendContent(F("</select>"));
-}
+}*/
 
 // Helperfunktion, die ein Select mit allen verfügbaren schreibbaren Pfaden zum angegebenen device zusammenstellt und den gegebenen key vor-auswählt
 void showFuncSelect(const char* dev, const char* key, int lineIndex) {
   // hole alle verfügbaren Properties für das device
-  //Serial.print("webserver::showFuncSelect: "); Serial.print(dev); Serial.print(", "); Serial.print(key); Serial.print(", "); Serial.println(lineIndex);
   size_t propCount = 0;
   KinoError err = KinoAPI::getPropertyCount(dev,propCount);
   _server.sendContent(F("<select name='func' class='funcselect'>"));
@@ -1318,12 +1352,10 @@ void showFuncSelect(const char* dev, const char* key, int lineIndex) {
       int getsetPathLen = 64; char getsetPath[getsetPathLen];
       
       for (int pc=0; pc < nrOfParams; pc++) {
-        //String getsetPathPath = paramPath + String("/") + String(pc);
         snprintf(_pathHelper, _pathHelperLen, "%s/%d", _paramPath, pc);
         _pathHelper[_pathHelperLen-1] = '\0';
         err = KinoAPI::getProperty(dev, _pathHelper, tmp);
         if (!isSelected && (strcmp(tmp.c_str(), key)==0)) {
-          //Serial.println("\tThis is a match!");
           isSelected = true;
         }
       }
@@ -1512,6 +1544,7 @@ void showParamPropertyControl(const char* deviceName, const char* getsetPath) {
   }
 }
 
+/*
 // deprecated, const char* version below!
 void showFuncControls(const String& dev, const String& key, int lineIndex) {
   Serial.println(F("Using string version of showFuncControls!"));
@@ -1543,7 +1576,7 @@ void showFuncControls(const String& dev, const String& key, int lineIndex) {
       }
       startMacroSelect(dev.c_str(), pi->key, pi->label);
       //_server.sendContent("<select name='");
-      //_server.sendContent(pi->key);/* _server.sendContent("_"); _server.sendContent(String(lineIndex).c_str());*/
+      //_server.sendContent(pi->key);
       //_server.sendContent("'>");
       uint16_t nrOfOptions = 0;
       err = KinoAPI::getQueryCount(dev.c_str(), pi->key, nrOfOptions);
@@ -1818,7 +1851,7 @@ void showFuncControls(const String& dev, const String& key, int lineIndex) {
     } // end of all parameters
   } // end of if(isPath)
 
-}
+}*/
 
 void showFuncControls(const char* dev, const char* key, int lineIndex) {
   // key ist entweder eine Property oder der Pfad einer Property zu einer Option
@@ -2212,8 +2245,6 @@ void handleDevice(const char* deviceName) {
       infoText(deviceName, pi->key, pi->label, value.toString().c_str());
     } else if ((!hasValue) && (hasParams)) {  // die Property ist eine Zusammenfassung von Parametern
       groupCardStart(pi->key, pi->label);
-      /*String path = pi->key;
-      path += "/param";*/
       snprintf(_pathHelper, _pathHelperLen, "%s/param", pi->key);
       //showParameters(deviceName, path.c_str());
       showParameters(deviceName, _pathHelper);
@@ -2281,35 +2312,17 @@ void buildSelect(const char* deviceName, const KinoPropertyInfo*& pi, bool hasPa
     KinoAPI::getQuery(deviceName, pi->key, opt, value);
     strncpy(optShort, value.c_str(), 10);
     optShort[10] = '\0';
-    //String optShort = value.toString().substring(0,10);
-    //String valShort = curValue.substring(0,10);
-    //bool selected = (valShort == optShort);
     bool selected = (strcmp(optShort, valShort)==0);
-    //if (hasLabel) {
-    /*  String labelPath = pi->key;
-      labelPath += "/";
-      labelPath += value.toString();
-      labelPath += "/label";*/
     snprintf(_pathHelper, _pathHelperLen, "%s/%s/label", pi->key, value.c_str());
     _pathHelper[_pathHelperLen-1] = '\0';
-    //err = KinoAPI::getProperty(deviceName, labelPath.c_str(), label);
     err = KinoAPI::getProperty(deviceName, _pathHelper, label);
       if (err != KinoError::OK) label = value;
-    //} else {
-    //  label = value;
-    //}
-    //optionItem(value.toString().c_str(), label.toString().c_str(), selected);
     optionItem(value.c_str(), label.c_str(), selected);
   }
   selectEnd();
   if (hasParams) {
-    /*String paramsPath = pi->key;
-    paramsPath += "/";
-    paramsPath += curValue;
-    paramsPath += "/param";*/
     snprintf(_pathHelper, _pathHelperLen, "%s/%s/param", pi->key, curValue);
     _pathHelper[_pathHelperLen-1] = '\0';
-    //showParameters(deviceName, paramsPath.c_str());
     showParameters(deviceName, _pathHelper);
     groupCardEnd();
   }
@@ -2323,10 +2336,8 @@ void buildComplexList(const char* deviceName, const KinoPropertyInfo*& pi, bool 
       
       KinoError err = KinoAPI::getQueryCount(deviceName,pi->key, nrOfOptions);
       for (int opt=0; opt < nrOfOptions; opt++) {
-        //KinoVariant option;
         err = KinoAPI::getQuery(deviceName, pi->key, opt, option);
         
-        //KinoVariant optLabel;
         snprintf(_pathHelper, _pathHelperLen, "%s/%s/label", pi->key, option.c_str());
         _pathHelper[_pathHelperLen-1] = '\0';
         
@@ -2365,31 +2376,26 @@ void showParameters(const char* deviceName, const char* paramPath) {
     path[pathLen-1] = '\0';
     err = KinoAPI::getProperty(deviceName, path, label);
 
-    //KinoVariant access;
     snprintf(path, pathLen, "%s/%d/access", paramPath, i);
     path[pathLen-1] = '\0';
     err = KinoAPI::getProperty(deviceName, path, tmp);
     access = tmp.asInt();
 
-    //KinoVariant minvalue;
     snprintf(path, pathLen, "%s/%d/minvalue", paramPath, i);
     path[pathLen-1] = '\0';
     err = KinoAPI::getProperty(deviceName, path, tmp);
     minvalue = tmp.asInt();
 
-    //KinoVariant maxvalue;
     snprintf(path, pathLen, "%s/%d/maxvalue", paramPath, i);
     path[pathLen-1] = '\0';
     err = KinoAPI::getProperty(deviceName, path, tmp);
     maxvalue = tmp.asInt();
 
-    //KinoVariant valuestep;
     snprintf(path, pathLen, "%s/%d/valuestep", paramPath, i);
     path[pathLen-1] = '\0';
     err = KinoAPI::getProperty(deviceName, path, tmp);
     valuestep = tmp.asInt();
     
-    //KinoVariant value;
     if ((access == 1) || (access == 3)) {
       err = KinoAPI::getProperty(deviceName, getsetpath.c_str(), value);
     }
@@ -2429,12 +2435,11 @@ void pageStart(const char* title) {
     _server.setContentLength(CONTENT_LENGTH_UNKNOWN); // Stream-Modus
     _server.send(200, "text/html", "<!DOCTYPE html>");
     _server.sendContent(F("<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"));
-    //_server.sendContent_P(HTML_CSS);
-    //_server.sendContent_P(HTML_JAVASCRIPT);
     _server.sendContent(F("<link rel='stylesheet' type='text/css' href='/style.css'>"));
     _server.sendContent(F("<script src='/script.js'></script>"));
         
     _server.sendContent(F("</head><body>"));
+    /* // ALTE VERSION
     bool isSubPage = false;
     if (_server.uri().length() > 1) isSubPage = true;
     int lastSlash = _server.uri().lastIndexOf("/");
@@ -2447,6 +2452,39 @@ void pageStart(const char* title) {
       _server.sendContent(target);
       _server.sendContent(F("'>&lt;</a>  "));
     }
+    */
+    /* NEUE VERSION OHNE STRING (start)*/
+    // 1. Hole den URI-Pfad als einfachen C-String
+    const char* uri = _server.uri().c_str();
+    
+    // 2. Prüfen, ob es eine Unterseite ist (Länge > 1)
+    // uri[0] ist immer '/', wenn uri[1] nicht '\0' ist, sind wir auf einer Unterseite.
+    bool isSubPage = (uri[0] == '/' && uri[1] != '\0');
+    
+    // Title card
+    _server.sendContent(F("<div class='card'><h1>"));
+    
+    if (isSubPage) {
+      // 3. Den letzten Slash finden
+      const char* lastSlashPtr = strrchr(uri, '/');
+  
+      _server.sendContent(F("<a href='"));
+      
+      // 4. Den Pfad bis zum letzten Slash senden
+      if (lastSlashPtr == uri) {
+        // Wenn der letzte Slash ganz am Anfang steht, ist das Ziel das Root-Verzeichnis "/"
+        _server.sendContent(F("/"));
+      } else {
+        // Wir senden manuell nur den Teil vor dem letzten Slash
+        size_t lengthToCopy = lastSlashPtr - uri;
+        
+        // Wir nutzen eine kleine Hilfsvariable für den Teil-String ohne Kopie!
+        _server.client().write((const uint8_t*)uri, lengthToCopy);
+      }
+      
+      _server.sendContent(F("'>&lt;</a>  "));
+    }
+    /* NEUE VERSION OHNE STRING (ende)*/
     _server.sendContent(title);
     _server.sendContent(F("</h1></div>"));
 }

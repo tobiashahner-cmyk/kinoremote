@@ -67,7 +67,7 @@ bool KinoMacroEngine::startMacro(const char* mName, MacroFinishedCallback cb) {
   runtime.file = f;
   runtime.line = 1;
   runtime.running = true;
-  runtime.testing = true;
+  runtime.testing = false;
   _onFinished = cb;
   strlcpy(_currentMacroName, mName, sizeof(_currentMacroName));
   return true;

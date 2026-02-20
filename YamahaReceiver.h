@@ -119,6 +119,8 @@ class YamahaReceiver : public KinoDevice {
     char _soundProgram[32];
     char _source[INPUTNAME_MAXLEN] = {};
     bool _mute           = false;
+
+    void cleanSong(char* title);
     
     // Liste aller auswählbaren Sources
     std::vector<InputSource> _InputSources;

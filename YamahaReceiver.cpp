@@ -49,11 +49,28 @@ bool YamahaReceiver::getStatusUpdate(const char* devName, JsonObject& root) {
   if (_dirty & TRACK) {
     NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
     root["station"].set(nri.station);
+    cleanSong(nri.song);
     root["song"].set(nri.song);
     root["elapsed"].set(nri.elapsed);
   }
   _dirty = NONE;
   return true;
+}
+
+void YamahaReceiver::cleanSong(char* str) {
+    const char* search = "&amp;amp;";
+    const size_t searchLen = 9;
+    const char replace = '&';
+    
+    char* p;
+    // Suche alle Vorkommen von "&amp;amp;"
+    while ((p = strstr(str, search)) != NULL) {
+      // Ersetze das erste Zeichen mit '&'
+      *p = replace;
+      // Den Rest des Strings (nach der Fundstelle + 9) nach vorne rücken
+      // memmove ist sicher bei überlappenden Bereichen
+      memmove(p + 1, p + searchLen, strlen(p + searchLen) + 1);
+    }
 }
 
 KinoError YamahaReceiver::set(const char* property, const KinoVariant& value) {
@@ -179,6 +196,7 @@ KinoError YamahaReceiver::get(const char* property, KinoVariant& out) {
       //if (_source == "NET RADIO") {
       if (strcmp(_source,"NET RADIO")==0) {
         NetRadioTrackInfo nri = readCurrentlyPlayingNetRadio();
+        cleanSong(nri.song);
         out.setString(nri.song);
         return KinoError::OK;
       } else {
@@ -674,8 +692,18 @@ size_t YamahaReceiver::readSanitizedUntil(Stream& s, char terminator, char* buff
       }
 
       // Das Entity Zeichen für Zeichen in den Puffer kopieren
-      while (*entity && count < maxLen - 1) {
+      /*while (*entity && count < maxLen - 1) {
         buffer[count++] = *entity++;
+      }*/
+      size_t entityLen = strlen(entity);
+      if (count + entityLen < maxLen) {
+        while (*entity) {
+          buffer[count++] = *entity++;
+        }
+      } else {
+        // Falls das Entity nicht mehr ganz passt, 
+        // schreiben wir stattdessen den Platzhalter '_'
+        buffer[count++] = '_';
       }
     }
     // 3. Fallback für alle anderen Sonderzeichen (z.B. 0xC2 Präfixe oder High-ASCII)
@@ -1002,31 +1030,40 @@ bool YamahaReceiver::selectNetRadioFavorite(const char* station) {
   if (_stationCount == 0) return false;
   // bereite Parameter vor: wir vergleichen nur die ersten 10 Buchstaben
   char wanted[11];
-  strncpy(wanted, station, 10);
-  wanted[10] = '\0';
+  strncpy(wanted, station, sizeof(wanted));
+  wanted[sizeof(wanted)-1] = '\0';
   // bereite Menü vor
   WiFiClient client;
-  if (!moveToFavorites(client)) return false;
+  if (!moveToFavorites(client)) {
+    NetworkHelper::resetClient(client);
+    return false;
+  }
   bool hasNextPage = true;
   int found = 0;
   while (hasNextPage && found <= _stationCount) {
     // Wir warten auf die Liste und halten den Stream offen (keepalive = true)
-    if (!waitForNetRadioList(client, true)) break;
+    if (!waitForNetRadioList(client, true)) {
+      break;
+    }
 
     // Die Liste hat typischerweise 8 Einträge pro Seite
     for (int linenr = 1; linenr < 9; linenr++) {
       // 1. Suche den Sendernamen
-      if (!client.find("<Txt>")) break; 
+      if (!client.find("<Txt>")) {
+        break; 
+      }
       
       char tempName[11];
-      size_t nLen = readSanitizedUntil(client, '<', tempName, sizeof(tempName) - 1);
+      size_t nLen = readSanitizedUntil(client, '<', tempName, sizeof(tempName));
       tempName[nLen] = '\0';
 
       // 2. Suche das zugehörige Attribut (muss nach <Txt> kommen)
-      if (!client.find("<Attribute>")) break;
+      if (!client.find("<Attribute>")) {
+        break;
+      }
       
       char tempAttr[20];
-      size_t aLen = readSanitizedUntil(client, '<', tempAttr, sizeof(tempAttr) - 1);
+      size_t aLen = readSanitizedUntil(client, '<', tempAttr, sizeof(tempAttr));
       tempAttr[aLen] = '\0';
 
       // 3. Validierung

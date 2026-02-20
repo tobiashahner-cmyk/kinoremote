@@ -1714,8 +1714,12 @@ bool kino_testMacro(String* p, uint8_t n) {
 bool kino_init(String* p, uint8_t n) {
   Serial.println(F("Initialisiere Geräte:"));
   bool ok = true;
+  KinoVariant devName;
+  size_t devCount = 0;
+  KinoError err = KinoAPI::getDeviceCount(devCount);
   if (n==0) {
-    for (auto& devName : KinoAPI::getDeviceNames()) {
+    for (int i=0; i<devCount; i++) {
+      KinoAPI::getDeviceName(i, devName);
       KinoError err = KinoAPI::initDevice(devName.c_str());
       if (err == KinoError::OK) {
         KinoVariant v;

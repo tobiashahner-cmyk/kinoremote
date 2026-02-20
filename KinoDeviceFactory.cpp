@@ -32,20 +32,22 @@ bool KinoDeviceFactory::initDevices() {
   }
 
   for (JsonObject d : arr) {
-    DeviceEntry e;
-    e.name      = d["name"]  | "";
-    e.className = d["class"] | "";
-
-    if (e.name.isEmpty() || e.className.isEmpty()) {
+    if ( (!d.containsKey("name")) || (!d.containsKey("class")) ) {
       Serial.println(F("DeviceFactory: invalid device entry"));
       continue;
     }
+    
+    DeviceEntry e;
+    strlcpy(e.name, d["name"]|"", sizeof(e.name));
+    strlcpy(e.className, d["class"]|"", sizeof(e.className));
+
+    
 
     Serial.print(F("DeviceFactory: creating ")); Serial.print(e.className); Serial.print(F(" ")); Serial.println(e.name);
     e.device = createDeviceFromJson(e.className, d);
     if (!e.device) {
       Serial.printf("DeviceFactory: unknown class '%s'\n",
-                    e.className.c_str());
+                    e.className);
       continue;
     }
 
@@ -54,7 +56,7 @@ bool KinoDeviceFactory::initDevices() {
 
     if (!e.initOk) {
       Serial.printf("DeviceFactory: init failed for %s\n",
-                    e.name.c_str());
+                    e.name);
     }
 
     _devices.push_back(e);
@@ -67,7 +69,7 @@ KinoDevice* KinoDeviceFactory::getDeviceByName(const char* name) {
   if (!name) return nullptr;
 
   for (auto& d : _devices) {
-    if (d.name == name) {
+    if (strcmp(d.name, name)==0) {
       if (!d.initOk && d.device) {
         // Lazy re-init
         Serial.print(F("re-initializing preciously unsuccessful "));
@@ -90,13 +92,14 @@ KinoDevice* KinoDeviceFactory::getDeviceByIndex(int index) {
   return nullptr;
 }
 
+/*
 std::vector<String> KinoDeviceFactory::getDeviceNames() {
   std::vector<String> out;
   for (auto& d : _devices) {
     out.push_back(d.name);
   }
   return out;
-}
+}*/
 
 /*String KinoDeviceFactory::getDeviceNameByIndex(int index) {
   if (index >= _devices.size()) return "";
@@ -119,7 +122,7 @@ const bool KinoDeviceFactory::getDeviceNameByIndex(int index, char* devName, siz
   for (auto& d : _devices) {
     if (i == index) {
       //return d.name; // Gibt Referenz auf den existierenden String zurück
-      strncpy(devName, d.name.c_str(), devNameLen);
+      strncpy(devName, d.name, devNameLen);
       return true;
     }
     i++;
@@ -142,18 +145,18 @@ void printFile() {
   File file = LittleFS.open("/devices.json", "r");
   
   if (!file) {
-    Serial.println("Fehler: Datei konnte nicht geöffnet werden.");
+    Serial.println(F("Fehler: Datei konnte nicht geöffnet werden."));
     return;
   }
 
-  Serial.println("--- Dateinhalt startet ---");
+  Serial.println(F("--- Dateinhalt startet ---"));
   
   // Solange Daten verfügbar sind, Byte für Byte auslesen und senden
   while (file.available()) {
     Serial.write(file.read());
   }
   
-  Serial.println("\n--- Dateinhalt Ende ---");
+  Serial.println(F("\n--- Dateinhalt Ende ---"));
   file.close(); // Wichtig: Datei wieder schließen
 }
 
@@ -171,7 +174,7 @@ bool KinoDeviceFactory::loadDevicesJson(DynamicJsonDocument& doc) {
 
   File f = LittleFS.open("/devices.json", "r");
   if (!f) {
-    Serial.println("could not open /devices.json");
+    Serial.println(F("could not open /devices.json"));
     return false;
   }
 
@@ -192,16 +195,16 @@ bool KinoDeviceFactory::createDefaultDevicesFile() {
     return false;
   }
   if (LittleFS.exists("/devices.json")) {
-    Serial.println("/devices.json existiert");
+    Serial.println(F("/devices.json existiert"));
   } else {
-    Serial.println("/devices.json existiert nicht!");
+    Serial.println(F("/devices.json existiert nicht!"));
   }
   if (!LittleFS.remove("/devices.json")) {
-    Serial.println("Konnte /devices.json nicht löschen!");
+    Serial.println(F("Konnte /devices.json nicht löschen!"));
   }
   File f = LittleFS.open("/devices.json", "w");
   if (!f) {
-    Serial.println("Konnte /devices.json nicht zum Schreiben öffnen!");
+    Serial.println(F("Konnte /devices.json nicht zum Schreiben öffnen!"));
     return false;
   }
   char buffer[256];
@@ -236,33 +239,33 @@ static IPAddress ipFromJson(JsonVariant v) {
   return ip;
 }
 
-KinoDevice* KinoDeviceFactory::createDeviceFromJson(const String& className, JsonObject cfg) {
-  if (className == "yamahareceiver") {
+KinoDevice* KinoDeviceFactory::createDeviceFromJson(const char* className, JsonObject cfg) {
+  if (strcmp(className, "yamahareceiver")==0) {
     return new YamahaReceiver(
       ipFromJson(cfg["ip"])
     );
   }
 
-  if (className == "wleddevice") {
+  if (strcmp(className, "wleddevice")==0) {
     return new WLEDDevice(
       ipFromJson(cfg["ip"])
     );
   }
 
-  if (className == "optomabeamer") {
+  if (strcmp(className, "optomabeamer")==0) {
     return new OptomaBeamer(
       ipFromJson(cfg["ip"]),
       cfg["id"] | 0
     );
   }
 
-  if (className == "hyperiondevice") {
+  if (strcmp(className, "hyperiondevice")==0) {
     return new HyperionDevice(
       ipFromJson(cfg["ip"])
     );
   }
 
-  if (className == "huebridge") {
+  if (strcmp(className, "huebridge")==0) {
     return new HueBridge(
       ipFromJson(cfg["ip"]),
       cfg["token"] | ""

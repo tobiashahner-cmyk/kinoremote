@@ -49,25 +49,7 @@ namespace KinoAPI {
     return KinoError::OutOfRange;
   }
 
-/*
-  bool prepareMacroJsonString(const String& cmd, const String& deviceName, const String& action, const KinoVariant& value, String& jsonString) {
-    char jsonActionString[128];
-    String valStr;
-    valStr.reserve(32);
-    if      (value.type == KinoVariant::BOOL)      valStr += ((value.b) ? "true" : "false");
-    else if (value.type == KinoVariant::INT)       valStr += value.i;
-    else if (value.type == KinoVariant::FLOAT)     valStr += value.f;
-    else if (value.type == KinoVariant::STRING)    valStr += "\"" + String(value.s) + "\"";
-    else if (value.type == KinoVariant::RGB_COLOR) valStr += "["+String(value.color.r)+","+String(value.color.g)+","+String(value.color.b)+"]";
-    else return false;
-    snprintf(jsonActionString,128,"{\"cmd\":\"%s\",\"dev\":\"%s\",\"val\":{\"%s\":%s}}",
-                    cmd.c_str(),
-                    deviceName.c_str(),
-                    action.c_str(),
-                    valStr.c_str());
-    jsonString = String(jsonActionString);
-    return true;
-  }*/
+
   bool prepareMacroJsonString(const char* cmd, const char* deviceName, const char* action, const KinoVariant& value, char* json, size_t jsonLen) {
     char valStr[64]; // Puffer etwas vergrößert für Sicherheit bei RGB/Strings
 
@@ -83,16 +65,8 @@ namespace KinoAPI {
     
     // Prüfen, ob der String in den Zielpuffer gepasst hat
     return (written > 0 && (size_t)written < jsonLen);
-}
-
-  /*std::vector<String> getAvailableMacroCommands() {
-    return macroEngine.getAvailableMacroCommands();
-  }*/
-  /*
-  std::vector<const char*> getAvailableMacroCommands() {
-    return macroEngine.getAvailableMacroCommands();
   }
-*/
+
   size_t getMacroCommandCount() {
     return macroEngine.getMacroCommandCount();
   }
@@ -105,14 +79,6 @@ namespace KinoAPI {
     return macroEngine.addCommand(macroName, index, jsonActionElement);
   }
 
-  /*
-  bool addMacroCommand(const String& macroName, size_t index, const String& cmd, const String& deviceName, const String& action, const KinoVariant& value) {
-    String jsonActionString;
-    jsonActionString.reserve(128);
-    if (!prepareMacroJsonString(cmd, deviceName, action, value, jsonActionString)) return false;
-    return macroEngine.addCommand(macroName, index, String(jsonActionString));
-  }
-  */
   bool addMacroCommand(const char* macroName, size_t linenr, const char* cmd, const char* devName, const char* action, const KinoVariant& value) {
     char json[128];
     if (!prepareMacroJsonString(cmd, devName, action, value, json, sizeof(json))) return false;
@@ -181,10 +147,11 @@ namespace KinoAPI {
     return KinoDeviceFactory::getDeviceByName(deviceName);
   }
 
+/*
   std::vector<String> getDeviceNames() {
     return KinoDeviceFactory::getDeviceNames();
   }
-
+*/
   KinoError getDeviceCount(size_t& out) {
     out = (size_t)KinoDeviceFactory::getDeviceCount();
     return KinoError::OK;
@@ -236,9 +203,6 @@ namespace KinoAPI {
     KinoError tickresult = KinoError::DeviceUnknown;
     if (d) {
       tickresult = d->tick();
-      /*if ((tickresult == KinoError::OK) && (cb != nullptr)) {
-        cb(KinoDeviceFactory::getDeviceNameByIndex(runner));
-      }*/
       if (tickresult != KinoError::NothingToDo) {
          char devName[32];
          KinoDeviceFactory::getDeviceNameByIndex(runner, devName, sizeof(devName));
@@ -262,7 +226,6 @@ namespace KinoAPI {
         if (!KinoDeviceFactory::getDeviceNameByIndex(idx, devName, sizeof(devName))) return KinoError::InternalError;
         JsonObject root = doc.to<JsonObject>();
         if (d && d->getStatusUpdate(devName, root)) {
-          //Serial.print("KinoAPI::getJsonUpdates : got update from device "); Serial.println(devName);
             lastIdx = (idx + 1) % total;
             return KinoError::OK;
         }
@@ -318,14 +281,10 @@ namespace KinoAPI {
   
   KinoError commit(const char* deviceName) {
     bool ok = true;
-    //Serial.println(F("Speicher vor Commit"));
-    //showMemory();
     if (!deviceName) return KinoError::DeviceNotReady;
     KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
     if (!d) return KinoError::DeviceNotReady;
     ok = d->commit();
-    //Serial.println(F("Speicher nach Commit"));
-    //showMemory();
     if (!ok) return KinoError::InternalError;
     return KinoError::OK;
   }

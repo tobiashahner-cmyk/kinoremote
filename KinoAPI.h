@@ -34,7 +34,7 @@ namespace KinoAPI {
   // als dynamischer Wrapper für alle KinoDevices
   KinoError getDeviceCount(size_t& out);
   KinoError getDeviceName(size_t devIndex, KinoVariant& out);
-  std::vector<String> getDeviceNames();
+  //std::vector<String> getDeviceNames();
   KinoError initDevice(const char* deviceName);
   void showMemory();
   KinoError handleDeviceTicks(std::function<void(const char* devname, bool success)> cb = nullptr);
