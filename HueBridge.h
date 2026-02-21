@@ -115,12 +115,14 @@ private:
     
     // stream helper
     void EnsureTimeoutBeforeRequest(unsigned long timeout);
-    bool findNextKey(WiFiClient& client, char* out, size_t outSize, bool numericOnly);
+    //bool findNextKey(WiFiClient& client, char* out, size_t outSize, bool numericOnly);
+    bool findNextKey(Stream& stream, char* out, size_t outSize, bool numericOnly);
     size_t _globalDepth;
     // HTTP helper
     bool waitForData(WiFiClient& client, uint32_t timeout = 2000);
     bool skipHttpHeader();
-    bool httpGET(WiFiClient& client, const char* path);
+    //bool httpGET(WiFiClient& client, const char* path);
+    bool httpGET(WiFiClient& wifi, HTTPClient& http, const char* path);
     bool sendState(const char* path, const char* jsonPayload);
 
     static const KinoPropertyInfo _properties[];

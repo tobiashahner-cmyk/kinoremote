@@ -1062,7 +1062,7 @@ void HueBridge::EnsureTimeoutBeforeRequest(unsigned long timeout) {
 }
 
 /* readLights() V5 neue Funktionssignatur für findNextKey */
-bool HueBridge::readLights() {
+/*bool HueBridge::readLights() {
   _globalDepth = 0;
   WiFiClient client;
   char path[64];
@@ -1101,6 +1101,52 @@ bool HueBridge::readLights() {
   }
   
   NetworkHelper::resetClient(client);
+  return !_lights.empty();
+}*/
+bool HueBridge::readLights() {
+  _globalDepth = 0;
+  WiFiClient wifi;
+  HTTPClient http;
+  char path[64];
+  snprintf(path, sizeof(path), "/api/%s/lights", _user);
+
+  if (!httpGET(wifi, http, path)) {
+    Serial.println(F("HueBridge: could not read lights"));
+    http.end();
+    wifi.stop();
+    return false;
+  }
+
+  char idStr[16];
+  _filter.clear();
+  _filter["name"] = true; _filter["state"] = true; _filter["capabilities"]["control"]["ct"] = true;
+
+  WiFiClient* stream = http.getStreamPtr();
+  
+  // Wichtig: findNextKey muss 'true' für numericOnly erhalten
+  while (findNextKey(*stream, idStr, sizeof(idStr), true)) {
+    _httpJson.clear();
+    
+    // deserializeJson liest ab der '{' das KOMPLETTE Objekt der Lampe
+    DeserializationError err = deserializeJson(_httpJson, *stream, DeserializationOption::Filter(_filter));
+    _globalDepth = 1;
+    if (err == DeserializationError::Ok) {
+      updateOrAddLight(atoi(idStr), _httpJson);
+    } else {
+      Serial.print(F("JSON Error for Light ID "));
+      Serial.print(idStr);
+      Serial.print(F(": "));
+      Serial.println(err.c_str());
+      
+      // Falls ein Parsing-Fehler auftritt, müssen wir zum nächsten 
+      // Lampen-Anfang synchronisieren. findNextKey macht das automatisch.
+    }
+    // Den Such-Puffer in findNextKey kann man nicht von hier löschen, 
+    // aber findNextKey fängt beim nächsten Aufruf eh frisch an zu sammeln.
+  }
+  
+  http.end();
+  wifi.stop();
   return !_lights.empty();
 }
 
@@ -1178,7 +1224,7 @@ const std::vector<HueGroup*>& HueBridge::getGroups() const {
 }
 
 /* readGroups() V5 DynamicJsonDocument wiederverwendet (while-Schleife) */
-bool HueBridge::readGroups() {
+/*bool HueBridge::readGroups() {
   _globalDepth = 0;
   WiFiClient client;
   char path[64];
@@ -1207,6 +1253,42 @@ bool HueBridge::readGroups() {
   }
   NetworkHelper::resetClient(client);
   return !_groups.empty();
+}*/
+
+bool HueBridge::readGroups() {
+  _globalDepth = 0;
+  WiFiClient wifi;
+  HTTPClient http;
+  char path[64];
+  snprintf(path, sizeof(path), "/api/%s/groups", _user);
+  if (!httpGET(wifi, http, path)) {
+    Serial.println(F("HueBridge: could not read groups"));
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  
+  char idStr[32];
+  _filter.clear();
+  _filter["name"]=true; _filter["lights"]=true;
+
+  WiFiClient* stream = http.getStreamPtr();
+  
+  while (findNextKey(*stream, idStr, sizeof(idStr),true)) {
+    //doc.clear();
+    _httpJson.clear();
+    if (deserializeJson(_httpJson, *stream, DeserializationOption::Filter(_filter)) == DeserializationError::Ok) {
+      _globalDepth = 1;
+      // Logik zum Extrahieren der Light-IDs bleibt in addGroup
+      updateOrAddGroup(atoi(idStr), _httpJson);
+    } else {
+      Serial.print(F("Deserialization failed for group "));
+      Serial.println(idStr);
+    }
+  }
+  http.end();
+  wifi.stop();
+  return !_groups.empty();
 }
 
 void HueBridge::updateOrAddGroup(int id, JsonVariant doc) {
@@ -1230,7 +1312,7 @@ void HueBridge::updateOrAddGroup(int id, JsonVariant doc) {
 }
 
 /* readScenes() V5 JsonDocument wird wiederverwendet */
-bool HueBridge::readScenes() {
+/*bool HueBridge::readScenes() {
   _globalDepth = 0;
   WiFiClient client;
   char path[64];
@@ -1257,6 +1339,41 @@ bool HueBridge::readScenes() {
     _globalDepth = 1;
   }
   NetworkHelper::resetClient(client);
+  return !_scenes.empty();
+}*/
+
+bool HueBridge::readScenes() {
+  _globalDepth = 0;
+  WiFiClient wifi;
+  HTTPClient http;
+  char path[64];
+  snprintf(path, sizeof(path), "/api/%s/scenes", _user);
+  if (!httpGET(wifi, http, path)) {
+    Serial.println(F("HueBridge: could not read scenes"));
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  
+  for (auto* s : _scenes) delete s;
+  _scenes.clear();
+
+  char idStr[32]; // Szenen-IDs sind Strings!
+  _filter.clear();
+  _filter["type"]=true; _filter["name"]=true; _filter["lights"]=true;
+
+  WiFiClient* stream = http.getStreamPtr();
+  
+  while (findNextKey(*stream, idStr, sizeof(idStr),false)) {
+    _httpJson.clear();
+    if (deserializeJson(_httpJson, *stream, DeserializationOption::Filter(_filter)) == DeserializationError::Ok) {
+      // Hier übergeben wir idStr direkt als const char*
+      addScene(idStr, _httpJson); 
+    }
+    _globalDepth = 1;
+  }
+  http.end();
+  wifi.stop();
   return !_scenes.empty();
 }
 
@@ -1295,7 +1412,7 @@ bool HueBridge::setScene(const char* sceneName) {
   return false;
 }
 
-std::map<uint8_t, bool> HueBridge::getScenePowerStates(const char* sceneId) {
+/*std::map<uint8_t, bool> HueBridge::getScenePowerStates(const char* sceneId) {
   std::map<uint8_t, bool> results;
   WiFiClient client;
   char path[128];
@@ -1320,10 +1437,40 @@ std::map<uint8_t, bool> HueBridge::getScenePowerStates(const char* sceneId) {
   }
   NetworkHelper::resetClient(client);
   return results;
+}*/
+std::map<uint8_t, bool> HueBridge::getScenePowerStates(const char* sceneId) {
+  std::map<uint8_t, bool> results;
+  WiFiClient wifi;
+  HTTPClient http;
+  char path[128];
+  snprintf(path, sizeof(path), "/api/%s/scenes/%s", _user, sceneId);
+
+  if (httpGET(wifi, http, path)) {
+    // Filter erstellen: Wir wollen nur "lightstates" -> "alle IDs" -> "on"
+    //StaticJsonDocument<128> filter;
+    _filter.clear();
+    _filter["lightstates"][true]["on"] = true;
+
+    WiFiClient* stream = http.getStreamPtr();
+    // Dank Filter reicht jetzt ein deutlich kleineres Dokument!
+    // 1024-2048 Bytes sollten selbst für viele Lampen dicke reichen.
+    DynamicJsonDocument doc(2048); 
+    DeserializationError error = deserializeJson(doc, *stream, DeserializationOption::Filter(_filter));
+
+    if (!error) {
+      JsonObject lightstates = doc["lightstates"];
+      for (JsonPair p : lightstates) {
+        results[atoi(p.key().c_str())] = p.value()["on"] | false;
+      }
+    }
+  }
+  http.end();
+  wifi.stop();
+  return results;
 }
 
 /* getSceneLightStates() V2: Strings entfernt, direktes JSON parsing mit Filter, lokaler WiFiClient */ 
-SceneLightStates HueBridge::getSceneLightStates(const char* sceneId) {
+/*SceneLightStates HueBridge::getSceneLightStates(const char* sceneId) {
   SceneLightStates result;
   WiFiClient client; // Lokaler Client zum Schutz vor Exception 29
   
@@ -1379,10 +1526,73 @@ SceneLightStates HueBridge::getSceneLightStates(const char* sceneId) {
 
   NetworkHelper::resetClient(client);
   return result;
+}*/
+SceneLightStates HueBridge::getSceneLightStates(const char* sceneId) {
+  SceneLightStates result;
+  WiFiClient wifi;
+  HTTPClient http;
+  
+  char path[128];
+  snprintf(path, sizeof(path), "/api/%s/scenes/%s", _user, sceneId);
+
+  if (!httpGET(wifi, http, path)) {
+    Serial.println(F("HueBridge: could not read scene"));
+    http.end();
+    wifi.stop();
+    return result; 
+  }
+
+  WiFiClient* stream = http.getStreamPtr();
+  // Filter erstellen: Wir wollen nur den "lightstates"-Zweig
+  // Innerhalb der IDs interessieren uns nur on, bri und ct
+  //StaticJsonDocument<192> filter;
+  _filter.clear();
+  JsonObject lightstatesFilter = _filter.createNestedObject("lightstates");
+  // [true] ist ein Platzhalter für "alle Keys in diesem Objekt"
+  JsonObject idPattern = lightstatesFilter.createNestedObject("*"); 
+  idPattern["on"] = true;
+  idPattern["bri"] = true;
+  idPattern["ct"] = true;
+
+  // Dank Filter reicht ein moderates DynamicJsonDocument
+  DynamicJsonDocument doc(3072); 
+  //DeserializationError error = deserializeJson(doc, client, DeserializationOption::Filter(filter));
+  DeserializationError error = deserializeJson(doc, *stream, DeserializationOption::Filter(_filter));
+
+  if (!error) {
+    JsonObject lightstates = doc["lightstates"];
+    for (JsonPair kv : lightstates) {
+      uint8_t lightId = (uint8_t)atoi(kv.key().c_str());
+      JsonObject obj = kv.value().as<JsonObject>();
+
+      SceneLightState state;
+      if (obj.containsKey("on")) {
+        state.hasOn = true;
+        state.on = obj["on"];
+      }
+      if (obj.containsKey("bri")) {
+        state.hasBri = true;
+        state.bri = obj["bri"];
+      }
+      if (obj.containsKey("ct")) {
+        state.hasCT = true;
+        state.ct = obj["ct"];
+      }
+
+      result[lightId] = state;
+    }
+  } else {
+    Serial.print(F("Hue Scene Parsing Error: "));
+    Serial.println(error.c_str());
+  }
+
+  http.end();
+  wifi.stop();
+  return result;
 }
 
 /* readSensors() V5 Json-Filter eingeführt wegen zu grosser Antworten von der Bridge */
-bool HueBridge::readSensors() {
+/*bool HueBridge::readSensors() {
     _globalDepth = 0;
     WiFiClient client;
     char path[64];
@@ -1425,6 +1635,57 @@ bool HueBridge::readSensors() {
         }
     }
     NetworkHelper::resetClient(client);
+    return !_sensors.empty();
+}*/
+
+bool HueBridge::readSensors() {
+    _globalDepth = 0;
+    WiFiClient wifi;
+    HTTPClient http;
+    char path[64];
+    snprintf(path, sizeof(path), "/api/%s/sensors", _user);
+
+    if (!httpGET(wifi, http, path)) {
+      Serial.println(F("HueBridge: could not read sensors"));
+      http.end();
+      wifi.stop();
+      return false;
+    }
+
+    char idStr[16];
+    // 2026-02-02 filter ersetzt durch _filter
+    
+    // Filter definieren, um den RAM-Bedarf pro Sensor zu drücken
+    _filter.clear();
+    _filter["name"] = true;
+    _filter["type"] = true;
+    _filter["state"] = true; // Wir nehmen das ganze state-Objekt
+
+    WiFiClient* stream = http.getStreamPtr();
+    
+    while (findNextKey(*stream, idStr, sizeof(idStr), true)) {
+        _httpJson.clear();
+        // Parsing mit Filter!
+        DeserializationError err = deserializeJson(_httpJson, *stream, DeserializationOption::Filter(_filter));
+        
+        _globalDepth = 1; // "Back to track" Synchronisation
+
+        if (err == DeserializationError::Ok) {
+            updateOrAddSensor(atoi(idStr), _httpJson);
+        } else {
+            Serial.print(F("Sensor JSON Error ID "));
+            Serial.print(idStr);
+            Serial.print(F(": ")); 
+            Serial.println(err.c_str());
+            
+            // WICHTIG: Wenn der Parser abbricht, müssen wir den Rest des 
+            // aktuellen Objekts im Stream überspringen, sonst findet 
+            // findNextKey nur Müll.
+            stream->find((char*)"},"); // Versuche zum nächsten Geschwister-Element zu springen
+        }
+    }
+    http.end();
+    wifi.stop();
     return !_sensors.empty();
 }
 
@@ -1482,7 +1743,7 @@ bool HueBridge::setSensorState(uint16_t id, const JsonObject& state) {
 // ===== HTTP =====
 
 /* findNextKey() V5 Schutz vor Zerstörung des Json durch Verwendung von peek() statt read() */
-bool HueBridge::findNextKey(WiFiClient& client, char* out, size_t outSize, bool numericOnly) {
+/*bool HueBridge::findNextKey(WiFiClient& client, char* out, size_t outSize, bool numericOnly) {
   char buffer[64]; 
   size_t bufIdx = 0;
   memset(buffer, 0, sizeof(buffer));
@@ -1543,8 +1804,68 @@ bool HueBridge::findNextKey(WiFiClient& client, char* out, size_t outSize, bool 
     }
   }
   return false;
-}
+}*/
+bool HueBridge::findNextKey(Stream& stream, char* out, size_t outSize, bool numericOnly) {
+  char buffer[64]; 
+  size_t bufIdx = 0;
+  memset(buffer, 0, sizeof(buffer));
 
+  while (stream.available()) {    
+    // peek() schaut nur das nächste Zeichen an, ohne es aus dem Stream zu löschen
+    char c = stream.peek(); 
+
+    if (c == '{') {
+      // NUR wenn wir auf der richtigen Ebene sind, prüfen wir den Key
+      if (_globalDepth == 1) { // Wir sind im Hauptobjekt, suchen Kinder auf Ebene 1
+        char* lastQuote = strrchr(buffer, '"');
+        if (lastQuote) {
+          char* firstQuote = nullptr;
+          for (char* p = lastQuote - 1; p >= buffer; p--) {
+            if (*p == '"') { firstQuote = p; break; }
+          }
+          if (firstQuote) {
+            *lastQuote = '\0';
+            const char* foundKey = firstQuote + 1;
+            bool isValid = true;
+            if (numericOnly) {
+              for (size_t i = 0; i < strlen(foundKey); i++) {
+                if (!isdigit(foundKey[i])) { isValid = false; break; }
+              }
+            }
+            if (isValid) {
+              strlcpy(out, foundKey, outSize);
+              // WICHTIG: Wir lassen die '{' im Stream! deserializeJson wird sie lesen.
+              // Aber wir müssen unsere interne Tiefe manuell erhöhen, 
+              // da wir gleich 'return' machen und die '{' im Stream bleibt.
+              _globalDepth++; 
+              return true; 
+            }
+          }
+        }
+      }
+      _globalDepth++; // Normales Hochzählen für Unterobjekte
+    } else if (c == '}') {
+      _globalDepth--;
+    }
+
+    // Jetzt das Zeichen wirklich aus dem Stream entfernen
+    stream.read(); 
+
+    if (c != '{' && c != '}' && c != '[' && c != ']') {
+        buffer[bufIdx++] = c;
+        if (bufIdx >= sizeof(buffer) - 1) {
+          memmove(buffer, buffer + 1, sizeof(buffer) - 2);
+          bufIdx = sizeof(buffer) - 2;
+        }
+        buffer[bufIdx] = '\0';
+    } else {
+        bufIdx = 0;
+        buffer[0] = '\0';
+    }
+  }
+  return false;
+}
+/*
 bool HueBridge::httpGET(WiFiClient& client, const char* path) {
     EnsureTimeoutBeforeRequest(100);
     client.stop(); // Bestehende Verbindung dieses lokalen Clients kappen
@@ -1559,6 +1880,29 @@ bool HueBridge::httpGET(WiFiClient& client, const char* path) {
     client.println(F("Connection: close\r\n"));
 
     return waitForData(client,2000);
+}
+*/
+
+bool HueBridge::httpGET(WiFiClient& wifi, HTTPClient& http, const char* path) {
+  EnsureTimeoutBeforeRequest(100);
+  char url[128];
+  snprintf(url, sizeof(url), "http://%d.%d.%d.%d%s", _ip[0], _ip[1], _ip[2], _ip[3], path);
+
+  if (!http.begin(wifi, url)) {
+    Serial.println(F("[HueBridge::get] could not connect"));
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  http.setReuse(false);
+  int httpCode = http.GET();
+
+  if (httpCode != HTTP_CODE_OK) {
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  return true;
 }
 
 bool HueBridge::sendLightState(uint8_t lightId, const char* jsonPayload) {

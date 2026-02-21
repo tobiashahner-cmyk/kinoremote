@@ -26,11 +26,11 @@ KinoError YamahaReceiver::init() {
 // ----------------------------------------------------
 
 bool YamahaReceiver::isDirty() {
-  return _dirty;
+  return (_dirty > 0);
 }
 
 void YamahaReceiver::clearDirty() {
-  _dirty = false;
+  _dirty = NONE;
 }
 
 bool YamahaReceiver::getStatusUpdate(const char* devName, JsonObject& root) {
@@ -558,6 +558,7 @@ const KinoPropertyParam* YamahaReceiver::getDspParam(const char* dspname, size_t
 }
 
 /* bool YamahaReceiver::getStatus() V2: 2026-02-10 Strings entfernt */
+/*
 bool YamahaReceiver::getStatus() {
   WiFiClient client;
   if (!sendXMLRequest(client, FPSTR(XML_GET_STATUS))) {
@@ -637,6 +638,95 @@ bool YamahaReceiver::getStatus() {
   // Rest verwerfen
   while(client.available() > 0) { client.read(); yield(); }
   client.stop();
+
+  //erzwinge refresh von NetRadioInfo:
+  if (_powerStatus && (strcmp(_source,"NET RADIO")==0)) _dirty |= TRACK;
+  return true;
+}
+*/
+
+/* boolYamahaReceiver::getStatus()  V3: 2026-02-21 Umstieg auf HttpClient */
+bool YamahaReceiver::getStatus() {
+  WiFiClient wifi;
+  HTTPClient http;
+  if (!sendXMLRequest(wifi, http, FPSTR(XML_GET_STATUS))) {
+    Serial.println(F("could not get status from yamaha"));
+    http.end();
+    wifi.stop();
+    return false;
+  }
+
+  WiFiClient* stream = http.getStreamPtr();
+
+  // 1. Power
+  if (stream->find("<Power>")) {
+    bool val = readIsOn(*stream);
+    if (_powerStatus != val) { _powerStatus = val; _dirty |= POWER; }
+  }
+  
+  // 2. Volume
+  if (stream->find("<Val>")) {
+    int val = readIntUntil(*stream);
+    if (_volume != val) { _volume = val; _dirty |= VOLUME; }
+  }
+
+  // 5. Mute
+  if (stream->find("<Mute>")) {
+    bool val = readIsOn(*stream);
+    if (_mute != val) { _mute = val; _dirty |= MUTE; }
+  }
+
+  // 2a. Subwoofer Trim
+  if (stream->find("<Val>")) {
+    int val = readIntUntil(*stream);
+    if (_subwooferTrim != val) { _subwooferTrim = val; _dirty |= SWTRIM; }
+  }
+
+  // 3. Input (Beispiel mit festem Puffer statt dynamischem String)
+  if (stream->find("<Input_Sel>")) {
+    char buf[32];
+    readSanitizedUntil(*stream, '<', buf, sizeof(buf));
+    if (strcmp(_source, buf)!=0) {
+      strncpy(_source, buf, sizeof(_source));
+      _source[sizeof(_source)-1] = '\0';
+      _dirty |= SOURCE;
+    }
+  }
+
+
+  // Straight / Enhancer
+  if (stream->find("<Straight>")) {
+    bool val = readIsOn(*stream);
+    if (_straight != val) { _straight = val; _dirty |= STRAIGHT; }
+  }
+  if (stream->find("<Enhancer>")) {
+    bool val = readIsOn(*stream);
+    if (_enhancer != val) { _enhancer = val; _dirty |= ENHANCER; }
+  }
+
+  // 4. Sound Program
+  if (stream->find("<Sound_Program>")) {
+    char buf[32];
+    readSanitizedUntil(*stream, '<', buf, sizeof(buf));
+    if (strcmp(_soundProgram, buf)!=0) {
+      strlcpy(_soundProgram, buf, sizeof(_soundProgram));
+      _dirty |= DSP;
+    }
+  }
+
+  // Bass / Treble
+  if (stream->find("<Val>")) {
+    int val = readIntUntil(*stream);
+    if (_bass != val) { _bass = val; _dirty |= BASS; }
+  }
+  if (stream->find("<Val>")) {
+    int val = readIntUntil(*stream);
+    if (_treble != val) { _treble = val; _dirty |= TREBLE; }
+  }
+
+  // Stream sauber schliessen
+  http.end();
+  wifi.stop();
 
   //erzwinge refresh von NetRadioInfo:
   if (_powerStatus && (strcmp(_source,"NET RADIO")==0)) _dirty |= TRACK;
@@ -756,7 +846,7 @@ void YamahaReceiver::initInputSources() {
 }
 
 /* readInputSources V3  2026-02-15  Verzicht auf Strings, Nutzung optimierter Helper */
-bool YamahaReceiver::readInputSources() {
+/*bool YamahaReceiver::readInputSources() {
   initInputSources();
   
   //String keyname; keyname.reserve(40);
@@ -833,6 +923,84 @@ bool YamahaReceiver::readInputSources() {
 
   _gotInputSources = true;
   return true;
+}*/
+
+bool YamahaReceiver::readInputSources() {
+  initInputSources();
+  
+  char keyname[32];
+  WiFiClient wifi;
+  HTTPClient http;
+  // 1. Namen abfragen
+  if (!sendXMLRequest(wifi, http, XML_GET_INPUTNAMES)) {
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  WiFiClient* stream = http.getStreamPtr();
+  // Finde "<Input_Name>"
+  if (stream->find("<Input_Name>")) {
+    while(true) {
+      if (stream->find('<')) {
+        readSanitizedUntil(*stream, '>', keyname, sizeof(keyname));
+        if (strcmp(keyname, "/Input_Name")==0) {
+          // end of list
+          break;
+        }
+        InputSource* is = getInputSourceByKey(keyname);
+        if (is) {
+          readSanitizedUntil(*stream, '<', is->custom, sizeof(is->custom));
+        }
+        if (!stream->find('>')) {
+          // closing tag not terminated, something is wrong
+          break;
+        }
+      } else {
+        // didnt find '<' => no tag opener, something is wrong
+        break;
+      }
+      yield();
+    }
+  }
+  http.end();
+
+  // 2. Skip-Status abfragen (analog zum ersten Teil)
+  if (!sendXMLRequest(wifi, http, XML_GET_INPUTSKIP)) {
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  stream = http.getStreamPtr(); // vielleicht nicht nötig, aber ich gehe mal lieber sicher
+  // Finde "<Input_Name>"
+  if (stream->find("<Input_Skip>")) {
+    while (true) {
+      if (stream->find('<')) {
+        readSanitizedUntil(*stream, '>', keyname, sizeof(keyname));
+        if (strcmp(keyname, "/Input_Skip")==0) {
+          // end of list
+          break;
+        }
+        InputSource* is = getInputSourceByKey(keyname);
+        if (is) {
+          is->skip = readIsOn(*stream);
+        }
+        if (!stream->find('>')) {
+          // closing tag not terminated, something is wrong
+          break;
+        }
+      } else {
+        // no tag opener, something is wrong
+        break;
+      }
+      yield();
+    }
+  }
+  
+  http.end();
+  wifi.stop();
+
+  _gotInputSources = true;
+  return true;
 }
 
 /* getInputSource   V2  2026-02-15  Rückgabetyp geändert auf Pointer */
@@ -859,7 +1027,7 @@ InputSource* YamahaReceiver::getInputSourceByKey(const char* keyname) {
 // ----------------------------------------------------
 
 /* waitForNetRadioList neu 2026-02-14   ersetzt die alte readNetRadioList: keine Strings, weniger RAM, besseres Fehlerhandling */
-bool YamahaReceiver::waitForNetRadioList(WiFiClient& client, bool keepalive) {
+/*bool YamahaReceiver::waitForNetRadioList(WiFiClient& client, bool keepalive) {
   unsigned long startTime = millis();
   bool ok = false;
 
@@ -891,9 +1059,42 @@ bool YamahaReceiver::waitForNetRadioList(WiFiClient& client, bool keepalive) {
   }
   return ok;
 }
+*/
+bool YamahaReceiver::waitForNetRadioList(WiFiClient& wifi, HTTPClient& http, bool keepalive) {
+  unsigned long startTime = millis();
+  bool ready = false;
+
+  while (millis() - startTime < 2000) {
+    if (!sendXMLRequest(wifi, http, XML_GET_NETRADIO_LIST)) {
+      http.end();
+      delay(100);
+      continue;
+    }
+
+    WiFiClient* stream = http.getStreamPtr();
+    if (stream->find("<Menu_Status>")) {
+      char menuStatus[20];
+      size_t len = stream->readBytesUntil('<', menuStatus, sizeof(menuStatus) - 1);
+      menuStatus[len] = '\0';
+      if (strcmp(menuStatus, "Ready") == 0) {
+        ready = true;
+        break; // Wir lassen http offen, damit der Stream gelesen werden kann!
+      }
+    }
+
+    http.end(); // Nicht bereit? Dann sauber schließen für den nächsten Versuch
+    delay(50);
+    yield();
+  }
+
+  if (!ready || !keepalive) {
+    http.end();
+  }
+  return ready;
+}
 
 /* moveToFavorites V2 : 2026-02-14  Strings entfernt, besseres Fehlerhandling */
-bool YamahaReceiver::moveToFavorites(WiFiClient& client) {
+/*bool YamahaReceiver::moveToFavorites(WiFiClient& client) {
   bool ok = true;
   if (!sendXMLRequest(client, XML_SET_MOVEHOME)) {
     ok = false;
@@ -931,13 +1132,34 @@ bool YamahaReceiver::moveToFavorites(WiFiClient& client) {
   // fertig, ok ist jetzt bereit:
   return ok;
 }
+*/
+bool YamahaReceiver::moveToFavorites(WiFiClient& wifi, HTTPClient& http) {
+  // 1. Home
+  if (!sendXMLRequest(wifi, http, XML_SET_MOVEHOME)) return false;
+  bool ok = http.getStreamPtr()->find("RC=\"0\"");
+  http.end(); 
+  if (!ok || !waitForNetRadioList(wifi, http, false)) return false;
+
+  // 2. Erster Select (Zeile 1)
+  if (!sendXMLRequest(wifi, http, XML_SET_SELECT_LINE_ONE)) return false;
+  ok = http.getStreamPtr()->find("RC=\"0\"");
+  http.end();
+  if (!ok || !waitForNetRadioList(wifi, http, false)) return false;
+
+  // 3. Zweiter Select (Favoriten-Ordner öffnen)
+  if (!sendXMLRequest(wifi, http, XML_SET_SELECT_LINE_ONE)) return false;
+  ok = http.getStreamPtr()->find("RC=\"0\"");
+  http.end();
+  
+  return ok;
+}
 
 // ----------------------------------------------------
 // Navigiert zu Favoriten
 // ----------------------------------------------------
 
 /* moveToNextPage V2  2026-02-14  keine Strings, besseres Fehlerhandling */
-bool YamahaReceiver::moveToNextPage(WiFiClient& client) {
+/*bool YamahaReceiver::moveToNextPage(WiFiClient& client) {
   if (!waitForNetRadioList(client, false)) return false; // Stream ist auf jeden Fall leer und geschlossen
   bool ok = sendXMLRequest(client, XML_SELECT_NEXT_PAGE);
   
@@ -947,13 +1169,25 @@ bool YamahaReceiver::moveToNextPage(WiFiClient& client) {
   NetworkHelper::resetClient(client);
   return ok;
 }
+*/
+bool YamahaReceiver::moveToNextPage(WiFiClient& wifi, HTTPClient& http) {
+  if (!waitForNetRadioList(wifi, http, false)) return false; // Stream ist auf jeden Fall leer und geschlossen
+  bool ok = sendXMLRequest(wifi, http, XML_SELECT_NEXT_PAGE);
+  
+  // sendXMLRequest gibt den Stream offen zurück. Antwort auswerten:
+  WiFiClient* stream = http.getStreamPtr();
+  if (ok) ok = stream->find((char*)"RC=\"0\"");
+  // Rest der Antwort interessiert nicht:
+  http.end();
+  return ok;
+}
 
 // ----------------------------------------------------
 // Favoriten auslesen
 // ----------------------------------------------------
 
 /* readNetRadioFavorites  V2  2026-02-14  jetzt bool, keine Strings, weniger RAM, besseres Fehlerhandling */
-bool YamahaReceiver::readNetRadioFavorites(bool reload) {
+/*bool YamahaReceiver::readNetRadioFavorites(bool reload) {
   if (_stationCount > 0 && !reload) return true;
   
   WiFiClient client;
@@ -1011,7 +1245,74 @@ bool YamahaReceiver::readNetRadioFavorites(bool reload) {
   // Am Ende sicherstellen, dass alles zu ist
   NetworkHelper::resetClient(client);
   return _stationCount > 0;
+}*/
+
+bool YamahaReceiver::readNetRadioFavorites(bool reload) {
+  if (_stationCount > 0 && !reload) return true;
+  WiFiClient wifi;
+  HTTPClient http;
+  if (!moveToFavorites(wifi, http)) {
+    http.end();
+    wifi.stop();
+    return false;
+  }
+
+  _stationCount = 0;
+  bool hasNextPage = true;
+
+  while (hasNextPage && _stationCount < MAX_STATIONS) {
+    // Wir warten auf die Liste und halten den Stream offen (keepalive = true)
+    if (!waitForNetRadioList(wifi, http, true)) break;
+
+    WiFiClient* stream = http.getStreamPtr();
+    // Die Liste hat typischerweise 8 Einträge pro Seite
+    for (int i = 0; i < 8; i++) {
+      if (_stationCount >= MAX_STATIONS) break;
+
+      // 1. Suche den Sendernamen
+      if (!stream->find("<Txt>")) break; 
+      
+      char tempName[48];
+      //size_t nLen = client.readBytesUntil('<', tempName, sizeof(tempName) - 1);
+      size_t nLen = readSanitizedUntil(*stream, '<', tempName, sizeof(tempName) - 1);
+      tempName[nLen] = '\0';
+
+      // 2. Suche das zugehörige Attribut (muss nach <Txt> kommen)
+      if (!stream->find("<Attribute>")) break;
+      
+      char tempAttr[20];
+      //size_t aLen = client.readBytesUntil('<', tempAttr, sizeof(tempAttr) - 1);
+      size_t aLen = readSanitizedUntil(*stream, '<', tempAttr, sizeof(tempAttr) - 1);
+      tempAttr[aLen] = '\0';
+
+      // 3. Validierung
+      if (strcmp(tempAttr, "Unselectable") == 0) {
+        hasNextPage = false; // Ende der Liste erreicht
+        break;
+      }
+
+      // 4. In das statische Array kopieren
+      strncpy(_stations[_stationCount], tempName, 47);
+      _stations[_stationCount][47] = '\0';
+      _stationCount++;
+    }
+
+    if (hasNextPage && _stationCount < MAX_STATIONS) {
+        // Seite voll, versuche nächste Seite
+        // moveToNextPage muss die Verbindung schließen, damit wir neu pollen können
+        if (!moveToNextPage(wifi, http)) {
+            hasNextPage = false; 
+        }
+        // Der nächste Schleifendurchlauf ruft wieder waitForNetRadioList auf
+    }
+  }
+  
+  // Am Ende sicherstellen, dass alles zu ist
+  http.end();
+  wifi.stop();
+  return _stationCount > 0;
 }
+
 
 /* getNetRadioFavorite  V1  2026-02-14  Getter für neuen private _stations */
 bool YamahaReceiver::getNetRadioFavorite(size_t index, char* buf, int buflen) {
@@ -1024,6 +1325,7 @@ bool YamahaReceiver::getNetRadioFavorite(size_t index, char* buf, int buflen) {
   return true;
 }
 
+/*
 bool YamahaReceiver::selectNetRadioFavorite(const char* station) {
   // gültige Favoritenliste sicherstellen
   if (_stationCount == 0) readNetRadioFavorites();
@@ -1099,8 +1401,88 @@ bool YamahaReceiver::selectNetRadioFavorite(const char* station) {
   // Ende der Liste erreicht oder alle bekannten Favoriten abgegrast. Schliesse den Client und melde den Misserfolg:
   NetworkHelper::resetClient(client);
   return false;
+}*/
+
+bool YamahaReceiver::selectNetRadioFavorite(const char* station) {
+  // gültige Favoritenliste sicherstellen
+  if (_stationCount == 0) readNetRadioFavorites();
+  if (_stationCount == 0) return false;
+  // bereite Parameter vor: wir vergleichen nur die ersten 10 Buchstaben
+  char wanted[11];
+  strncpy(wanted, station, sizeof(wanted));
+  wanted[sizeof(wanted)-1] = '\0';
+  // bereite Menü vor
+  WiFiClient wifi;
+  HTTPClient http;
+  if (!moveToFavorites(wifi, http)) {
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  bool hasNextPage = true;
+  int found = 0;
+  while (hasNextPage && found <= _stationCount) {
+    // Wir warten auf die Liste und halten den Stream offen (keepalive = true)
+    if (!waitForNetRadioList(wifi, http, true)) {
+      break;
+    }
+    WiFiClient* stream = http.getStreamPtr();
+    // Die Liste hat typischerweise 8 Einträge pro Seite
+    for (int linenr = 1; linenr < 9; linenr++) {
+      // 1. Suche den Sendernamen
+      if (!stream->find("<Txt>")) {
+        break; 
+      }
+      
+      char tempName[11];
+      size_t nLen = readSanitizedUntil(*stream, '<', tempName, sizeof(tempName));
+      tempName[nLen] = '\0';
+
+      // 2. Suche das zugehörige Attribut (muss nach <Txt> kommen)
+      if (!stream->find("<Attribute>")) {
+        break;
+      }
+      
+      char tempAttr[20];
+      size_t aLen = readSanitizedUntil(*stream, '<', tempAttr, sizeof(tempAttr));
+      tempAttr[aLen] = '\0';
+
+      // 3. Validierung
+      if (strcmp(tempAttr, "Unselectable") == 0) {
+        hasNextPage = false; // Ende der Liste erreicht
+        break;
+      }
+
+      // 4. vergleichen und ggf auswählen
+      if (strcmp(tempName, wanted)==0) {
+        // Stream vorbereiten für den Auswahlbefehl
+        http.end();
+        bool ok = executeSetCommand(wifi, http, XML_SET_SELECT_LINENR_START, linenr, XML_SET_SELECT_LINENR_END);
+        http.end();
+        wifi.stop();
+        return ok;
+      }
+      // wenn wir hier sind, war noch nicht der richtige Sender dabei
+      found++;
+    }
+
+    if (hasNextPage && _stationCount < MAX_STATIONS) {
+        // Seite voll, versuche nächste Seite
+        // moveToNextPage wird die Verbindung schließen, damit wir neu pollen können
+        http.end();
+        if (!moveToNextPage(wifi, http)) {
+          hasNextPage = false; 
+        }
+        // Der nächste Schleifendurchlauf ruft wieder waitForNetRadioList auf
+    }
+  }
+  // Ende der Liste erreicht oder alle bekannten Favoriten abgegrast. Schliesse den Client und melde den Misserfolg:
+  http.end();
+  wifi.stop();
+  return false;
 }
 
+/*
 bool YamahaReceiver::readDspNames(bool reload) {
   if ((_dspCount > 0) && (!reload)) return true;
   _dspCount = 0;
@@ -1152,6 +1534,61 @@ bool YamahaReceiver::readDspNames(bool reload) {
   }
   NetworkHelper::resetClient(client);
   return (_dspCount > 0);
+}*/
+
+bool YamahaReceiver::readDspNames(bool reload) {
+  if ((_dspCount > 0) && (!reload)) return true;
+  _dspCount = 0;
+  WiFiClient wifi;
+  HTTPClient http;
+  if (!sendXMLRequest(wifi, http, FPSTR(XML_GET_DSP_SKIP))) {
+    Serial.println(F("readDspNames: sendXMLRequest failed, returning false"));
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  WiFiClient* stream = http.getStreamPtr();
+  if (!stream->find((char*)"RC=\"0\"")) {
+    http.end();
+    wifi.stop();
+    return false;
+  }
+  char keyname[32];
+  unsigned long now = millis();
+  unsigned long wdStart = now;
+  unsigned long maxTimeout = 1000;
+  // Finde "<DSP_Skip>"
+  if (stream->find("<DSP_Skip>")) {
+    while(now - wdStart < maxTimeout) { // ensure max timeout
+      if (stream->find('<')) {
+        readSanitizedUntil(*stream,'>',keyname, sizeof(keyname));
+        // end of list?
+        if (strcmp(keyname, "/DSP_Skip")== 0) {
+          break;
+        }
+        bool skip = readIsOn(*stream);
+        if (!skip && (_dspCount < MAX_DSP)) {
+          sanitizeDspName(keyname);
+          strncpy(_dsps[_dspCount], keyname, 31);
+          _dsps[_dspCount][31] = '\0';
+          _dspCount++;
+        }
+        // try skipping the closing tag (in fact, ANY tag)
+        // closing tag not terminated => something is wrong
+        if (!stream->find('>')) {
+          break;
+        }
+      } else {
+        // no tag opener, something is wrong
+        break;
+      }
+      now = millis();
+      yield();  // take this, watchdog ;-)
+    }
+  }
+  http.end();
+  wifi.stop();
+  return (_dspCount > 0);
 }
 
 bool YamahaReceiver::getDspName(size_t index, char* buf, size_t bufLen) {
@@ -1178,6 +1615,7 @@ void YamahaReceiver::sanitizeDspName(char* name) {
     name[len] = '\0';
 }
 
+/*
 NetRadioTrackInfo YamahaReceiver::readCurrentlyPlayingNetRadio() {
   static NetRadioTrackInfo info;
   unsigned long now = millis();
@@ -1203,28 +1641,76 @@ NetRadioTrackInfo YamahaReceiver::readCurrentlyPlayingNetRadio() {
   NetworkHelper::resetClient(client);
   info.created = millis();
   return info;
+}*/
+NetRadioTrackInfo YamahaReceiver::readCurrentlyPlayingNetRadio() {
+  static NetRadioTrackInfo info;
+  unsigned long now = millis();
+  if ((info.created != 0)&&(now-info.created < 2000)) return info;
+  WiFiClient wifi;
+  HTTPClient http;
+  if (!sendXMLRequest(wifi, http, FPSTR(XML_GET_NETRADIO_PLAYINFO))){
+    http.end();
+    wifi.stop();
+    return info;
+  }
+  WiFiClient* stream = http.getStreamPtr();
+  char buf[64];
+  size_t readLen;
+  if (stream->find("<Elapsed>")) {
+    readSanitizedUntil(*stream, '<', info.elapsed, sizeof(info.elapsed));
+  }
+  if (stream->find("<Station>")) {
+    readSanitizedUntil(*stream, '<', info.station, sizeof(info.station));
+  }
+  if (stream->find("<Song>")) {
+    readSanitizedUntil(*stream, '<', info.song, sizeof(info.song));
+  }
+  http.end();
+  wifi.stop();
+  info.created = millis();
+  return info;
 }
 
+/*
 bool YamahaReceiver::setPower(bool onoff) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_POWER_START, onoff ? "On" : "Standby", XML_SET_POWER_END)) {
-      if (_powerStatus != onoff) _dirty = true;
+      if (_powerStatus != onoff) _dirty |= POWER;
       _powerStatus = onoff;
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setPower(bool onoff) {
+  bool ok = executeSetCommand(XML_SET_POWER_START, onoff ? "On" : "Standby", XML_SET_POWER_END);
+  if (ok) {
+    if (_powerStatus != onoff) _dirty |= POWER;
+    _powerStatus = onoff;
+  }
+  return ok;
 }
 
+/*
 bool YamahaReceiver::setVolume(int vol) {
   WiFiClient client;
   if (vol > 0) vol *= -1;
   if (client, executeSetCommand(client, XML_SET_VOLUME_START, vol, XML_SET_VOLUME_END)) {
-      if (_volume != vol) _dirty = true;
+      if (_volume != vol) _dirty |= VOLUME;
       _volume = vol;
       _mute = false;
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setVolume(int vol) {
+  if (vol > 0) vol *= -1;
+  bool ok = executeSetCommand(XML_SET_VOLUME_START, vol, XML_SET_VOLUME_END);
+  if (ok) {
+    if (_volume != vol) _dirty |= VOLUME;
+    _volume = vol;
+    _mute = false;  // Yamaha schaltet Mute aus, wenn Lautstärke gesetzt wird
+  }
+  return ok;
 }
 
 bool YamahaReceiver::setVolumeAlexa(int vol) {
@@ -1244,93 +1730,159 @@ bool YamahaReceiver::setVolumePercent(int vol) {
   return setVolume(realVal);
 }
 
-bool YamahaReceiver::setMute(bool onoff) {
+/*bool YamahaReceiver::setMute(bool onoff) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_MUTE_START, onoff ? "On" : "Off", XML_SET_MUTE_END)) {
-      if (_mute != onoff) _dirty = true;
+      if (_mute != onoff) _dirty |= MUTE;
       _mute = onoff;
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setMute(bool onoff) {
+  bool ok = executeSetCommand(XML_SET_MUTE_START, onoff ? "On" : "Off", XML_SET_MUTE_END);
+  if (ok) {
+    if (_mute != onoff) _dirty |= MUTE;
+    _mute = onoff;
+  }
+  return ok;
 }
-
-bool YamahaReceiver::setTreble(int treb) {
+/*bool YamahaReceiver::setTreble(int treb) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_TREBLE_START, treb, XML_SET_TREBLE_END)) {
-      if(_treble != treb) _dirty = true;
+      if(_treble != treb) _dirty |= TREBLE;
       _treble = treb;
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setTreble(int treb) {
+  bool ok = executeSetCommand(XML_SET_TREBLE_START, treb, XML_SET_TREBLE_END);
+  if (ok) {
+    if(_treble != treb) _dirty |= TREBLE;
+    _treble = treb;
+  }
+  return ok;
 }
 
+/*
 bool YamahaReceiver::setBass(int bas) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_BASS_START, bas, XML_SET_BASS_END)) {
-      if (_bass != bas) _dirty = true;
+      if (_bass != bas) _dirty |= BASS;
       _bass = bas;
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setBass(int bas) {
+  bool ok = executeSetCommand(XML_SET_BASS_START, bas, XML_SET_BASS_END);
+  if (ok) {
+    if (_bass != bas) _dirty |= BASS;
+    _bass = bas;
+  }
+  return ok;
 }
 
-bool YamahaReceiver::setSubwooferTrim(int val) {
+/*bool YamahaReceiver::setSubwooferTrim(int val) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_SWTRIM_START, val, XML_SET_SWTRIM_END)) {
-      if (_subwooferTrim != val) _dirty = true;
+      if (_subwooferTrim != val) _dirty |= SWTRIM;
       _subwooferTrim = val;
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setSubwooferTrim(int val) {
+  bool ok = executeSetCommand(XML_SET_SWTRIM_START, val, XML_SET_SWTRIM_END);
+  if (ok) {
+    if (_subwooferTrim != val) _dirty |= SWTRIM;
+    _subwooferTrim = val;
+  }
+  return ok;
 }
 
 /* setSource()  V2  2026-02-15  _source geändert von String nach char[] */
-bool YamahaReceiver::setSource(const char* srcName) {
+/*bool YamahaReceiver::setSource(const char* srcName) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_SOURCE_START, srcName, XML_SET_SOURCE_END)) {
       //if (_source != srcName) _dirty = true;
       if (strcmp(_source, srcName)!=0) {
         strncpy(_source, srcName, sizeof(_source));
         _source[sizeof(_source)-1] = '\0';
-        _dirty = true;
+        _dirty |= SOURCE;
       }
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setSource(const char* srcName) {
+  bool ok = executeSetCommand(XML_SET_SOURCE_START, srcName, XML_SET_SOURCE_END);
+  if (ok && (strcmp(_source, srcName)!=0)) {
+    strncpy(_source, srcName, sizeof(_source));
+    _source[sizeof(_source)-1] = '\0';
+    _dirty |= SOURCE;
+  }
+  return ok;
 }
 
-bool YamahaReceiver::setStraight(bool onoff) {
+/*bool YamahaReceiver::setStraight(bool onoff) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_STRAIGHT_START, onoff ? "On" : "Off", XML_SET_STRAIGHT_END)) {
-      if (_straight != onoff) _dirty = true;
+      if (_straight != onoff) _dirty |= STRAIGHT;
       _straight = onoff;
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setStraight(bool onoff) {
+  bool ok = executeSetCommand(XML_SET_STRAIGHT_START, onoff ? "On" : "Off", XML_SET_STRAIGHT_END);
+  if ( ok && (_straight != onoff)) {
+    _straight = onoff;
+    _dirty |= STRAIGHT;
+  }
+  return ok;
 }
 
-bool YamahaReceiver::setEnhancer(bool onoff) {
+/*bool YamahaReceiver::setEnhancer(bool onoff) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_ENHANCER_START, onoff ? "On" : "Off", XML_SET_ENHANCER_END)) {
-      if (_enhancer != onoff) _dirty = true;
+      if (_enhancer != onoff) _dirty |= ENHANCER;
       _enhancer = onoff;
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setEnhancer(bool onoff) {
+  bool ok = executeSetCommand(XML_SET_ENHANCER_START, onoff ? "On" : "Off", XML_SET_ENHANCER_END);
+  if (ok && (_enhancer != onoff)) {
+    _enhancer = onoff;
+    _dirty |= ENHANCER;
+  }
+  return ok;
 }
 
 /* 2026-02-15 V2  removed Strings */
-bool YamahaReceiver::setSoundProgram(const char* dspname) {
+/*bool YamahaReceiver::setSoundProgram(const char* dspname) {
   WiFiClient client;
   if (executeSetCommand(client, XML_SET_DSP_START, dspname, XML_SET_DSP_END)) {
       if (strcmp(dspname, _soundProgram)!=0) {
         strncpy(_soundProgram, dspname, sizeof(_soundProgram));
         _soundProgram[sizeof(_soundProgram)-1] = '\0';
-        _dirty = true;
+        _dirty |= DSP;
       }
       return true;
   }
   return false;
+}*/
+bool YamahaReceiver::setSoundProgram(const char* dspname) {
+  bool ok = executeSetCommand(XML_SET_DSP_START, dspname, XML_SET_DSP_END);
+  if (ok && (strcmp(dspname, _soundProgram)!=0)) {
+        strncpy(_soundProgram, dspname, sizeof(_soundProgram));
+        _soundProgram[sizeof(_soundProgram)-1] = '\0';
+        _dirty |= DSP;
+  }
+  return ok;
 }
 
 // ----------------------------------------------------
@@ -1347,6 +1899,7 @@ void YamahaReceiver::EnsureDelayBeforeRequest(unsigned long timeout) {
     return;
 }
 
+/*
 bool YamahaReceiver::sendXMLRequest(WiFiClient& client, const __FlashStringHelper* xml) {
     client.stop(); // Bestehende Verbindungen killen
     client.setTimeout(1000); // Kurzer Timeout für das LAN
@@ -1376,13 +1929,61 @@ bool YamahaReceiver::sendXMLRequest(WiFiClient& client, const __FlashStringHelpe
     }
     return true;
 }
+*/
+bool YamahaReceiver::sendXMLRequest(WiFiClient& wifi, HTTPClient& http, const __FlashStringHelper* xml) {
+  EnsureDelayBeforeRequest(100);
+  // URL zusammenbauen
+  char url[56];
+  snprintf(url, sizeof(url), "http://%d.%d.%d.%d/YamahaRemoteControl/ctrl", _ip[0], _ip[1], _ip[2], _ip[3]);
+  
+  if (!http.begin(wifi, url)) {
+    return false;
+  }
 
+  http.addHeader(F("Content-Type"), F("text/xml; charset=UTF-8"));
+  http.setReuse(false); // Yamaha-Schnittstellen mögen oft keine persistenten Verbindungen
+
+  // Body zusammensetzen (Header + XML)
+  /*String payload = FPSTR(XML_HEADER);
+  payload += xml;*/
+  // Wir nutzen einen lokalen Puffer auf dem Stack (ca. 160-200 Bytes reichen locker)
+  char body[256]; 
+  // Zusammenbauen mit snprintf_P (spart RAM, nutzt Flash-Strings)
+  // %S = Flash-String (__FlashStringHelper*), %s = RAM-String (char*)
+  int len = snprintf_P(body, sizeof(body), PSTR("%S%S"), 
+                       (PGM_P)XML_HEADER, (PGM_P)xml);
+
+  if (len >= (int)sizeof(body)) {
+      Serial.println(F("[Yamaha] XML too long for buffer!"));
+      http.end();
+      return false;
+  }
+
+  // POST sendet jetzt den Puffer UND setzt Content-Length automatisch
+  int httpCode = http.POST((uint8_t*)body, len);
+
+  //int httpCode = http.POST(payload);
+
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("[YamahaReceiver::sendXMLRequest] POST failed, error: %s\n", http.errorToString(httpCode).c_str());
+    http.end();
+    return false;
+  }
+
+  return true;
+}
+
+/*
 bool YamahaReceiver::sendXMLRequest(WiFiClient& c, const char* xml) {
   return sendXMLRequest(c, FPSTR(xml));
 }
+*/
+bool YamahaReceiver::sendXMLRequest(WiFiClient& wifi, HTTPClient& http, const char* xml) {
+  return sendXMLRequest(wifi, http, FPSTR(xml));
+}
 
 /* executeSetCommand  V2  2026-02-15  String entfernt, Dummy-Verbindungsstart entfernt */
-bool YamahaReceiver::executeSetCommand(WiFiClient& client, const __FlashStringHelper* start, const char* val, const __FlashStringHelper* end) {
+/*bool YamahaReceiver::executeSetCommand(WiFiClient& client, const __FlashStringHelper* start, const char* val, const __FlashStringHelper* end) {
     int contentLength = strlen_P((PGM_P)(start)) + strlen(val) + strlen_P((PGM_P)(end));
     contentLength += strlen_P((PGM_P)XML_HEADER);
     
@@ -1411,17 +2012,114 @@ bool YamahaReceiver::executeSetCommand(WiFiClient& client, const __FlashStringHe
     bool success = client.find((char*)"RC=\"0\"");
     NetworkHelper::resetClient(client);
     return success;
+}*/
+/*bool YamahaReceiver::executeSetCommand(WiFiClient& wifi, HTTPClient& http, const __FlashStringHelper* xmlstart, const char* xmlval, const __FlashStringHelper* xmlend) {
+  EnsureDelayBeforeRequest(100);
+
+  char url[56];
+  snprintf(url, sizeof(url), "http://%d.%d.%d.%d/YamahaRemoteControl/ctrl", _ip[0], _ip[1], _ip[2], _ip[3]);
+
+  if (!http.begin(wifi, url)) return false;
+
+  http.addHeader(F("Content-Type"), F("text/xml; charset=UTF-8"));
+  http.setReuse(false);
+
+  int contentLength = strlen_P((PGM_P)XML_HEADER) + 
+                      strlen_P((PGM_P)xmlstart) + 
+                      strlen(xmlval) + 
+                      strlen_P((PGM_P)xmlend);
+
+  int httpCode = http.sendRequest("POST", (uint8_t*)NULL, contentLength);
+
+  // Wichtig: Erst prüfen, ob die Verbindung steht (Code > 0)
+  if (httpCode > 0) {
+      WiFiClient* stream = http.getStreamPtr();
+      stream->print(FPSTR(XML_HEADER));
+      stream->print(xmlstart); // Hier kein FPSTR, da es schon ein Flash-String ist!
+      stream->print(xmlval);
+      stream->print(xmlend);   // Hier auch kein FPSTR
+      stream->flush();
+  } else {
+    Serial.printf("[YamahaReceiver::executeSetCommand] POST failed: %s\n", http.errorToString(httpCode).c_str());
+    http.end();
+    return false;
+  }
+
+  return (httpCode == 200 || httpCode == 201);
+}*/
+bool YamahaReceiver::executeSetCommand(WiFiClient& wifi, HTTPClient& http, const __FlashStringHelper* xmlstart, const char* xmlval, const __FlashStringHelper* xmlend) {
+  EnsureDelayBeforeRequest(100);
+
+  char url[56];
+  snprintf(url, sizeof(url), "http://%d.%d.%d.%d/YamahaRemoteControl/ctrl", _ip[0], _ip[1], _ip[2], _ip[3]);
+
+  if (!http.begin(wifi, url)) return false;
+
+  http.addHeader(F("Content-Type"), F("text/xml; charset=UTF-8"));
+  http.setReuse(false);
+
+  // Wir nutzen einen lokalen Puffer auf dem Stack (ca. 160-200 Bytes reichen locker)
+  char body[256]; 
+  // Zusammenbauen mit snprintf_P (spart RAM, nutzt Flash-Strings)
+  // %S = Flash-String (__FlashStringHelper*), %s = RAM-String (char*)
+  int len = snprintf_P(body, sizeof(body), PSTR("%S%S%s%S"), 
+                       (PGM_P)XML_HEADER, (PGM_P)xmlstart, xmlval, (PGM_P)xmlend);
+
+  if (len >= (int)sizeof(body)) {
+      Serial.println(F("[Yamaha] XML too long for buffer!"));
+      http.end();
+      return false;
+  }
+
+  // POST sendet jetzt den Puffer UND setzt Content-Length automatisch
+  int httpCode = http.POST((uint8_t*)body, len);
+
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("[YamahaReceiver] POST failed, error: %s (%d)\n", http.errorToString(httpCode).c_str(), httpCode);
+    http.end();
+    return false;
+  }
+
+  return true;
 }
 
+bool YamahaReceiver::executeSetCommand(const __FlashStringHelper* xmlstart, const char* xmlval, const __FlashStringHelper* xmlend) {
+  WiFiClient wifi;
+  HTTPClient http;
+  bool success = executeSetCommand(wifi, http, xmlstart, xmlval, xmlend);
+  http.end();
+  wifi.stop(); 
+  return success;
+}
+/*
 bool YamahaReceiver::executeSetCommand(WiFiClient& c, const char* start, const char* val, const char* end) {
   return executeSetCommand(c, FPSTR(start), val, FPSTR(end));
 }
+*/
+bool YamahaReceiver::executeSetCommand(WiFiClient& wifi, HTTPClient& http, const char* start, const char* val, const char* end) {
+  return executeSetCommand(wifi, http, FPSTR(start), val, FPSTR(end));
+}
 
+bool YamahaReceiver::executeSetCommand(const char* start, const char* val, const char* end) {
+  return executeSetCommand(FPSTR(start), val, FPSTR(end));
+}
+
+/*
 bool YamahaReceiver::executeSetCommand(WiFiClient& client, const char* start, int val, const char* end) {
   char buf[10];
   snprintf(buf, sizeof(buf), "%d", val);
   buf[sizeof(buf)-1] = '\0';
   return executeSetCommand(client, FPSTR(start), (const char*)buf, FPSTR(end));
+}*/
+bool YamahaReceiver::executeSetCommand(WiFiClient& wifi, HTTPClient& http, const char* xmlstart, int val, const char* xmlend) {
+  char buf[12];
+  itoa(val, buf, 10); // schneller und kleiner als snprintf
+  return executeSetCommand(wifi, http, FPSTR(xmlstart), (const char*)buf, FPSTR(xmlend));
+}
+bool YamahaReceiver::executeSetCommand(const char* xmlstart, int val, const char* xmlend) {
+  char buf[12];
+  itoa(val, buf, 10); // schneller und kleiner als snprintf
+  return executeSetCommand(FPSTR(xmlstart), (const char*)buf, FPSTR(xmlend));
 }
 
 KinoError YamahaReceiver::tick() {
@@ -1433,9 +2131,7 @@ KinoError YamahaReceiver::tick() {
   if (now - _lastTick >= _tickInterval) {
     _lastTick = now;
     _refreshing = true;
-    //showMemory();
     bool ok = getStatus();
-    //showMemory();
     _refreshing = false;
     return (ok ? KinoError::OK : KinoError::DeviceNotReady);
   }

@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
 #include "KinoDevice.h"
 
@@ -69,9 +70,10 @@ private:
   bool sendJsonRpc(const JsonDocument& request);
 
   bool httpPOST(const char* path, const JsonDocument& request);
-  bool waitForClientData(WiFiClient& client);
-  bool parseComponentsFromStream(WiFiClient& client);
-  bool readHttpResponse(WiFiClient& client, String& response);
+  //bool waitForClientData(WiFiClient& client);
+  bool parseComponentsFromStream(Stream& client);
+  bool parsePostResponse(Stream& s);
+  //bool readHttpResponse(WiFiClient& client, String& response);
 
   static const KinoPropertyInfo _properties[];
 };

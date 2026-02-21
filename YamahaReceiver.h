@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
 #include <vector>
 #include "KinoDevice.h"
 
@@ -156,14 +157,19 @@ class YamahaReceiver : public KinoDevice {
     
     InputSource* getInputSourceByKey(const char* keyname);
                                                          
-    bool waitForNetRadioList(WiFiClient& client, bool keepalive);     // Helper für readNetRadioFavorites()
-    bool moveToFavorites(WiFiClient& client);                         // Helper für readNetRadioFavorites()
-    bool moveToNextPage(WiFiClient& client);
-    bool sendXMLRequest(WiFiClient& client, const __FlashStringHelper* xml);
-    bool sendXMLRequest(WiFiClient& client, const char* xml);
-    bool executeSetCommand(WiFiClient& client, const __FlashStringHelper* start, const char* val, const __FlashStringHelper* end);
-    bool executeSetCommand(WiFiClient& client, const char* start, const char* val, const char* end);
-    bool executeSetCommand(WiFiClient& client, const char* start, int val, const char* end);
+    bool waitForNetRadioList(WiFiClient& client, HTTPClient& http, bool keepalive);     // Helper für readNetRadioFavorites()
+    bool moveToFavorites(WiFiClient& client, HTTPClient& http);                         // Helper für readNetRadioFavorites()
+    bool moveToNextPage(WiFiClient& wifi, HTTPClient& http);
+    //bool sendXMLRequest(WiFiClient& client, const __FlashStringHelper* xml);
+    //bool sendXMLRequest(WiFiClient& client, const char* xml);
+    bool sendXMLRequest(WiFiClient& wifi, HTTPClient& http, const __FlashStringHelper* xml);
+    bool sendXMLRequest(WiFiClient& wifi, HTTPClient& http, const char* xml);
+    bool executeSetCommand(WiFiClient& wifi, HTTPClient& http, const __FlashStringHelper* xmlstart, const char* val, const __FlashStringHelper* xmlend);
+    bool executeSetCommand(const __FlashStringHelper* xmlstart, const char* val, const __FlashStringHelper* xmlend);
+    bool executeSetCommand(WiFiClient& wifi, HTTPClient& http, const char* xmlstart, const char* val, const char* xmlend);
+    bool executeSetCommand(const char* xmlstart, const char* val, const char* xmlend);
+    bool executeSetCommand(WiFiClient& wifi, HTTPClient& http, const char* xmlstart, int val, const char* xmlend);
+    bool executeSetCommand(const char* xmlstart, int val, const char* xmlend);
     void EnsureDelayBeforeRequest(unsigned long timeout);
 
     // ----------------------------------------------------

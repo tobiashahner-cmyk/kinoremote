@@ -4,13 +4,30 @@
 #include <ESP8266WiFi.h>
 #include <ArduinoJson.h>
 #include "KinoDevice.h"
+#include "RGBColor.h"
 
 struct WLEDColor {
   uint8_t r;
   uint8_t g;
   uint8_t b;
+  
+  // Überladener Operator für direkten Vergleich
+  bool operator!=(const WLEDColor& other) const {
+    return r != other.r || g != other.g || b != other.b;
+  }
 };
 
+struct WLEDState {
+  bool onoff;
+  uint16_t fx;
+  uint8_t bri;
+  uint8_t sx, ix, c1x, c2x, c3x;
+  bool lor;
+  RGBColor col[3];       // 0=FG, 1=BG, 2=FX
+  uint8_t pal;
+};
+
+// deprecated: wird ersetzt durch WLEDState
 struct stateBackup {
   bool onoff;
   uint16_t fx;
@@ -18,9 +35,9 @@ struct stateBackup {
   uint8_t sx;
   uint8_t ix;
   uint8_t pal;
-  WLEDColor fgCol;
-  WLEDColor bgCol;
-  WLEDColor fxCol;
+  RGBColor fgCol;
+  RGBColor bgCol;
+  RGBColor fxCol;
   uint8_t c1x;
   uint8_t c2x;
   uint8_t c3x;
@@ -88,9 +105,9 @@ class WLEDDevice : public KinoDevice {
     uint8_t getPalette() const;
     bool inAlarm() const;
     bool inPause() const;
-    WLEDColor getColFg() const;
-    WLEDColor getColBg() const;
-    WLEDColor getColFx() const;
+    RGBColor getColFg() const;
+    RGBColor getColBg() const;
+    RGBColor getColFx() const;
   
     // Setter
     bool setPowerStatus(bool onoff);
@@ -101,11 +118,11 @@ class WLEDDevice : public KinoDevice {
     bool setSpeed(uint8_t speed);
     bool setIntensity(uint8_t intensity);
     bool setFgColor(uint8_t R, uint8_t G, uint8_t B);
-    bool setFgColor(WLEDColor col);
+    bool setFgColor(RGBColor col);
     bool setBgColor(uint8_t R, uint8_t G, uint8_t B);
-    bool setBgColor(WLEDColor col);
+    bool setBgColor(RGBColor col);
     bool setFxColor(uint8_t R, uint8_t G, uint8_t B);
-    bool setFxColor(WLEDColor col);
+    bool setFxColor(RGBColor col);
     bool setCustom(uint8_t c1x, uint8_t c2x, uint8_t c3x);
     bool setCustom1(uint8_t c1x);
     bool setCustom2(uint8_t c2x);
@@ -147,9 +164,17 @@ class WLEDDevice : public KinoDevice {
     void EnsureTimeoutBeforeRequest(unsigned long timeout);
     static const KinoPropertyInfo _properties[];
     // Status
-    StaticJsonDocument<1024> _props;
-    StaticJsonDocument<1024> _newProps;
     bool readState();
+    void syncNewPropsAfterReadState();
+    //StaticJsonDocument<1024> _props;
+    //StaticJsonDocument<1024> _newProps;
+    WLEDState _props;
+    WLEDState _newProps;
+    // reine Info-Properties, die nicht gesetzt werden können
+    bool _live;
+    char _livesource[20];    // für "input" => Hyperion
+    int _tt;
+    
     stateBackup _bkp;
     bool _alarm = false;
     bool _pause = false;

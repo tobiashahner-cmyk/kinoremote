@@ -1,6 +1,7 @@
 #include "WLEDDevice.h"
 #include "NetworkHelper.h"
 #include "FileHelper.h"
+#include <ESP8266HTTPClient.h>
 
 
 // ===== Lazy Streaming (pro Instanz) =====
@@ -126,66 +127,81 @@ KinoError WLEDDevice::get(const char* prop, KinoVariant& out) {
     return KinoError::OK;
   }
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
-    out.setBool(_props["state"]["on"]|false);
+    //out.setBool(_props["state"]["on"]|false);
+    out.setBool(_props.onoff);
     return KinoError::OK;
   }
   if (strcmp(prop,"live")==0) {
-    out.setBool(_props["info"]["live"]|false);
+    //out.setBool(_props["info"]["live"]|false);
+    out.setBool(_live);
     return KinoError::OK;
   }
   if ((strcmp(prop,"override")==0)||(strcmp(prop,"lor")==0)) {
-    out.setBool(_props["state"]["lor"]|false);
+    //out.setBool(_props["state"]["lor"]|false);
+    out.setBool(_props.lor);
     return KinoError::OK;
   }
   if ((strcmp(prop,"brightness")==0)||(strcmp(prop,"bri")==0)) {
-    out.setInt(_props["state"]["bri"] | 0);
+    //out.setInt(_props["state"]["bri"] | 0);
+    out.setInt(_props.bri);
     return KinoError::OK;
   }
   if ((strcmp(prop,"speed")==0)||(strcmp(prop,"sx")==0)) {
-    out.setInt(_props["state"]["seg"][0]["sx"] | 0);
+    //out.setInt(_props["state"]["seg"][0]["sx"] | 0);
+    out.setInt(_props.sx);
     return KinoError::OK;
   }
   if ((strcmp(prop,"intensity")==0)||(strcmp(prop,"ix")==0)) {
-    out.setInt(_props["state"]["seg"][0]["ix"] | 0);
+    //out.setInt(_props["state"]["seg"][0]["ix"] | 0);
+    out.setInt(_props.ix);
     return KinoError::OK;
   }
   if ((strcmp(prop,"c1x")==0)||(strcmp(prop,"custom1")==0)) {
-    out.setInt(_props["state"]["seg"][0]["c1x"] | 0);
+    //out.setInt(_props["state"]["seg"][0]["c1x"] | 0);
+    out.setInt(_props.c1x);
     return KinoError::OK;
   }
   if ((strcmp(prop,"c2x")==0)||(strcmp(prop,"custom2")==0)) {
-    out.setInt(_props["state"]["seg"][0]["c2x"] | 0);
+    //out.setInt(_props["state"]["seg"][0]["c2x"] | 0);
+    out.setInt(_props.c2x);
     return KinoError::OK;
   }
   if ((strcmp(prop,"c3x")==0)||(strcmp(prop,"custom3")==0)) {
-    out.setInt(_props["state"]["seg"][0]["c13"] | 0);
+    //out.setInt(_props["state"]["seg"][0]["c13"] | 0);
+    out.setInt(_props.c3x);
     return KinoError::OK;
   }
   if ((strcmp(prop,"effect")==0)||(strcmp(prop,"fx")==0)) {
-    out.setInt(_props["state"]["seg"][0]["fx"] | 0);
+    //out.setInt(_props["state"]["seg"][0]["fx"] | 0);
+    out.setInt(_props.fx);
     return KinoError::OK;
   }
   if ((strcmp(prop,"palette")==0)||(strcmp(prop,"pal")==0)) {
-    out.setInt(_props["state"]["seg"][0]["pal"] | 0);
+    //out.setInt(_props["state"]["seg"][0]["pal"] | 0);
+    out.setInt(_props.pal);
     return KinoError::OK;
   }
   if (strcmp(prop,"input")==0) {
-    out.setString(_props["info"]["lm"] | "");
+    //out.setString(_props["info"]["lm"] | "");
+    out.setString(_livesource);
     return KinoError::OK;
   }
   if ((strcmp(prop,"color") == 0)||(strcmp(prop,"color1") == 0)||(strcmp(prop,"colorFg") == 0)||(strcmp(prop,"FgColor") == 0)||(strcmp(prop,"col1")==0)) {
-    JsonVariant col = _props["state"]["seg"][0]["col"][0];
-    out.setColor(col[0]|0, col[1]|0, col[2]|0);
+    //JsonVariant col = _props["state"]["seg"][0]["col"][0];
+    //out.setColor(col[0]|0, col[1]|0, col[2]|0);
+    out.setColor(_props.col[0]);
     return KinoError::OK;
   }
   if ((strcmp(prop,"color2") == 0)||(strcmp(prop,"colorBg") == 0)||(strcmp(prop,"BgColor") == 0)||(strcmp(prop,"col2")==0)) {
-    JsonVariant col = _props["state"]["seg"][0]["col"][1];
-    out.setColor(col[0]|0, col[1]|0, col[2]|0);
+    //JsonVariant col = _props["state"]["seg"][0]["col"][1];
+    //out.setColor(col[0]|0, col[1]|0, col[2]|0);
+    out.setColor(_props.col[1]);
     return KinoError::OK;
   }
   if ((strcmp(prop,"color3") == 0)||(strcmp(prop,"colorFx") == 0)||(strcmp(prop,"FxColor") == 0)||(strcmp(prop,"col3")==0)) {
-    JsonVariant col = _props["state"]["seg"][0]["col"][2];
-    out.setColor(col[0]|0, col[1]|0, col[2]|0);
+    //JsonVariant col = _props["state"]["seg"][0]["col"][2];
+    //out.setColor(col[0]|0, col[1]|0, col[2]|0);
+    out.setColor(_props.col[2]);
     return KinoError::OK;
   }
   int fxnr, paramnr, found;
@@ -908,11 +924,16 @@ bool WLEDDevice::getStatusUpdate(const char* devName, JsonObject& root) {
     uint16_t mask = ON|BRI|FX|SX|IX;
     if ( (_dirty & mask)>0 ) {
       root["dev"].set(devName);
-      if (_dirty & ON)    root["on"].set(_props["state"]["on"]|false);
-      if (_dirty & BRI)   root["bri"].set(_props["state"]["bri"]|0);
-      if (_dirty & FX)    root["fx"].set(_props["state"]["seg"][0]["fx"]|0);
-      if (_dirty & SX)    root["sx"].set(_props["state"]["seg"][0]["sx"]|0);
-      if (_dirty & IX)    root["ix"].set(_props["state"]["seg"][0]["ix"]|0);
+      //if (_dirty & ON)    root["on"].set(_props["state"]["on"]|false);
+      if (_dirty & ON)    root["on"].set(_props.onoff);
+      //if (_dirty & BRI)   root["bri"].set(_props["state"]["bri"]|0);
+      if (_dirty & BRI)   root["bri"].set(_props.bri);
+      //if (_dirty & FX)    root["fx"].set(_props["state"]["seg"][0]["fx"]|0);
+      if (_dirty & FX)    root["fx"].set(_props.fx);
+      //if (_dirty & SX)    root["sx"].set(_props["state"]["seg"][0]["sx"]|0);
+      if (_dirty & SX)    root["sx"].set(_props.sx);
+      //if (_dirty & IX)    root["ix"].set(_props["state"]["seg"][0]["ix"]|0);
+      if (_dirty & IX)    root["ix"].set(_props.ix);
       part = 1;
       _dirty &= ~mask;  // bits löschen
       return true;
@@ -924,10 +945,14 @@ bool WLEDDevice::getStatusUpdate(const char* devName, JsonObject& root) {
     uint16_t mask = FGCOL|BGCOL|FXCOL|PAL;
     if ( (_dirty & mask) > 0) {
       root["dev"].set(devName);
-      if (_dirty & FGCOL) { JsonVariant col = _props["state"]["seg"][0]["col"][0]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
-      if (_dirty & BGCOL) { JsonVariant col = _props["state"]["seg"][0]["co2"][1]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
-      if (_dirty & FXCOL) { JsonVariant col = _props["state"]["seg"][0]["co3"][2]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
-      if (_dirty & PAL)   root["pal"].set(_props["state"]["seg"][0]["pal"]|0);
+      //if (_dirty & FGCOL) { JsonVariant col = _props["state"]["seg"][0]["col"][0]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
+      if (_dirty & FGCOL) { KinoVariant v = KinoVariant::fromColor(_props.col[0]); root["col1"].set(v.c_str()); }
+      //if (_dirty & BGCOL) { JsonVariant col = _props["state"]["seg"][0]["co2"][1]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
+      if (_dirty & BGCOL) { KinoVariant v = KinoVariant::fromColor(_props.col[1]); root["col2"].set(v.c_str()); }
+      //if (_dirty & FXCOL) { JsonVariant col = _props["state"]["seg"][0]["co3"][2]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
+      if (_dirty & FXCOL) { KinoVariant v = KinoVariant::fromColor(_props.col[2]); root["col3"].set(v.c_str()); }
+      //if (_dirty & PAL)   root["pal"].set(_props["state"]["seg"][0]["pal"]|0);
+      if (_dirty & PAL)   root["pal"].set(_props.pal);
       _dirty &= ~mask;  // bits löschen
       part = 2;
       return true;
@@ -939,10 +964,14 @@ bool WLEDDevice::getStatusUpdate(const char* devName, JsonObject& root) {
     uint16_t mask = LOR|C1X|C2X|C3X;
     if ( (_dirty & mask) > 0) {
       root["dev"].set(devName);
-      if (_dirty & LOR)   root["lor"].set(_props["state"]["lor"]|false);
-      if (_dirty & C1X)   root["c1x"].set(_props["state"]["seg"][0]["c1x"]|0);
-      if (_dirty & C2X)   root["c2x"].set(_props["state"]["seg"][0]["c2x"]|0);
-      if (_dirty & C3X)   root["c3x"].set(_props["state"]["seg"][0]["c3x"]|0);
+      //if (_dirty & LOR)   root["lor"].set(_props["state"]["lor"]|false);
+      if (_dirty & LOR)   root["lor"].set(_props.lor);
+      //if (_dirty & C1X)   root["c1x"].set(_props["state"]["seg"][0]["c1x"]|0);
+      if (_dirty & C1X)   root["c1x"].set(_props.c1x);
+      //if (_dirty & C2X)   root["c2x"].set(_props["state"]["seg"][0]["c2x"]|0);
+      if (_dirty & C2X)   root["c2x"].set(_props.c2x);
+      //if (_dirty & C3X)   root["c3x"].set(_props["state"]["seg"][0]["c3x"]|0);
+      if (_dirty & C3X)   root["c3x"].set(_props.c3x);
       part = 0;
       _dirty &= ~mask;
       return true;
@@ -956,7 +985,8 @@ bool WLEDDevice::getStatusUpdate(const char* devName, JsonObject& root) {
 // ===== Getter =====
 
 bool WLEDDevice::getPowerStatus() const {
-  return _props["state"]["on"] | false;
+  //return _props["state"]["on"] | false;
+  return _props.onoff;
 }
 
 bool WLEDDevice::inAlarm() const {
@@ -968,39 +998,48 @@ bool WLEDDevice::inPause() const {
 }
 
 uint8_t WLEDDevice::getBrightness() const {
-  return _props["state"]["bri"] | 0;
+  //return _props["state"]["bri"] | 0;
+  return _props.bri;
 }
 
 bool WLEDDevice::isReceivingLiveData() const {
-  return _props["info"]["live"] | false;
+  //return _props["info"]["live"] | false;
+  return _live;
 }
 
 bool WLEDDevice::isOverridingLiveData() const {
-  return _props["state"]["lor"] | true;
+  //return _props["state"]["lor"] | true;
+  return _props.lor;
 }
 
 uint8_t WLEDDevice::getSpeed() const {
-  return _props["state"]["seg"][0]["sx"] | 0;
+  //return _props["state"]["seg"][0]["sx"] | 0;
+  return _props.sx;
 }
 
 uint8_t WLEDDevice::getIntensity() const {
-  return _props["state"]["seg"][0]["ix"] | 0;
+  //return _props["state"]["seg"][0]["ix"] | 0;
+  return _props.ix;
 }
 
 uint16_t WLEDDevice::getEffect() const {
-  return _props["state"]["seg"][0]["fx"] | 0;
+  //return _props["state"]["seg"][0]["fx"] | 0;
+  return _props.fx;
 }
 
 uint8_t WLEDDevice::getPalette() const {
-  return _props["state"]["seg"][0]["pal"] | 0;
+  //return _props["state"]["seg"][0]["pal"] | 0;
+  return _props.pal;
 }
 
 void WLEDDevice::getLiveSource(char* src, size_t srcLen) {
-  const char* lm = _props["info"]["lm"]|"";
-  strncpy(src, lm, srcLen);
-  src[srcLen-1] = '\0';
+  //const char* lm = _props["info"]["lm"]|"";
+  //strncpy(src, lm, srcLen);
+  //src[srcLen-1] = '\0';
+  strlcpy(src, _livesource, srcLen);
 }
 
+/*
 WLEDColor WLEDDevice::getColFg() const {
   JsonArrayConst  col = _props["state"]["seg"][0]["col"][0];
   return {
@@ -1008,8 +1047,13 @@ WLEDColor WLEDDevice::getColFg() const {
     col[1]|0,
     col[2]|0
   };
+}*/
+
+RGBColor WLEDDevice::getColFg() const {
+  return _props.col[0];
 }
 
+/*
 WLEDColor WLEDDevice::getColBg() const {
   JsonArrayConst  col = _props["state"]["seg"][0]["col"][1];
   return {
@@ -1018,7 +1062,13 @@ WLEDColor WLEDDevice::getColBg() const {
     col[2]|0
   };
 }
+*/
 
+RGBColor WLEDDevice::getColBg() const {
+  return _props.col[1];
+}
+
+/*
 WLEDColor WLEDDevice::getColFx() const {
   JsonArrayConst  col = _props["state"]["seg"][0]["col"][2];
   return {
@@ -1027,11 +1077,17 @@ WLEDColor WLEDDevice::getColFx() const {
     col[2]|0
   };
 }
+*/
+
+RGBColor WLEDDevice::getColFx() const {
+  return _props.col[2];
+}
 
 // ===== Setter =====
 
 bool WLEDDevice::setPowerStatus(bool onoff) {
-  _newProps["state"]["on"] = onoff;
+  //_newProps["state"]["on"] = onoff;
+  _newProps.onoff = onoff;
   _pendingDirty |= ON;
   return true;
 }
@@ -1040,7 +1096,8 @@ bool WLEDDevice::setBrightness(uint8_t bri) {
   if (bri < 0)   return false;
   if (bri > 255) return false;
 
-  _newProps["state"]["bri"] = bri;
+  //_newProps["state"]["bri"] = bri;
+  _newProps.bri = bri;
   _pendingDirty |= BRI;
   return true;
 }
@@ -1048,13 +1105,14 @@ bool WLEDDevice::setBrightness(uint8_t bri) {
 bool WLEDDevice::setTransitionTime(int tt) {
   if (tt < 0) return false;
   if (tt < 100) tt = 100;
-  _newProps["state"]["tt"] = (int)(tt/100);
-  if (_newProps["state"]["tt"] == 0) _newProps["state"]["tt"] = 1;
+  //_newProps["state"]["tt"] = (int)(tt/100);
+  _tt = (int)(tt/100);
   return true;
 }
 
 bool WLEDDevice::setEffect(uint16_t effect) {
-  _newProps["state"]["seg"][0]["fx"] = effect;
+  //_newProps["state"]["seg"][0]["fx"] = effect;
+  _newProps.fx = effect;
   _pendingDirty |= FX;
   return true;
 }
@@ -1062,7 +1120,8 @@ bool WLEDDevice::setEffect(uint16_t effect) {
 bool WLEDDevice::setSpeed(uint8_t sx) {
   if (sx < 0)   return false;
   if (sx > 255) return false;
-  _newProps["state"]["seg"][0]["sx"] = sx;
+  //_newProps["state"]["seg"][0]["sx"] = sx;
+  _newProps.sx = sx;
   _pendingDirty |= SX;
   return true;
 }
@@ -1070,52 +1129,79 @@ bool WLEDDevice::setSpeed(uint8_t sx) {
 bool WLEDDevice::setIntensity(uint8_t ix) {
   if (ix < 0)   return false;
   if (ix > 255) return false;
-  _newProps["state"]["seg"][0]["ix"] = ix;
+  //_newProps["state"]["seg"][0]["ix"] = ix;
+  _newProps.ix = ix;
   _pendingDirty |= IX;
   return true;
 }
 
 bool WLEDDevice::setFgColor(uint8_t R, uint8_t G, uint8_t B) {
   if ((R<0)||(R>255)||(G<0)||(G>255)||(B<0)||(B>255)) return false;
-  _newProps["state"]["seg"][0]["col"][0][0] = R;
-  _newProps["state"]["seg"][0]["col"][0][1] = G;
-  _newProps["state"]["seg"][0]["col"][0][2] = B;
+  //_newProps["state"]["seg"][0]["col"][0][0] = R;
+  //_newProps["state"]["seg"][0]["col"][0][1] = G;
+  //_newProps["state"]["seg"][0]["col"][0][2] = B;
+  _newProps.col[0].r = R;
+  _newProps.col[0].g = G;
+  _newProps.col[0].b = B;
   _pendingDirty |= FGCOL;
   return true;
 }
 
+/*
 bool WLEDDevice::setFgColor(WLEDColor c) {
+  return setFgColor(c.r, c.g, c.b);
+}
+*/
+bool WLEDDevice::setFgColor(RGBColor c) {
   return setFgColor(c.r, c.g, c.b);
 }
 
 bool WLEDDevice::setBgColor(uint8_t R, uint8_t G, uint8_t B) {
   if ((R<0)||(R>255)||(G<0)||(G>255)||(B<0)||(B>255)) return false;
-  _newProps["state"]["seg"][0]["col"][1][0] = R;
-  _newProps["state"]["seg"][0]["col"][1][1] = G;
-  _newProps["state"]["seg"][0]["col"][1][2] = B;
+  //_newProps["state"]["seg"][0]["col"][1][0] = R;
+  //_newProps["state"]["seg"][0]["col"][1][1] = G;
+  //_newProps["state"]["seg"][0]["col"][1][2] = B;
+  _newProps.col[1].r = R;
+  _newProps.col[1].g = G;
+  _newProps.col[1].b = B;
   _pendingDirty |= BGCOL;
   return true;
 }
 
+/*
 bool WLEDDevice::setBgColor(WLEDColor c) {
+  return setBgColor(c.r, c.g, c.b);
+}
+*/
+bool WLEDDevice::setBgColor(RGBColor c) {
   return setBgColor(c.r, c.g, c.b);
 }
 
 bool WLEDDevice::setFxColor(uint8_t R, uint8_t G, uint8_t B) {
   if ((R<0)||(R>255)||(G<0)||(G>255)||(B<0)||(B>255)) return false;
-  _newProps["state"]["seg"][0]["col"][2][0] = R;
-  _newProps["state"]["seg"][0]["col"][2][1] = G;
-  _newProps["state"]["seg"][0]["col"][2][2] = B;
+  //_newProps["state"]["seg"][0]["col"][2][0] = R;
+  //_newProps["state"]["seg"][0]["col"][2][1] = G;
+  //_newProps["state"]["seg"][0]["col"][2][2] = B;
+  _newProps.col[2].r = R;
+  _newProps.col[2].g = G;
+  _newProps.col[2].b = B;
   _pendingDirty |= FXCOL;
   return true;
 }
 
+/*
 bool WLEDDevice::setFxColor(WLEDColor c) {
+  return setFxColor(c.r, c.g, c.b);
+}
+*/
+
+bool WLEDDevice::setFxColor(RGBColor c) {
   return setFxColor(c.r, c.g, c.b);
 }
 
 bool WLEDDevice::setLive(bool onoff) {
-  _newProps["state"]["lor"] = !onoff;
+  //_newProps["state"]["lor"] = !onoff;
+  _newProps.lor = !onoff;
   _pendingDirty |= LOR;
   return true;
 }
@@ -1172,33 +1258,40 @@ bool WLEDDevice::restoreBackup() {
 }
 
 bool WLEDDevice::setCustom(uint8_t c1x, uint8_t c2x, uint8_t c3x) {
-  _newProps["state"]["seg"][0]["c1x"] = c1x;
-  _newProps["state"]["seg"][0]["c2x"] = c2x;
-  _newProps["state"]["seg"][0]["c3x"] = c3x;
+  //_newProps["state"]["seg"][0]["c1x"] = c1x;
+  //_newProps["state"]["seg"][0]["c2x"] = c2x;
+  //_newProps["state"]["seg"][0]["c3x"] = c3x;
+  _newProps.c1x = c1x;
+  _newProps.c2x = c2x;
+  _newProps.c3x = c3x;
   _pendingDirty |= (C1X | C2X | C3X);
   return true;
 }
 
 bool WLEDDevice::setCustom1(uint8_t c1x) {
-  _newProps["state"]["seg"][0]["c1x"] = c1x;
+  //_newProps["state"]["seg"][0]["c1x"] = c1x;
+  _newProps.c1x = c1x;
   _pendingDirty |= C1X;
   return true;
 }
 
 bool WLEDDevice::setCustom2(uint8_t c2x) {
-  _newProps["state"]["seg"][0]["c2x"] = c2x;
+  //_newProps["state"]["seg"][0]["c2x"] = c2x;
+  _newProps.c2x = c2x;
   _pendingDirty |= C2X;
   return true;
 }
 
 bool WLEDDevice::setCustom3(uint8_t c3x) {
-  _newProps["state"]["seg"][0]["c3x"] = c3x;
+  //_newProps["state"]["seg"][0]["c3x"] = c3x;
+  _newProps.c3x = c3x;
   _pendingDirty |= C3X;
   return true;
 }
 
 bool WLEDDevice::setPalette(uint8_t pal) {
-  _newProps["state"]["seg"][0]["pal"] = pal;
+  //_newProps["state"]["seg"][0]["pal"] = pal;
+  _newProps.pal = pal;
   _pendingDirty |= PAL;
   return true;
 }
@@ -1215,6 +1308,7 @@ void WLEDDevice::EnsureTimeoutBeforeRequest(unsigned long timeout) {
   return;
 }
 
+/*
 bool WLEDDevice::readState() {
   bool onBefore     = _props["state"]["on"] | false;
   uint8_t briBefore = _props["state"]["bri"] | 0;
@@ -1307,7 +1401,113 @@ bool WLEDDevice::readState() {
   NetworkHelper::resetClient(client);
   return false;
 }
+*/
+bool WLEDDevice::readState() {
+  // ... deine "Before"-Variablen bleiben identisch ...
+  bool      onBefore  = _props.onoff;
+  uint8_t   briBefore = _props.bri;
+  uint8_t   fxBefore  = _props.fx;
+  uint8_t   sxBefore  = _props.sx;
+  uint8_t   ixBefore  = _props.ix;
+  RGBColor  c1Before  = _props.col[0];
+  RGBColor  c2Before  = _props.col[1];
+  RGBColor  c3Before  = _props.col[2];
+  bool      lorBefore = _props.lor;
+  uint8_t   c1xBefore = _props.c1x;
+  uint8_t   c2xBefore = _props.c2x;
+  uint8_t   c3xBefore = _props.c3x;
+  uint8_t   palBefore = _props.pal;
+  // BEFORE- Variablen Ende
+  WiFiClient client;
+  HTTPClient http;
+  
+  EnsureTimeoutBeforeRequest(200);
 
+  // URL generieren (http://ip/json)
+  //String url = "http://" + _ip.toString() + "/json";
+  char url[32];
+  snprintf(url, sizeof(url), "http://%d.%d.%d.%d/json", _ip[0], _ip[1], _ip[2], _ip[3]);
+  
+  http.setTimeout(3000); // Großzügiges Timeout für WLED 0.13 SR
+  
+  if (http.begin(client, url)) {
+    int httpCode = http.GET();
+
+    if (httpCode == HTTP_CODE_OK) {
+      initFilter();
+      // Direkt vom Stream des HTTPClient deserialisieren
+      StaticJsonDocument<1024> json;
+      DeserializationError error = deserializeJson(json, http.getStream(), DeserializationOption::Filter(_jsonFilter));
+
+      if (!error) {
+        _props.onoff        = json["state"]["on"] | false;
+        _props.bri          = json["state"]["bri"] | 0;
+        _props.fx           = json["state"]["seg"][0]["fx"] | 0;
+        _props.sx           = json["state"]["seg"][0]["sx"] | 0;
+        _props.ix           = json["state"]["seg"][0]["ix"] | 0;
+        _props.col[0].r     = json["state"]["seg"][0]["col"][0][0] | 0;
+        _props.col[0].g     = json["state"]["seg"][0]["col"][0][1] | 0;
+        _props.col[0].b     = json["state"]["seg"][0]["col"][0][2] | 0;
+        _props.col[1].r     = json["state"]["seg"][0]["col"][1][0] | 0;
+        _props.col[1].g     = json["state"]["seg"][0]["col"][1][1] | 0;
+        _props.col[1].b     = json["state"]["seg"][0]["col"][1][2] | 0;
+        _props.col[2].r     = json["state"]["seg"][0]["col"][2][0] | 0;
+        _props.col[2].g     = json["state"]["seg"][0]["col"][2][1] | 0;
+        _props.col[2].b     = json["state"]["seg"][0]["col"][2][2] | 0;
+        _props.lor          = json["state"]["lor"] | 0;
+        _props.c1x          = json["state"]["seg"][0]["c1x"] | 0;
+        _props.c2x          = json["state"]["seg"][0]["c2x"] | 0;
+        _props.c3x          = json["state"]["seg"][0]["c3x"] | 0;
+        _props.pal          = json["state"]["seg"][0]["pal"] | 0;
+        strlcpy(_livesource,  json["info"]["lm"]|"", sizeof(_livesource));
+        _live               = json["info"]["live"]|false;
+        if (_props.onoff    != onBefore)    _dirty |= ON;
+        if (_props.bri      != briBefore)   _dirty |= BRI;
+        if (_props.fx       != fxBefore)    _dirty |= FX;
+        if (_props.sx       != sxBefore)    _dirty |= SX;
+        if (_props.ix       != ixBefore)    _dirty |= IX;
+        if (_props.col[0]   != c1Before)    _dirty |= FGCOL;
+        if (_props.col[1]   != c2Before)    _dirty |= BGCOL;
+        if (_props.col[2]   != c3Before)    _dirty |= FXCOL;
+        if (_props.lor      != lorBefore)   _dirty |= LOR;
+        if (_props.c1x      != c1xBefore)   _dirty |= C1X;
+        if (_props.c2x      != c2xBefore)   _dirty |= C2X;
+        if (_props.c3x      != c3xBefore)   _dirty |= C3X;
+        if (_props.pal      != palBefore)   _dirty |= PAL;
+
+        syncNewPropsAfterReadState();
+        // Vergleichs-Logik-Block Ende
+        
+        http.end();
+        return true;
+      } else {
+        Serial.printf("WLED Parsing error: %s\n", error.c_str());
+      }
+    } else {
+      Serial.printf("WLED HTTP failed, error: %s\n", http.errorToString(httpCode).c_str());
+    }
+    http.end(); // Schließt Verbindung und räumt Puffer auf
+  }
+  return false;
+}
+
+void WLEDDevice::syncNewPropsAfterReadState() {
+  if (!(_pendingDirty & ON))    _newProps.onoff = _props.onoff;
+  if (!(_pendingDirty & BRI))   _newProps.bri   = _props.bri;
+  if (!(_pendingDirty & FX))    _newProps.fx    = _props.fx;
+  if (!(_pendingDirty & SX))    _newProps.sx    = _props.sx;
+  if (!(_pendingDirty & IX))    _newProps.ix    = _props.ix;
+  if (!(_pendingDirty & FGCOL)) _newProps.col[0]= _props.col[0];
+  if (!(_pendingDirty & BGCOL)) _newProps.col[1]= _props.col[1];
+  if (!(_pendingDirty & FXCOL)) _newProps.col[2]= _props.col[2];
+  if (!(_pendingDirty & LOR))   _newProps.lor   = _props.lor;
+  if (!(_pendingDirty & C1X))   _newProps.c1x   = _props.c1x;
+  if (!(_pendingDirty & C2X))   _newProps.c2x   = _props.c2x;
+  if (!(_pendingDirty & C3X))   _newProps.c3x   = _props.c3x;
+  if (!(_pendingDirty & PAL))   _newProps.pal   = _props.pal;
+}
+
+/*
 bool WLEDDevice::applyChanges() {
   WiFiClient client;
   EnsureTimeoutBeforeRequest(200);
@@ -1339,6 +1539,56 @@ bool WLEDDevice::applyChanges() {
   }
 
   return success;
+}
+*/
+bool WLEDDevice::applyChanges() {
+  if (_pendingDirty == NONE) return true;
+
+  char buffer[256]; // Sicher auf dem Stack
+  int pos = 0;
+
+  // Start des JSON
+  pos += snprintf(buffer + pos, sizeof(buffer) - pos, "{\"on\":%s,\"bri\":%d,\"lor\":%s", 
+                  _newProps.onoff ? "true" : "false", _newProps.bri, _newProps.lor ? "true" : "false");
+
+  // Segment-Daten (FX, Speed, Intensity, Palette, Farben, etc.)
+  // Wir prüfen, ob IRGENDEIN Segment-relevanter Wert dirty ist
+  if (_pendingDirty & (FX | SX | IX | PAL | C1X | C2X | C3X | FGCOL | BGCOL | FXCOL)) {
+    pos += snprintf(buffer + pos, sizeof(buffer) - pos, ",\"seg\":[{\"fx\":%d,\"sx\":%d,\"ix\":%d,\"pal\":%d,\"c1x\":%d,\"c2x\":%d,\"c3x\":%d",
+                    _newProps.fx, _newProps.sx, _newProps.ix, _newProps.pal, _newProps.c1x, _newProps.c2x, _newProps.c3x);
+    
+    // Farben nur mitschicken, wenn eine davon dirty ist (WLED erwartet bei "col" ein Array von Arrays)
+    if (_pendingDirty & (FGCOL | BGCOL | FXCOL)) {
+      pos += snprintf(buffer + pos, sizeof(buffer) - pos, ",\"col\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]",
+                      _newProps.col[0].r, _newProps.col[0].g, _newProps.col[0].b,
+                      _newProps.col[1].r, _newProps.col[1].g, _newProps.col[1].b,
+                      _newProps.col[2].r, _newProps.col[2].g, _newProps.col[2].b);
+    }
+    pos += snprintf(buffer + pos, sizeof(buffer) - pos, "}]");
+  }
+  
+  pos += snprintf(buffer + pos, sizeof(buffer) - pos, "}");
+
+  // Netzwerk-Teil
+  WiFiClient client;
+  HTTPClient http;
+  char url[32];
+  snprintf(url, sizeof(url), "http://%d.%d.%d.%d/json/state", _ip[0], _ip[1], _ip[2], _ip[3]);
+
+  if (http.begin(client, url)) {
+    http.addHeader(F("Content-Type"), F("application/json"));
+    
+    int httpCode = http.POST((uint8_t*)buffer, pos);
+    bool success = (httpCode == HTTP_CODE_OK || httpCode == 204 || httpCode == 207);
+
+    if (success) {
+      _props = _newProps; // Synchronisieren
+      _pendingDirty = NONE;
+    }
+    http.end();
+    return success;
+  }
+  return false;
 }
 
 // Json Filter für die Properties und pending
