@@ -98,17 +98,38 @@ bool HueGroup::applyChanges(HueBridge* bridge) {
 
     if (!hasChanges) return true;
 
-    StaticJsonDocument<256> doc;
+    //StaticJsonDocument<256> doc;
 
-    if (pending.on)  doc["on"]  = *pending.on;
+    /*if (pending.on)  doc["on"]  = *pending.on;
     if (pending.bri) doc["bri"] = *pending.bri;
     if (pending.ct)  doc["ct"]  = *pending.ct;
     if (pending.tt)  doc["transitiontime"] = *pending.tt;
+    */
+    //char payload[128];
+    // Es liegen irgendwelche pending-Werte vor
+    int pos = 0;
+    pos += snprintf(_payload + pos, sizeof(_payload) - pos, "{");
+    
+    if (pending.on.has_value()) {
+      pos += snprintf(_payload + pos, sizeof(_payload) - pos, "\"on\":%s,", pending.on.value() ? "true" : "false");
+    }
+    if (pending.bri.has_value()) {
+      pos += snprintf(_payload + pos, sizeof(_payload) - pos, "\"bri\":%d,", pending.bri.value());
+    }
+    if (pending.ct.has_value()) {
+      pos += snprintf(_payload + pos, sizeof(_payload) - pos, "\"ct\":%d,", pending.ct.value());
+    }
+    if (pending.tt.has_value()) {
+      pos += snprintf(_payload + pos, sizeof(_payload) - pos, "\"transitiontime\":%d,", pending.tt.value());
+    }
+    // Letztes Komma entfernen und schließen
+    if (_payload[pos - 1] == ',') pos--; 
+    snprintf(_payload + pos, sizeof(_payload) - pos, "}");
 
-    char payload[128];
-    serializeJson(doc, payload);
+    
+    //serializeJson(doc, payload);
 
-    if (!bridge->sendGroupState(_id, payload))
+    if (!bridge->sendGroupState(_id, _payload))
         return false;
 
     // --- lokale HueLights synchronisieren ---
@@ -133,3 +154,5 @@ void HueGroup::clearPending() {
     pending.ct.reset();
     pending.tt.reset();
 }
+
+char HueGroup::_payload[128];

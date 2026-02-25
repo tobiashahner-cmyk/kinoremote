@@ -14,7 +14,7 @@ OptomaBeamer::OptomaBeamer(const String& ip, uint8_t beamerId)
 
 // neue Public API, als Wrapper auf alte Public API
 const KinoPropertyInfo OptomaBeamer::_properties[] = {
-  { "tickInterval", "Aktualisierung [ms]", Prop_Read | Prop_Write , 0, 20000, 500},
+  //{ "tickInterval", "Aktualisierung [ms]", Prop_Read | Prop_Write , 0, 20000, 500},
   { "ip",         "IP",             Prop_Read                         },
   { "on",         "Power",          Prop_Read  | Prop_Write           },
   { "uptime",     "Lampenstunden",  Prop_Read                         },
@@ -32,10 +32,10 @@ const KinoPropertyInfo* OptomaBeamer::getPropertyInfo(size_t index) const {
 
 KinoError OptomaBeamer::get(const char* prop, KinoVariant& out) {
   if (!prop) return KinoError::PropertyNotSupported;
-  if (strcmp(prop,"tickInterval")==0) {
+  /*if (strcmp(prop,"tickInterval")==0) {
     out.setInt(_tickInterval);
     return KinoError::OK;
-  }
+  }*/
   if (strcmp(prop,"ip")==0) {
     char buf[20];
     snprintf(buf, 20, "%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
@@ -58,10 +58,10 @@ KinoError OptomaBeamer::get(const char* prop, KinoVariant& out) {
 }
 
 KinoError OptomaBeamer::set(const char* prop, const KinoVariant& value) {
-  if (strcmp(prop,"tickInterval")==0) {
+  /*if (strcmp(prop,"tickInterval")==0) {
     if (!setTickInterval(value.asInt())) return KinoError::InvalidValue;
     return KinoError::OK;
-  }
+  }*/
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     if (!setPower(value.asBool())) return KinoError::InvalidValue;
     return KinoError::OK;
@@ -124,17 +124,17 @@ bool OptomaBeamer::getStatus() {
 
 KinoError OptomaBeamer::tick() {
   if (WiFi.status() != WL_CONNECTED) return KinoError::NothingToDo;
-  if (_tickInterval == 0) return KinoError::NothingToDo;
-  if (_refreshing) return KinoError::NothingToDo;
-  int now = millis();
-  if (now - _lastTick >= _tickInterval) {
-    _lastTick = now;
-    _refreshing = true;
+  //if (_tickInterval == 0) return KinoError::NothingToDo;
+  //if (_refreshing) return KinoError::NothingToDo;
+  //unsigned long now = millis();
+  //if (now - _lastTick >= _tickInterval) {
+    //_lastTick = now;
+    //_refreshing = true;
     bool ok = getStatus();
-    _refreshing = false;
+    //_refreshing = false;
     return (ok ? KinoError::OK : KinoError::DeviceNotReady);
-  }
-  return KinoError::NothingToDo;
+  //}
+  //return KinoError::NothingToDo;
 }
 
 bool OptomaBeamer::setPower(bool onoff) {
@@ -187,14 +187,15 @@ bool OptomaBeamer::freeze(bool onoff) {
   char response[3];
   return sendCommand("04", onoff ? 1 : 0, response, sizeof(response));
 }
-
+/*
 bool OptomaBeamer::setTickInterval(int ms) {
   if (ms == 0) { _tickInterval = 0; return true; }
   if (ms < 0) return false;       // nur für bessere Lesbarkeit hier. negative Werte sind unerlaubt
   if (ms < 2000) return false;    // schneller als alle 2 Sekunden erzeugt zu viel Traffic
   _tickInterval = ms;
+  _lastTick = millis();
   return true;
-}
+}*/
 
 // ===== Getter =====
 
@@ -217,10 +218,10 @@ OptomaBeamer::DisplayMode OptomaBeamer::getDisplayMode() const {
 int OptomaBeamer::getLampHours() const {
   return _lampHours;
 }
-
+/*
 int OptomaBeamer::getTickInterval() {
   return _tickInterval;
-}
+}*/
 
 // ===== Helper =====
 
@@ -237,9 +238,12 @@ void OptomaBeamer::EnsureTimeoutBeforeRequest(unsigned long timeout) {
 bool OptomaBeamer::sendCommand(const char* command, const int parameter, char* response, size_t responseLen) {
   EnsureTimeoutBeforeRequest(200); // Deine bestehende Logik
   
-  WiFiClient client;
-  if (!client.connect(_ip, 23)) {
-    NetworkHelper::resetClient(client);
+  WiFiClient wifi;
+  if (!wifi.connect(_ip, 23)) {
+    //NetworkHelper::resetClient(wifi);
+    NetworkHelper::resetWiFiClient(wifi);
+    yield();
+    delay(1000);
     return false;
   }
 
@@ -250,8 +254,8 @@ bool OptomaBeamer::sendCommand(const char* command, const int parameter, char* r
     snprintf(cmd, sizeof(cmd), "~%02u%s", _id, command);
   }
 
-  client.print(cmd);
-  client.print("\r");
+  wifi.print(cmd);
+  wifi.print("\r");
 
   // --- Antwort in response lesen (max responseLen Zeichen) ---
   unsigned long start = millis();
@@ -260,8 +264,8 @@ bool OptomaBeamer::sendCommand(const char* command, const int parameter, char* r
 
   // Warten auf Daten mit Timeout (2000ms)
   while (millis() - start < 2000) {
-    while (client.available()) {
-      char c = client.read();
+    while (wifi.available()) {
+      char c = wifi.read();
       
       if (c == '\r') {
         foundDelimiter = true;
@@ -269,21 +273,22 @@ bool OptomaBeamer::sendCommand(const char* command, const int parameter, char* r
       }
       
       // Zeichen im Buffer speichern, sofern noch Platz ist (1 Byte für \0 lassen)
-      if (index < responseLen - 1) {
+      if ((response != nullptr) && (index < responseLen - 1)) {
         response[index++] = c;
       }
     }
     if (foundDelimiter) break;
-    yield(); // ESP8266 Background-Tasks füttern
+    yield();
   }
 
   // Null-Terminator immer setzen!
-  response[index] = '\0';
+  if ((response != nullptr) && (index < responseLen)) response[index] = '\0';
 
-  NetworkHelper::resetClient(client);
+  //NetworkHelper::resetClient(client);
+  NetworkHelper::resetWiFiClient(wifi);
   
   if (!foundDelimiter && index == 0) return false; // Timeout ohne Daten
-  
+  if (response == nullptr) return true; // Wenn die Antwort eh nicht interessiert ;-)
   return isOkResponse(response);
 }
 
@@ -292,21 +297,6 @@ bool OptomaBeamer::isOkResponse(const char* response) {
 }
 
 // ===== Parsing =====
-/*
-bool OptomaBeamer::parseStatusResponse(const String& response) {
-  if (!isOkResponse(response) || response.length() < 13) {
-    return false;
-  }
-
-  _powerState = (response.charAt(2) == '1');
-  _lampHours  = response.substring(3, 7).toInt();
-
-  uint8_t readCode = response.substring(7, 9).toInt();
-  _source = OptomaSourceLookup::fromReadCode(readCode);
-
-  return true;
-}
-*/
 
 bool OptomaBeamer::parseStatusResponse(const char* response) {
   // 1. Plausibilitäts-Check (Länge und OK-Status)

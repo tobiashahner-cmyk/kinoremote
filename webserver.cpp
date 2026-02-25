@@ -1,6 +1,10 @@
 #include "webserver.h"
 #include <ArduinoJson.h>
 
+void webserverMacroFinished(bool success) {
+  return webserver::socketMacroFinished(success);
+}
+
 namespace webserver {
   ESP8266WebServer _server(80);
   WebSocketsServer _socket(81);
@@ -15,8 +19,9 @@ namespace webserver {
   char _paramPath[128];
   const int _pathHelperLen = 128;
   char _pathHelper[128];
+  char responseBuffer[512];
 
-  bool WSConnected = false;
+  size_t WSConnected = 0;
 
 KinoError begin() {
   _server.on("/",handleRoot);
@@ -35,6 +40,7 @@ KinoError begin() {
   _server.begin();
   _socket.begin();
   _socket.onEvent(webSocketEvent);
+  _socket.enableHeartbeat(15000, 3000, 4);
   return KinoError::OK;
 }
 
@@ -49,18 +55,29 @@ void handleJS() {
   _server.sendHeader("Cache-Control", "public, max-age=2678400");
   _server.send_P(200, "text/js", HTML_JAVASCRIPT);
 }
-  
 
 void loop() {
+  static unsigned long lastupdate = millis();
+  static size_t lastWSConnected = WSConnected;
   _socket.loop();
   _server.handleClient();
   _parseContainer.clear();
-  if (!WSConnected) return;
+  if (WSConnected == 0) return;
   if (KinoAPI::getJsonUpdates(_parseContainer) == KinoError::OK) {
-    char buf[512];
-    serializeJson(_parseContainer, buf);
+    serializeJson(_parseContainer, responseBuffer);
     delay(10);
-    _socket.broadcastTXT(buf);
+    _socket.broadcastTXT(responseBuffer);
+  } else {  // keine updates zu senden, schicke WSConnected
+    if ((millis() - lastupdate > 5000)&&(WSConnected != lastWSConnected)) {
+      _parseContainer["dev"].set((char*)"system");
+      _parseContainer["online"].set(WSConnected);
+      _parseContainer["timestamp"].set(millis());
+      serializeJson(_parseContainer, responseBuffer);
+      delay(10);
+      _socket.broadcastTXT(responseBuffer);
+      lastupdate = millis();
+      lastWSConnected = WSConnected;
+    }
   }
 }
 
@@ -68,11 +85,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
     switch(type) {
         case WStype_DISCONNECTED:
             Serial.printf("[%u] Disconnected!\n", num);
+            if (WSConnected > 0) WSConnected--;
             break;
         case WStype_CONNECTED: {
             IPAddress ip = _socket.remoteIP(num);
             Serial.printf("[%u] Connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
-            WSConnected = true;
+            WSConnected++;
             break;
         }
         case WStype_TEXT:
@@ -108,9 +126,10 @@ void handleCmd() {
   if (!_server.hasArg("f")) ok = false;
   if (!_server.hasArg("v")) ok = false;
   // first, check if "dev" is "macro"
-  if ((ok)&&(_server.arg("dev")=="macro")) {
+  if ((ok)&&(strcmp(_server.arg("dev").c_str(),"macro")==0)) {
     if (_server.arg("f").length() < 4) { _server.send(200, "text/plain", "Fehler"); return; }
-    bool err = KinoAPI::executeMacro(_server.arg("f").c_str()+4); // überspringe die ersten 4 Zeichen, also "run/"
+    //bool err = KinoAPI::executeMacro(_server.arg("f").c_str()+4,webserverMacroFinished); // überspringe die ersten 4 Zeichen, also "run/"
+    bool err = KinoAPI::executeMacro(_server.arg("f").c_str()+4,webserver::socketMacroFinished,webserver::socketMacroError); // überspringe die ersten 4 Zeichen, also "run/"
     Serial.println((err)?F("Makro gestartet"):F("Fehler beim Starten des Makros"));
     _server.send(200, "text/plain", (err)?"OK":"Fehler");
     return;
@@ -125,6 +144,24 @@ void handleCmd() {
   } else {
     _server.send(200, "text/plain", "missing parameter");
   }
+}
+
+void socketMacroFinished(bool success) {
+  char mName[32];
+  KinoAPI::getCurrentMacroName(mName, sizeof(mName));
+  if (!success) {
+    snprintf(responseBuffer, sizeof(responseBuffer), "{\"dev\":\"macro\",\"cmd\":\"error\",\"val\":{\"text\":\"Es gab Fehler in Makro %s\"}}", mName);
+  } else {
+    snprintf(responseBuffer, sizeof(responseBuffer), "{\"dev\":\"macro\",\"cmd\":\"success\",\"val\":{\"text\":\"Makro %s fertig\"}}", mName);
+  }
+  _socket.broadcastTXT(responseBuffer);
+}
+
+void socketMacroError(int linenr, const char* cmd, const char* msg) {
+  char mName[32];
+  KinoAPI::getCurrentMacroName(mName, sizeof(mName));
+  snprintf(responseBuffer, sizeof(responseBuffer), "{\"dev\":\"macro\",\"cmd\":\"error\",\"val\":{\"macro\":\"%s\",\"line\":%d,\"cmd\":\"%s\",\"msg\":\"%s\"}}", mName, linenr, cmd, msg);
+  _socket.broadcastTXT(responseBuffer);
 }
 
 void handleRoot() {
@@ -315,7 +352,6 @@ void createNewMacro() {
 
   pageEnd();
 }
-  
 
 void listMacros() {
   size_t macroCount;
@@ -397,7 +433,6 @@ bool checkMacroPostParameters() {
   return true;
 }
 
-
 void updateMacro() {
   int macroIndex = _server.arg("macronr").toInt();
 
@@ -437,14 +472,11 @@ void updateMacro() {
 bool deleteMacroLine() {
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(_server.arg("macronr").toInt(), mName);
-  //String macroName; macroName.reserve(32); macroName = mName.toString();
   if (err != KinoError::OK) return false;
-  //macroName.replace(".macro","");
   char* macroName = mName.s;
   char* fileEnding = strstr(macroName, ".macro");
   if (fileEnding) *fileEnding = '\0';
   int linenr = _server.arg("linenr").toInt();
-  //bool ok = KinoAPI::deleteMacroCommand(macroName.c_str(), linenr);
   bool ok = KinoAPI::deleteMacroCommand(macroName, linenr);
   return ok;
 }
@@ -453,7 +485,6 @@ bool updateMacroSetLine() {
   KinoVariant mName;
   KinoError err = KinoAPI::getMacroNameByIndex(_server.arg("macronr").toInt(), mName);
   if (err != KinoError::OK) return false;
-  // macroName.replace(".macro","");
   char* macroName = mName.s;
   if (strlen(macroName)==0) return false;
   char* fileEnding = strstr(macroName, ".macro");
@@ -474,11 +505,10 @@ bool updateMacroSetLine() {
     strlcpy(key, _server.argName(i).c_str(), sizeof(key));
     strlcpy(value, _server.arg(i).c_str(), sizeof(value));
 
-    //if ((key.startsWith("inc_"))&&(value == "on")) {
     char incChk[5];
     strlcpy(incChk, key, sizeof(incChk));
     if ( (strcmp(incChk,"inc_")==0) && (strcmp(value,"on")==0) ) {  // Wenn die inc_<key> checkbox checked ist
-      char* newKey = key+4; // überspringe "inc_"
+      char* newKey = &key[4]; // überspringe "inc_"
       char chkVal[64];
       snprintf(chkVal, sizeof(chkVal), "val_%s", newKey);           // ersetze "inc_" durch "val_". Unter diesem Namen wurde der Wert gepostet
       KinoVariant newVal = KinoVariant::fromString("off");          // Fallback für checkboxen, die wegen "off" nicht mitgesendet wurden
@@ -494,12 +524,12 @@ bool updateMacroSetLine() {
           _parseContainer["val"][newKey].set(newVal.asInt());
           break;
         }
-        case KinoVariant::RGB_COLOR: {
-          _parseContainer["val"][newKey].set(newVal.c_str());
+        case KinoVariant::FLOAT: {
+          _parseContainer["val"][newKey].set(newVal.asFloat());
           break;
         }
-        default: {
-          _parseContainer["val"][newKey].set(newVal.c_str());
+        default: {  // also STRING und RGB_COLOR
+          _parseContainer["val"][newKey].set((char*)newVal.c_str());  // Cast auf char*, um eine Kopie zu erzwingen
           break;
         }
       }
@@ -609,12 +639,12 @@ bool insertMacroSetLine() {
           _parseContainer["val"][newKey].set(newVal.asInt());
           break;
         }
-        case KinoVariant::RGB_COLOR: {
-          _parseContainer["val"][newKey].set(newVal.c_str());
+        case KinoVariant::FLOAT: {
+          _parseContainer["val"][newKey].set(newVal.asFloat());
           break;
         }
-        default: {
-          _parseContainer["val"][newKey].set(newVal.c_str());
+        default: {  // STRING oder RGB_COLOR
+          _parseContainer["val"][newKey].set((char*)newVal.c_str());
           break;
         }
       }
@@ -908,114 +938,6 @@ void showMacroDeviceSelect(const char* curDevice, int lineIndex) {
   _server.sendContent(F("</select>"));
 }
 
-/*
-// deprecated, const char* version below!
-String getSelectedKeyForFuncSelect(const String& dev, const String& key) {
-  Serial.println(F("using string version of getSelectedKeyForFuncSelect!"));
-  size_t propCount = 0;
-  KinoError err = KinoAPI::getPropertyCount(dev.c_str(),propCount);
-  for (int pc=0; pc<propCount; pc++) {
-    const KinoPropertyInfo* prop = nullptr;
-    err = KinoAPI::getPropertyInfo(dev.c_str(), pc, prop);
-    bool hasLabel     = KinoAPI::hasValue(prop);
-    bool isWritable   = KinoAPI::isWritable(prop);
-    bool hasValue     = KinoAPI::hasValue(prop);
-    bool hasQuery     = KinoAPI::hasQuery(prop);
-    bool hasParams    = KinoAPI::hasParam(prop);
-    bool isSelected   = (strcmp(key.c_str(),prop->key)==0);
-    if (isSelected) return String(prop->key);
-    if (isWritable && !hasParams) { // für schreibbare properties ohne Parameter
-      if (isSelected) return String(prop->key);
-    }
-    if (isWritable && hasParams) {
-      // Dies ist ein schreibbarer Wert, der aber zusätzliche Parameter hat. Checke, ob einer der Parameter hier gefragt ist, und setzte dementsprechend
-      // das "selected"
-      // Bedenke dabei, dass die Parameter abhängig vom gesetzten Wert der Property sein können.
-      KinoVariant value;
-      String setValue = _settings[dev][prop->key] | "";
-      const char* jsonTmp = _settings[dev][prop->key] | "";
-      if (setValue != "") {
-        value = KinoVariant::fromString(jsonTmp);
-      } else {
-        err = KinoAPI::getProperty(dev.c_str(), prop->key, value);
-        setValue = value.toString();
-      }
-      String paramPath = String(prop->key) + "/" + setValue + "/param";
-      uint16_t nrOfParams = 0;
-      err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), nrOfParams);
-      for (int pc=0; pc < nrOfParams; pc++) {
-        String getsetPathPath = paramPath + String("/") + String(pc);
-        KinoVariant getsetPath;
-        err = KinoAPI::getProperty(dev.c_str(), getsetPathPath.c_str(), getsetPath);
-        if (!isSelected && (getsetPath.toString() == key)) {
-          return String(prop->key);
-        }
-      }
-    }
-    if (!isWritable && hasValue) continue;  // In diesem Fall ist die Eigenschaft eine reine Info-Eigenschaft
-    if (!isWritable && !hasValue && hasQuery && hasParams) {            
-      // Es gibt eine Auflistung von Unter-Eigenschaften, die evtl setzbare Parameter haben
-      // Checke jedes Element auf seine Parameter. Wenn es setzbare Parameter besitzt, zeige den Pfad des Elements im select an
-      uint16_t optionCount = 0;
-      err = KinoAPI::getQueryCount(dev.c_str(), prop->key, optionCount);
-      for (int oc=0; oc < optionCount; oc++) {
-        KinoVariant optionKey;
-        err = KinoAPI::getQuery(dev.c_str(), prop->key, oc, optionKey);
-        if ((!isSelected) && (optionKey.toString() == key)) {
-          return optionKey.toString();
-        }
-        KinoVariant optionLabel = optionKey;
-        if (hasLabel) {
-          String optionLabelPath = String(prop->key) + String("/") + optionKey.toString() + String("/label");
-          err = KinoAPI::getProperty(dev.c_str(), optionLabelPath.c_str(), optionLabel);
-        }
-        // key und label der potentiellen option sind jetzt bekannt. Jetzt checke, ob sie setzbare Parameter besitzt. Wenn ja, gib den Pfad zu dieser Option
-        // im select aus
-        String paramPath = String(prop->key) + String("/") + optionKey.toString() + String("/param");
-        uint16_t paramCount = 0;
-        err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), paramCount);
-        bool hasWritableParams = false;
-        for (int pc=0; pc < paramCount; pc++) {
-          // Gehe alle verfügbaren Parameter für diese Option durch. Wir interessieren uns nur dafür, ob mindestens eine davon writable ist
-          String paramAccessPath = paramPath + String("/") + String(pc) + String("/access");
-          KinoVariant paramAccess;
-          err = KinoAPI::getProperty(dev.c_str(), paramAccessPath.c_str(), paramAccess);
-          if (paramAccess.asInt() < 2) continue;
-          // Der Parameter ist writable. Jetzt checke noch schnell, ob er vielleicht gerade selected ist
-          hasWritableParams = true;
-          KinoVariant paramGetsetPath;
-          String paramGetsetPathPath = paramPath + String("/") + String(pc);
-          err = KinoAPI::getProperty(dev.c_str(), paramGetsetPathPath.c_str(), paramGetsetPath);
-          if ((!isSelected) && (paramGetsetPath.toString() == key)) {
-            String path = String(prop->key) + String("/") + optionKey.toString();
-            return path;
-          }
-        }
-      }
-    }
-    if (!isWritable && !hasValue && !hasQuery && hasParams) {
-      // Eine Gruppierung von direkten Parametern. Checke, ob mindestens eine davon schreibbar ist. Wenn ja, zeige die Option an
-      // Wenn einer dieser Parameter gerade abgehandelt wird, setze auch selected
-      bool hasWritableParams = false;
-      String paramPath = String(prop->key) + "/param";
-      uint16_t nrOfParams = 0;
-      err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), nrOfParams);
-      for (int i=0; i < nrOfParams; i++) {
-        String paramSubPath = paramPath + String("/") + String(i);
-        KinoVariant paramGetsetpath;
-        err = KinoAPI::getProperty(dev.c_str(), paramSubPath.c_str(), paramGetsetpath);
-        KinoVariant paramAccess;
-        paramSubPath += "/access";
-        err = KinoAPI::getProperty(dev.c_str(), paramSubPath.c_str(), paramAccess);
-        if (paramAccess.asInt() < 2) continue;  // Dieser Parameter ist nicht writable, also im Moment uninteressant
-        hasWritableParams = true;
-        if (!isSelected && (paramGetsetpath.toString() == key)) return String(prop->key);
-      }
-    }
-  }
-  return "Nuescht";
-}*/
-
 void getSelectedKeyForFuncSelect(const char* dev, const char* key, char* buf, size_t bufLen) {
   size_t propCount = 0;
   KinoError err = KinoAPI::getPropertyCount(dev, propCount);
@@ -1142,170 +1064,6 @@ void getSelectedKeyForFuncSelect(const char* dev, const char* key, char* buf, si
   buf[bufLen - 1] = '\0';
   return;
 }
-
-/*
-// deprecated, const char* version below!
-void showFuncSelect(const String& dev, const String& key, int lineIndex) {
-  Serial.println(F("using string version of showFuncSelect!"));
-  // hole alle verfügbaren Properties für das device
-  //Serial.print("webserver::showFuncSelect: "); Serial.print(dev); Serial.print(", "); Serial.print(key); Serial.print(", "); Serial.println(lineIndex);
-  size_t propCount = 0;
-  KinoError err = KinoAPI::getPropertyCount(dev.c_str(),propCount);
-  char selectName[128];
-  _server.sendContent(F("<select name='func' class='funcselect'>"));
-  _server.sendContent(F("<option value="">Choose function</option>"));
-  for (int pc=0; pc<propCount; pc++) {
-    const KinoPropertyInfo* prop = nullptr;
-    err = KinoAPI::getPropertyInfo(dev.c_str(), pc, prop);
-    bool hasLabel     = KinoAPI::hasValue(prop);
-    bool isWritable   = KinoAPI::isWritable(prop);
-    bool hasValue     = KinoAPI::hasValue(prop);
-    bool hasQuery     = KinoAPI::hasQuery(prop);
-    bool hasParams    = KinoAPI::hasParam(prop);
-    bool isSelected   = (strcmp(key.c_str(),prop->key)==0);
-    if (isWritable && !hasParams) { // für schreibbare properties ohne Parameter
-      _server.sendContent(F("<option value='"));
-      _server.sendContent(prop->key);
-      _server.sendContent(F("'"));
-      if (isSelected) _server.sendContent(F(" selected='selected'"));
-      _server.sendContent(F(">"));
-      _server.sendContent(prop->label);
-      _server.sendContent(F("</option>"));
-      continue;
-    }
-    if (isWritable && hasParams) {
-      // Dies ist ein schreibbarer Wert, der aber zusätzliche Parameter hat. Checke, ob einer der Parameter hier gefragt ist, und setzte dementsprechend
-      // das "selected"
-      // Bedenke dabei, dass die Parameter abhängig vom gesetzten Wert der Property sein können.
-      //Serial.print(prop->key); Serial.println(" is writable and has Params. Checking them for selectedness");
-      KinoVariant value;
-      String setValue = _lineSettings[dev][prop->key] | "";
-      if (setValue == "") setValue = _settings[dev][prop->key] | "";
-      if (setValue != "") {
-        value = KinoVariant::fromString(setValue.c_str());
-      } else {
-        err = KinoAPI::getProperty(dev.c_str(), prop->key, value);
-        setValue = value.toString();
-      }
-      String paramPath = String(prop->key) + "/" + setValue + "/param";
-      uint16_t nrOfParams = 0;
-      err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), nrOfParams);
-      for (int pc=0; pc < nrOfParams; pc++) {
-        String getsetPathPath = paramPath + String("/") + String(pc);
-        KinoVariant getsetPath;
-        //Serial.print("\tchecking "); Serial.print(getsetPathPath); Serial.print(" : ");
-        err = KinoAPI::getProperty(dev.c_str(), getsetPathPath.c_str(), getsetPath);
-        //Serial.println(getsetPath.toString());
-        if (!isSelected && (getsetPath.toString() == key)) {
-          //Serial.println("\tThis is a match!");
-          isSelected = true;
-        }
-      }
-      _server.sendContent(F("<option value='"));
-      _server.sendContent(prop->key);
-      _server.sendContent("'");
-      if (isSelected) _server.sendContent(F(" selected='selected'"));
-      _server.sendContent(">");
-      _server.sendContent(prop->label);
-      _server.sendContent(F("</option>"));
-      isSelected = false;
-      continue;
-    }
-    if (!isWritable && hasValue) continue;  // In diesem Fall ist die Eigenschaft eine reine Info-Eigenschaft
-    if (!isWritable && !hasValue && hasQuery && hasParams) {            
-      // Es gibt eine Auflistung von Unter-Eigenschaften, die evtl setzbare Parameter haben
-      // Checke jedes Element auf seine Parameter. Wenn es setzbare Parameter besitzt, zeige den Pfad des Elements im select an
-      uint16_t optionCount = 0;
-      err = KinoAPI::getQueryCount(dev.c_str(), prop->key, optionCount);
-      for (int oc=0; oc < optionCount; oc++) {
-        KinoVariant optionKey;
-        err = KinoAPI::getQuery(dev.c_str(), prop->key, oc, optionKey);
-        if ((!isSelected) && (optionKey.toString() == key)) {
-          //Serial.print("selecting optionKey ");
-          //Serial.print(optionKey.toString());
-          //Serial.print(", as it matches key ");
-          //Serial.println(key);
-          isSelected = true;
-        }
-        KinoVariant optionLabel = optionKey;
-        if (hasLabel) {
-          String optionLabelPath = String(prop->key) + String("/") + optionKey.toString() + String("/label");
-          err = KinoAPI::getProperty(dev.c_str(), optionLabelPath.c_str(), optionLabel);
-        }
-        // key und label der potentiellen option sind jetzt bekannt. Jetzt checke, ob sie setzbare Parameter besitzt. Wenn ja, gib den Pfad zu dieser Option
-        // im select aus
-        String paramPath = String(prop->key) + String("/") + optionKey.toString() + String("/param");
-        uint16_t paramCount = 0;
-        err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), paramCount);
-        bool hasWritableParams = false;
-        for (int pc=0; pc < paramCount; pc++) {
-          // Gehe alle verfügbaren Parameter für diese Option durch. Wir interessieren uns nur dafür, ob mindestens eine davon writable ist
-          String paramAccessPath = paramPath + String("/") + String(pc) + String("/access");
-          KinoVariant paramAccess;
-          err = KinoAPI::getProperty(dev.c_str(), paramAccessPath.c_str(), paramAccess);
-          if (paramAccess.asInt() < 2) continue;
-          // Der Parameter ist writable. Jetzt checke noch schnell, ob er vielleicht gerade selected ist
-          hasWritableParams = true;
-          KinoVariant paramGetsetPath;
-          String paramGetsetPathPath = paramPath + String("/") + String(pc);
-          err = KinoAPI::getProperty(dev.c_str(), paramGetsetPathPath.c_str(), paramGetsetPath);
-          if ((!isSelected) && (paramGetsetPath.toString() == key)) {
-            //Serial.print("selecting paramGetsetPath");
-            //Serial.print(paramGetsetPath.toString());
-            //Serial.print(", as it matches key ");
-            //Serial.println(key);
-            isSelected = true;
-          }
-        }
-        // Jetzt: gibt es wenigstens einen schreibbaren Parameter für diese option? Dann zeige sie an und checke die nächste option
-        if (hasWritableParams) {
-          _server.sendContent(F("<option value='"));
-          _server.sendContent(prop->key);
-          _server.sendContent(F("/"));
-          _server.sendContent(optionKey.toString());
-          _server.sendContent("'");
-          if (isSelected) _server.sendContent(F(" selected='selected'"));
-          _server.sendContent(F(">"));
-          _server.sendContent(prop->label);
-          _server.sendContent(F(" / ")); 
-          _server.sendContent(optionLabel.toString());
-          _server.sendContent(F("</option>"));
-          isSelected = false;
-        }
-      }
-    }
-    if (!isWritable && !hasValue && !hasQuery && hasParams) {
-      // Eine Gruppierung von direkten Parametern. Checke, ob mindestens eine davon schreibbar ist. Wenn ja, zeige die Option an
-      // Wenn einer dieser Parameter gerade abgehandelt wird, setze auch selected
-      bool hasWritableParams = false;
-      String paramPath = String(prop->key) + "/param";
-      uint16_t nrOfParams = 0;
-      err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), nrOfParams);
-      for (int i=0; i < nrOfParams; i++) {
-        String paramSubPath = paramPath + String("/") + String(i);
-        KinoVariant paramGetsetpath;
-        err = KinoAPI::getProperty(dev.c_str(), paramSubPath.c_str(), paramGetsetpath);
-        KinoVariant paramAccess;
-        paramSubPath += "/access";
-        err = KinoAPI::getProperty(dev.c_str(), paramSubPath.c_str(), paramAccess);
-        if (paramAccess.asInt() < 2) continue;  // Dieser Parameter ist nicht writable, also im Moment uninteressant
-        hasWritableParams = true;
-        if (!isSelected && (paramGetsetpath.toString() == key)) isSelected = true;
-      }
-      if (hasWritableParams) {
-        _server.sendContent(F("<option value='"));
-        _server.sendContent(prop->key);
-        _server.sendContent(F("'"));
-        if (isSelected) _server.sendContent(F(" selected='selected'"));
-        _server.sendContent(F(">"));
-        _server.sendContent(prop->label);
-        _server.sendContent(F("</option>"));
-        isSelected = false;
-      }
-    }
-  }
-  _server.sendContent(F("</select>"));
-}*/
 
 // Helperfunktion, die ein Select mit allen verfügbaren schreibbaren Pfaden zum angegebenen device zusammenstellt und den gegebenen key vor-auswählt
 void showFuncSelect(const char* dev, const char* key, int lineIndex) {
@@ -1543,315 +1301,6 @@ void showParamPropertyControl(const char* deviceName, const char* getsetPath) {
     }
   }
 }
-
-/*
-// deprecated, const char* version below!
-void showFuncControls(const String& dev, const String& key, int lineIndex) {
-  Serial.println(F("Using string version of showFuncControls!"));
-  // key ist entweder eine Property oder der Pfad einer Property zu einer Option
-  // Gehe alle Properties zu dem Device durch und checke, womit wir es genau zu tun haben
-  bool isPath = (key.indexOf("/") != -1);
-
-  if (!isPath) {
-    // einfacher Fall: Es handelt sich um eine Property
-    const KinoPropertyInfo* pi = nullptr;
-    KinoError err = KinoAPI::getPropertyInfoByName(dev.c_str(), key.c_str(), pi);
-    if (!pi) {
-      //Serial.print("FEHLER!!! Konnte PropertyInfo "); Serial.print(key); Serial.println(" nicht lesen!");
-      return;
-    }
-    bool hasValue = KinoAPI::hasValue(pi);
-    bool hasQuery = KinoAPI::hasQuery(pi);
-    bool hasParam = KinoAPI::hasParam(pi);
-    if (hasValue && hasQuery) {
-      // baue ein Select zusammen mit allen Optionen. Falls ein Wert in _settings dazu existiert, wähle ihn aus
-      // Falls in _settings KEIN Wert existiert, wähle den aktuellen Wert aus
-      String value = _lineSettings[dev][key] | "";
-      if (value == "") value = _settings[dev][key] | "";
-      //Serial.print("reading _settings["); Serial.print(dev); Serial.print("]["); Serial.print(key); Serial.print("] = "); Serial.println(value);
-      if (value == "") {
-        KinoVariant currentValue;
-        err = KinoAPI::getProperty(dev.c_str(), pi->key, currentValue);
-        value = currentValue.toString();
-      }
-      startMacroSelect(dev.c_str(), pi->key, pi->label);
-      //_server.sendContent("<select name='");
-      //_server.sendContent(pi->key);
-      //_server.sendContent("'>");
-      uint16_t nrOfOptions = 0;
-      err = KinoAPI::getQueryCount(dev.c_str(), pi->key, nrOfOptions);
-      for (int oc=0; oc < nrOfOptions; oc++) {
-        //Serial.print("requesting optionvalue for "); Serial.print(pi->key); Serial.print(" #"); Serial.print(oc);
-        KinoVariant optionValue;
-        err = KinoAPI::getQuery(dev.c_str(), pi->key, oc, optionValue);
-        //Serial.print(" => "); Serial.println(optionValue.toString());
-        //Serial.print("requesting label for "); Serial.print(pi->key); Serial.print("/"); Serial.print(optionValue.toString());
-        String labelPath = String(pi->key) + "/" + optionValue.toString() + "/label";
-        KinoVariant optionLabel;
-        err = KinoAPI::getProperty(dev.c_str(), labelPath.c_str(), optionLabel);
-        //Serial.println(" => "); Serial.println(optionLabel.toString());
-        if (optionLabel.type == KinoVariant::NONE) optionLabel = optionValue;
-        bool selected = (optionValue.toString() == value);
-        _server.sendContent(F("<option value='"));
-        _server.sendContent(optionValue.toString());
-        _server.sendContent(F("'"));
-        if (selected) _server.sendContent(F(" selected='selected'"));
-        _server.sendContent(">");
-        _server.sendContent(optionLabel.toString());
-        _server.sendContent(F("</option>"));
-      }
-      endMacroSelect();
-      //_server.sendContent("</select>");
-      if (hasParam) {
-        uint16_t paramCount = 0;
-        String paramPath = String(pi->key) + String("/") + value + String("/param");
-        err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), paramCount);
-        for (int i = 0; i < paramCount; i++) {
-          String subPath = paramPath + String("/") + String(i);
-          KinoVariant getsetPath;
-          err = KinoAPI::getProperty(dev.c_str(), subPath.c_str(), getsetPath);
-          if (isProperty(dev.c_str(), getsetPath.toString().c_str())) {
-            showParamPropertyControl(dev.c_str(), getsetPath.toString().c_str());
-            continue;
-          }
-          KinoVariant paramCurrentValue;
-          err = KinoAPI::getProperty(dev.c_str(), getsetPath.toString().c_str(), paramCurrentValue); // brauchen den type, und den Value als Fallback
-          KinoVariant paramAccess;
-          String accessPath = subPath + String("/access");
-          err = KinoAPI::getProperty(dev.c_str(), accessPath.c_str(), paramAccess);
-          if (paramAccess.asInt() < 2) continue;  // uns interessieren hier im Moment nur schreibbare Parameter
-          String paramValue = _lineSettings[dev][getsetPath.toString()] | "";
-          if (paramValue == "") paramValue = _settings[dev][getsetPath.toString()] | "";
-          if (paramValue == "") paramValue = paramCurrentValue.toString();
-          KinoVariant pv = KinoVariant::fromString(paramValue.c_str());
-          KinoVariant paramLabel;
-          String labelPath = subPath + String("/label");
-          err = KinoAPI::getProperty(dev.c_str(), labelPath.c_str(), paramLabel);
-          switch (paramCurrentValue.type) {
-            case KinoVariant::BOOL: {
-              macroToggleButton(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.asBool());
-              break;
-            }
-            case KinoVariant::INT: {
-              String subsubpath = subPath + String("/minvalue");
-              KinoVariant minval;
-              err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), minval);
-              subsubpath = subPath + String("/maxvalue");
-              KinoVariant maxval;
-              err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), maxval);
-              subsubpath = subPath + String("/valuestep");
-              KinoVariant valuestep;
-              err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), valuestep);
-              macroSlider(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.asInt(), minval.asInt(), maxval.asInt(), valuestep.asInt());
-              break;
-            }
-            case KinoVariant::RGB_COLOR: {
-              macroColorPicker(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.toString().c_str());
-              break;
-            }
-            default: {
-              infoText(dev.c_str(), getsetPath.c_str(), paramLabel.toString().c_str(), "unknown");
-              break;
-            }
-          } // one parameter done
-        } // all parameters done
-      } // end of if (hasParam)
-    } // end of if (hasValue && hasQuery)
-    if (hasValue && !hasQuery) {
-      KinoVariant propValue;
-      KinoError err = KinoAPI::getProperty(dev.c_str(), key.c_str(), propValue);
-      String currentValue = _lineSettings[dev][key] | "";
-      if (currentValue == "") currentValue = _settings[dev][key] | "";
-      if (currentValue == "") currentValue = propValue.toString();
-      KinoVariant cv = KinoVariant::fromString(currentValue.c_str());
-      switch (propValue.type) {
-        case KinoVariant::BOOL: {
-          macroToggleButton(dev.c_str(), pi->key, pi->label, cv.asBool());
-          break;
-        }
-        case KinoVariant::INT: {
-          int minvalue = pi->minValue.value_or(0);
-          int maxvalue = pi->maxValue.value_or(255);
-          int valuestp = pi->valueStp.value_or(1);
-          macroSlider(dev.c_str(), pi->key, pi->label, cv.asInt(), minvalue, maxvalue, valuestp);
-          break;
-        }
-        case KinoVariant::RGB_COLOR: {
-          macroColorPicker(dev.c_str(), pi->key, pi->label, cv.toString().c_str());
-          break;
-        }
-        default: {
-          infoText(dev.c_str(), pi->key, pi->label, "unknown");
-          break;
-        }
-      }
-      if (hasParam) {
-        uint16_t paramCount = 0;
-        String paramPath = String(pi->key) + String("/") + currentValue + String("/param");
-        err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), paramCount);
-        for (int i = 0; i < paramCount; i++) {
-          String subPath = paramPath + String("/") + String(i);
-          KinoVariant getsetPath;
-          err = KinoAPI::getProperty(dev.c_str(), subPath.c_str(), getsetPath);
-
-          KinoVariant paramCurrentValue;
-          err = KinoAPI::getProperty(dev.c_str(), getsetPath.toString().c_str(), paramCurrentValue); // brauchen den type, und den Value als Fallback
-          KinoVariant paramAccess;
-          String accessPath = subPath + String("/access");
-          err = KinoAPI::getProperty(dev.c_str(), accessPath.c_str(), paramAccess);
-          if (paramAccess.asInt() < 2) continue;  // uns interessieren hier im Moment nur schreibbare Parameter
-          String paramValue = _lineSettings[dev][getsetPath.toString()] | "";
-          if (paramValue == "") paramValue = _settings[dev][getsetPath.toString()] | "";
-          if (paramValue == "") paramValue = paramCurrentValue.toString();
-          KinoVariant pv = KinoVariant::fromString(paramValue.c_str());
-          KinoVariant paramLabel;
-          String labelPath = subPath + String("/label");
-          err = KinoAPI::getProperty(dev.c_str(), labelPath.c_str(), paramLabel);
-          switch (paramCurrentValue.type) {
-            case KinoVariant::BOOL: {
-              macroToggleButton(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.asBool());
-              break;
-            }
-            case KinoVariant::INT: {
-              String subsubpath = subPath + String("/minvalue");
-              KinoVariant minval;
-              err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), minval);
-              subsubpath = subPath + String("/maxvalue");
-              KinoVariant maxval;
-              err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), maxval);
-              subsubpath = subPath + String("/valuestep");
-              KinoVariant valuestep;
-              err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), valuestep);
-              macroSlider(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.asInt(), minval.asInt(), maxval.asInt(), valuestep.asInt());
-              break;
-            }
-            case KinoVariant::RGB_COLOR: {
-              macroColorPicker(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.toString().c_str());
-              break;
-            }
-            default: {
-              infoText(dev.c_str(), getsetPath.c_str(), paramLabel.toString().c_str(), "unknown");
-              break;
-            }
-          } // one parameter done
-        } // all parameters done
-      } // end of if(hasParam)
-    } // end of if(hasValue && !hasQuery)
-    if (!hasValue && hasParam) {
-      uint16_t paramCount = 0;
-      String paramPath = String(pi->key) + String("/param");
-      err = KinoAPI::getQueryCount(dev.c_str(), paramPath.c_str(), paramCount);
-      for (int i = 0; i < paramCount; i++) {
-        String subPath = paramPath + String("/") + String(i);
-        KinoVariant getsetPath;
-        err = KinoAPI::getProperty(dev.c_str(), subPath.c_str(), getsetPath);
-        //Serial.print("found parameter "); Serial.println(getsetPath.toString());
-        if (isProperty(dev.c_str(), getsetPath.toString().c_str())) {
-          showParamPropertyControl(dev.c_str(), getsetPath.toString().c_str());
-          continue;
-        }
-        KinoVariant paramCurrentValue;
-        err = KinoAPI::getProperty(dev.c_str(), getsetPath.toString().c_str(), paramCurrentValue); // brauchen den type, und den Value als Fallback
-        KinoVariant paramAccess;
-        String accessPath = subPath + String("/access");
-        err = KinoAPI::getProperty(dev.c_str(), accessPath.c_str(), paramAccess);
-        if (paramAccess.asInt() < 2) continue;  // uns interessieren hier im Moment nur schreibbare Parameter
-        String paramValue = _lineSettings[dev][getsetPath.toString()] | "";
-        if (paramValue == "") paramValue = _settings[dev][getsetPath.toString()] | "";
-        if (paramValue == "") paramValue = paramCurrentValue.toString();
-        KinoVariant pv = KinoVariant::fromString(paramValue.c_str());
-        KinoVariant paramLabel;
-        String labelPath = subPath + String("/label");
-        err = KinoAPI::getProperty(dev.c_str(), labelPath.c_str(), paramLabel);
-        switch (paramCurrentValue.type) {
-          case KinoVariant::BOOL: {
-            macroToggleButton(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.asBool());
-            break;
-          }
-          case KinoVariant::INT: {
-            String subsubpath = subPath + String("/minvalue");
-            KinoVariant minval;
-            err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), minval);
-            subsubpath = subPath + String("/maxvalue");
-            KinoVariant maxval;
-            err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), maxval);
-            subsubpath = subPath + String("/valuestep");
-            KinoVariant valuestep;
-            err = KinoAPI::getProperty(dev.c_str(), subsubpath.c_str(), valuestep);
-            macroSlider(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.asInt(), minval.asInt(), maxval.asInt(), valuestep.asInt());
-            break;
-          }
-          case KinoVariant::RGB_COLOR: {
-            macroColorPicker(dev.c_str(), getsetPath.toString().c_str(), paramLabel.toString().c_str(), pv.toString().c_str());
-            break;
-          }
-          default: {
-            infoText(dev.c_str(), getsetPath.c_str(), paramLabel.toString().c_str(), "unknown");
-            break;
-          }
-        } // one parameter done
-      } // all parameters done
-    } // end of if (!hasValue && hasParam)
-  }
-  if (isPath) {
-    // Das kann nur sein, wenn die ursprüngliche Property keinen Wert hat (wenn es sich also um eine reine Ansammlung von Parametern handelt)
-    uint16_t paramCount = 0;
-    String path = key + String("/param");
-    KinoError err = KinoAPI::getQueryCount(dev.c_str(), path.c_str(), paramCount);
-    for(int i=0; i < paramCount; i++) {
-      String paramPath = path + String("/") + String(i);
-      KinoVariant getsetpath;
-      err = KinoAPI::getProperty(dev.c_str(), paramPath.c_str(), getsetpath);
-      
-      String ppath = paramPath + String("/access");
-      KinoVariant paramAccess;
-      err = KinoAPI::getProperty(dev.c_str(), ppath.c_str(), paramAccess);
-      if (paramAccess.asInt() < 2) continue;
-
-      ppath = paramPath + String("/label");
-      KinoVariant paramLabel;
-      err = KinoAPI::getProperty(dev.c_str(), ppath.c_str(), paramLabel);
-      if (paramLabel.type == KinoVariant::NONE) paramLabel = getsetpath;
-
-      KinoVariant pValue;
-      err = KinoAPI::getProperty(dev.c_str(), getsetpath.toString().c_str(), pValue);
-      String paramValue = _lineSettings[dev][getsetpath.toString()] | "";
-      if (paramValue == "") paramValue = _settings[dev][getsetpath.toString()] | "";
-      if (paramValue == "") paramValue = pValue.toString();
-      KinoVariant val = KinoVariant::fromString(paramValue.c_str());
-      
-      switch (pValue.type) {
-        case KinoVariant::BOOL: {
-          macroToggleButton(dev.c_str(), getsetpath.toString().c_str(), paramLabel.toString().c_str(), val.asBool());
-          break;
-        }
-        case KinoVariant::INT: {
-          ppath = paramPath + String("/minvalue");
-          KinoVariant minvalue;
-          err = KinoAPI::getProperty(dev.c_str(), ppath.c_str(), minvalue);
-          ppath = paramPath + String("/maxvalue");
-          KinoVariant maxvalue;
-          err = KinoAPI::getProperty(dev.c_str(), ppath.c_str(), maxvalue);
-          ppath = paramPath + String("/valuestep");
-          KinoVariant valuestep;
-          err = KinoAPI::getProperty(dev.c_str(), ppath.c_str(), valuestep);
-          
-          macroSlider(dev.c_str(), getsetpath.toString().c_str(), paramLabel.toString().c_str(), val.asInt(), minvalue.asInt(), maxvalue.asInt(), valuestep.asInt());
-          break;
-        }
-        case KinoVariant::RGB_COLOR: {
-          macroColorPicker(dev.c_str(), getsetpath.toString().c_str(), paramLabel.toString().c_str(), val.toString().c_str());
-          break;
-        }
-        default: {
-          infoText(dev.c_str(), getsetpath.c_str(), paramLabel.toString().c_str(), "unknown");
-          break;
-        }
-      } // end of one parameter
-    } // end of all parameters
-  } // end of if(isPath)
-
-}*/
 
 void showFuncControls(const char* dev, const char* key, int lineIndex) {
   // key ist entweder eine Property oder der Pfad einer Property zu einer Option
@@ -2210,7 +1659,6 @@ void showFuncControls(const char* dev, const char* key, int lineIndex) {
 
 }
 
-
 void handleDevice(const char* deviceName) {  
   pageStart(deviceName);
   
@@ -2228,9 +1676,9 @@ void handleDevice(const char* deviceName) {
     bool hasParams    = KinoAPI::hasParam(pi);
 
     KinoVariant propValue;
-    if (hasValue) {
+    /*if (hasValue) {
       err = KinoAPI::getProperty(deviceName, pi->key, propValue);
-    }
+    }*/
     if ((hasValue)&&(isWritable)&&(!hasQuery)) {  // einfacher Wert mit Schreibrechten
       buildSimpleControl(deviceName, pi);
     } else if ((hasValue)&&(isWritable)&&(hasQuery)) { // select mit aktuellem Wert
@@ -2242,11 +1690,10 @@ void handleDevice(const char* deviceName) {
       if (!isStatus) { continue; }
       KinoVariant value;
       err = KinoAPI::getProperty(deviceName, pi->key, value);
-      infoText(deviceName, pi->key, pi->label, value.toString().c_str());
+      infoText(deviceName, pi->key, pi->label, value.c_str());
     } else if ((!hasValue) && (hasParams)) {  // die Property ist eine Zusammenfassung von Parametern
       groupCardStart(pi->key, pi->label);
       snprintf(_pathHelper, _pathHelperLen, "%s/param", pi->key);
-      //showParameters(deviceName, path.c_str());
       showParameters(deviceName, _pathHelper);
       groupCardEnd();
     }
@@ -2280,11 +1727,11 @@ void buildSimpleControl(const char* deviceName, const KinoPropertyInfo*& pi) {
           break;
         }
         case KinoVariant::RGB_COLOR: {
-          colorPicker(deviceName, pi->key, pi->label, propValue.toString().c_str());
+          colorPicker(deviceName, pi->key, pi->label, propValue.c_str());
           break;
         }
         default:
-          infoText(deviceName, pi->key, pi->label, "unknown");
+          //infoText(deviceName, pi->key, pi->label, "unknown");
           break;
         }
       }
@@ -2439,21 +1886,6 @@ void pageStart(const char* title) {
     _server.sendContent(F("<script src='/script.js'></script>"));
         
     _server.sendContent(F("</head><body>"));
-    /* // ALTE VERSION
-    bool isSubPage = false;
-    if (_server.uri().length() > 1) isSubPage = true;
-    int lastSlash = _server.uri().lastIndexOf("/");
-    String target = _server.uri().substring(0,lastSlash);
-    if (target.length() == 0) target = String("/");
-    // Title card
-    _server.sendContent(F("<div class='card'><h1>"));
-    if (isSubPage) {
-      _server.sendContent(F("<a href='"));
-      _server.sendContent(target);
-      _server.sendContent(F("'>&lt;</a>  "));
-    }
-    */
-    /* NEUE VERSION OHNE STRING (start)*/
     // 1. Hole den URI-Pfad als einfachen C-String
     const char* uri = _server.uri().c_str();
     
@@ -2484,14 +1916,17 @@ void pageStart(const char* title) {
       
       _server.sendContent(F("'>&lt;</a>  "));
     }
-    /* NEUE VERSION OHNE STRING (ende)*/
     _server.sendContent(title);
     _server.sendContent(F("</h1></div>"));
 }
 
 void pageEnd() {
-  Serial.println("ready sending page");
-    _server.sendContent(F("</body></html>"));
+  Serial.println(F("ready sending page"));
+    _server.sendContent(F("<footer><small><output data-dev=\"system\" data-path=\"online\">"));
+    char ctr[5];
+    itoa(WSConnected, ctr, 10);
+    _server.sendContent(ctr);
+    _server.sendContent(F("<output></small> Users online</footer></body></html>"));
     _server.sendContent("");
 }
 
@@ -2596,7 +2031,11 @@ void selectStart(const char* deviceName, const char* func, const char* label) {
 
 void optionItem(const char* value, const char* label, bool selected) {
     _server.sendContent(F("<option value='"));
-    _server.sendContent(value);
+    if (strlen(value)>0) {
+      _server.sendContent(value);
+    } else {
+      _server.sendContent(F(" "));
+    }
     _server.sendContent(F("'"));
     if (selected) _server.sendContent(F(" selected"));
     _server.sendContent(F(">"));
@@ -2627,7 +2066,11 @@ void infoText(const char* deviceName, const char* func, const char* label, const
   _server.sendContent(F("' data-path='"));
   _server.sendContent(func);
   _server.sendContent(F("'>"));
-  _server.sendContent(value);
+  if (strlen(value)>0) {
+    _server.sendContent(value);
+  } else {
+    _server.sendContent(F("&nbsp;"));
+  }
   _server.sendContent(F("</output></div>"));
 }
 
@@ -2677,9 +2120,12 @@ void macroToggleButton(const char* deviceName, const char* func, const char* lab
   _server.sendContent(F("<input type='checkbox' name='inc_"));
   _server.sendContent(func);
   _server.sendContent(F("'"));
-  bool isIncluded = false;
+  /*bool isIncluded = false;
   if ((_lineSettings.containsKey(deviceName)) && (_lineSettings[deviceName].containsKey(func))) isIncluded = true;
-  if (isIncluded) _server.sendContent(F(" checked"));
+  if (isIncluded) _server.sendContent(F(" checked"));*/
+  if ((_lineSettings.containsKey(deviceName)) && (_lineSettings[deviceName].containsKey(func))) {
+    _server.sendContent(F(" checked"));
+  }
   _server.sendContent(F(">"));
   
   _server.sendContent(F("<label class='toggle-inline'><span class='toggle-text'>"));
@@ -2701,9 +2147,12 @@ void macroSlider(const char* deviceName, const char* func, const char* label, in
   _server.sendContent(F("<input type='checkbox' name='inc_"));
   _server.sendContent(func);
   _server.sendContent(F("'"));
-  bool isIncluded = false;
+  /*bool isIncluded = false;
   if ((_lineSettings.containsKey(deviceName)) && (_lineSettings[deviceName].containsKey(func))) isIncluded = true;
-  if (isIncluded) _server.sendContent(F(" checked"));
+  if (isIncluded) _server.sendContent(F(" checked"));*/
+  if ((_lineSettings.containsKey(deviceName)) && (_lineSettings[deviceName].containsKey(func))) {
+    _server.sendContent(F(" checked"));
+  }
   _server.sendContent(F(">"));
 
   _server.sendContent(F("<label class='toggle-inline'><span class='toggle-text'>"));
@@ -2745,9 +2194,13 @@ void macroColorPicker(const char* deviceName, const char* func, const char* labe
   _server.sendContent(F("<input type='checkbox' name='inc_"));
   _server.sendContent(func);
   _server.sendContent(F("'"));
-  bool isIncluded = false;
+  /*bool isIncluded = false;
   if ((_lineSettings.containsKey(deviceName)) && (_lineSettings[deviceName].containsKey(func))) isIncluded = true;
-  if (isIncluded) _server.sendContent(F(" checked"));
+  if (isIncluded) _server.sendContent(F(" checked"));*/
+  if ((_lineSettings.containsKey(deviceName)) && (_lineSettings[deviceName].containsKey(func))) {
+    _server.sendContent(F(" checked"));
+  }
+  
   _server.sendContent(F(">"));
   
   _server.sendContent(F("<label class='toggle-inline'><span class='toggle-text'>"));

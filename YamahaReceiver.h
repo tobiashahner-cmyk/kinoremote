@@ -98,7 +98,7 @@ class YamahaReceiver : public KinoDevice {
     bool selectNetRadioFavorite(const char* radioname); // wählt den übergebenen NETRADIO- Favoriten aus (checkt die ersten 10 Zeichen des Namens)
     NetRadioTrackInfo readCurrentlyPlayingNetRadio(); // liefert Infos über den aktuellen NETRADIO Tracks
     KinoError tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
-    bool setTickInterval(int ms);                     // setzt das Intervall für tick() in Millisekunden. Erlaubt: 0 oder 2000 bis unendlich
+    //bool setTickInterval(int ms);                     // setzt das Intervall für tick() in Millisekunden. Erlaubt: 0 oder 2000 bis unendlich
     bool isDirty();
     void clearDirty();
     bool getStatusUpdate(const char* devName, JsonObject& root);
@@ -107,8 +107,8 @@ class YamahaReceiver : public KinoDevice {
     IPAddress _ip;
     static const KinoPropertyInfo _props[];
     // ticker
-    unsigned long _tickInterval  = 0;
-    unsigned long _lastTick = 0;
+    //unsigned long _tickInterval  = 0;
+    //unsigned long _lastTick = 0;
     // Status Cache
     bool _powerStatus    = false;
     int  _volume         = 0;
@@ -172,6 +172,8 @@ class YamahaReceiver : public KinoDevice {
     bool executeSetCommand(const char* xmlstart, int val, const char* xmlend);
     void EnsureDelayBeforeRequest(unsigned long timeout);
 
+    static char _url[56];
+    static char _body[256];
     // ----------------------------------------------------
     // XML Templates in PROGMEM
     // ----------------------------------------------------

@@ -92,27 +92,7 @@ KinoDevice* KinoDeviceFactory::getDeviceByIndex(int index) {
   return nullptr;
 }
 
-/*
-std::vector<String> KinoDeviceFactory::getDeviceNames() {
-  std::vector<String> out;
-  for (auto& d : _devices) {
-    out.push_back(d.name);
-  }
-  return out;
-}*/
-
-/*String KinoDeviceFactory::getDeviceNameByIndex(int index) {
-  if (index >= _devices.size()) return "";
-  int i = 0;
-  for (auto& d : _devices) {
-    if (i==index) return d.name;
-    i++;
-  }
-  return "";
-}*/
-
 const bool KinoDeviceFactory::getDeviceNameByIndex(int index, char* devName, size_t devNameLen) {
-  //static const String empty = ""; // Statisch, damit die Referenz immer gültig bleibt
   if (index < 0 || index >= _devices.size()) {
     if (devNameLen > 0) devName[0] = '\0'; 
     return false; 
@@ -121,8 +101,7 @@ const bool KinoDeviceFactory::getDeviceNameByIndex(int index, char* devName, siz
   int i = 0;
   for (auto& d : _devices) {
     if (i == index) {
-      //return d.name; // Gibt Referenz auf den existierenden String zurück
-      strncpy(devName, d.name, devNameLen);
+      strlcpy(devName, d.name, devNameLen);
       return true;
     }
     i++;
@@ -140,7 +119,7 @@ int KinoDeviceFactory::getDeviceCount() {
 // ------------------------------------------------------------
 
 void printFile() {
-  Serial.println("\n\nKontrollausgabe von /devices.json");
+  Serial.println(F("\n\nKontrollausgabe von /devices.json"));
   // Datei im Lesemodus ("r") öffnen
   File file = LittleFS.open("/devices.json", "r");
   

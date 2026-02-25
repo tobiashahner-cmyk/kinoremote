@@ -88,8 +88,8 @@ class WLEDDevice : public KinoDevice {
     bool begin();
     bool getStatus();
     KinoError tick();                                      // zum regelmässigen Auslesen des aktuellen Status. Ist true, wenn ausgeführt, sonst false
-    bool setTickInterval(int ms);
-    int getTickInterval();
+    //bool setTickInterval(int ms);
+    //int getTickInterval();
   
   
     // Getter
@@ -159,8 +159,8 @@ class WLEDDevice : public KinoDevice {
     static void stripAfterAt(char* s);
   
     IPAddress _ip;
-    int  _tickInterval  = 0;
-    unsigned long _lastTick = 0;
+    //int  _tickInterval  = 0;
+    //unsigned long _lastTick = 0;
     void EnsureTimeoutBeforeRequest(unsigned long timeout);
     static const KinoPropertyInfo _properties[];
     // Status
@@ -189,5 +189,7 @@ class WLEDDevice : public KinoDevice {
     int countParams(size_t linenr);
     bool getParamLabel(size_t linenr, size_t paramnr, char* out, size_t outLen);
     bool getParamField(size_t linenr, size_t paramnr, char* out, size_t outLen);
+    static char _bodybuffer[256];
+    static StaticJsonDocument<1024> _jsonResponse;
     static StaticJsonDocument<512> _jsonFilter; 
 };

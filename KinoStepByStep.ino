@@ -45,6 +45,7 @@ void disconnectWiFi() {
 }
 
 static WiFiEventHandler gotIpEventHandler, disconnectedEventHandler;
+bool tickEnabled = false;
 
 void setup() {
     gotIpEventHandler = WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP& event) {
@@ -55,7 +56,8 @@ void setup() {
     
     disconnectedEventHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected& event) {
       Serial.print(F("WiFi Lost. Reason: "));
-      Serial.println(event.reason); 
+      Serial.println(event.reason);
+      isConnected = false;
       // Gründe: 8 = Verlassen (normal), 202 = Auth Fail, 201 = AP nicht gefunden...
     });
   
@@ -71,24 +73,24 @@ void setup() {
         isConnected = true;
     }
 
-    Serial.println("Lasse Devices initialisieren...");
+    Serial.println(F("Lasse Devices initialisieren..."));
     bool initOk = KinoDeviceFactory::initDevices();
     if (!initOk) {
-      Serial.println("\t ... es gab Fehler");
+      Serial.println(F("\t ... es gab Fehler"));
     } else {
-      Serial.println("\t ... OK");
+      Serial.println(F("\t ... OK"));
     }
     
-    Serial.println("\nSerial Command Dispatcher V1.0 ready");
+    Serial.println(F("\nSerial Command Dispatcher V1.0 ready"));
 
     if (!KinoAPI::startMacroEngine()) {
-      Serial.println("MacroEngine konnte nicht gestartet werden!");
+      Serial.println(F("MacroEngine konnte nicht gestartet werden!"));
     } else {
-      Serial.println("MacroEngine bereit");
+      Serial.println(F("MacroEngine bereit"));
     }
 
     webserver::begin();
-    randomSeed(analogRead(A0)); 
+    //randomSeed(analogRead(A0)); 
 }
 
 int tickFailures = 0;
@@ -115,6 +117,10 @@ void loop() {
       Serial.println(F("WiFi is back now"));
       isConnected = true;
     }
+    if (!tickEnabled) {
+      KinoAPI::startTicks();
+      tickEnabled = true;
+    }
     
     webserver::loop(); // Webserver nur bei stabilem WiFi!
     
@@ -125,6 +131,8 @@ void loop() {
     yield();
     int devCount = KinoDeviceFactory::getDeviceCount();
     if (tickFailures == devCount) {
+      KinoAPI::stopTicks();
+      tickEnabled = false;
       disconnectWiFi();
       tickFailures = 0;
       return;
@@ -134,6 +142,8 @@ void loop() {
     // Hier rufen wir s.loop() auch NICHT auf.
     static unsigned long lastAttempt = 0;
     if (millis() - lastAttempt > 60000) {
+      KinoAPI::stopTicks();
+      tickEnabled = false;
       disconnectWiFi();
       isReconnecting = true;
       lastAttempt = millis();

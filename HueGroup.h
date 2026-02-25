@@ -46,6 +46,6 @@ private:
         std::optional<uint16_t> ct;
         std::optional<uint16_t> tt;
     } pending;
-
+    static char _payload[128];
     void clearPending();
 };

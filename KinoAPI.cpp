@@ -9,6 +9,8 @@ namespace KinoAPI {
   bool isPause = false;
   bool isAlarm = false;
 
+  unsigned long tickInterval = 0;
+
   // =================================================
   //            MACROS
   // =================================================
@@ -99,12 +101,12 @@ namespace KinoAPI {
     return macroEngine.updateCommand(macroName, index, jsonActionString);
   }
   
-  bool executeMacro(const char* name,MacroFinishedCallback cb/*=nullptr*/) {
-    return macroEngine.startMacro(name, cb);
+  bool executeMacro(const char* name,MacroFinishedCallback cb/*=nullptr*/, MacroErrorCallback e/*=nullptr*/) {
+    return macroEngine.startMacro(name, cb, e);
   }
 
-  bool testMacro(const char* name, MacroFinishedCallback cb/*=nullptr*/) {
-    return macroEngine.testMacro(name, cb);
+  bool testMacro(const char* name, MacroFinishedCallback cb/*=nullptr*/, MacroErrorCallback e/*=nullptr*/) {
+    return macroEngine.testMacro(name, cb, e);
   }
 
   bool getCurrentMacroName(char* out, size_t outLen) {
@@ -147,11 +149,6 @@ namespace KinoAPI {
     return KinoDeviceFactory::getDeviceByName(deviceName);
   }
 
-/*
-  std::vector<String> getDeviceNames() {
-    return KinoDeviceFactory::getDeviceNames();
-  }
-*/
   KinoError getDeviceCount(size_t& out) {
     out = (size_t)KinoDeviceFactory::getDeviceCount();
     return KinoError::OK;
@@ -192,12 +189,83 @@ namespace KinoAPI {
     Serial.println(freeStack);
   }
 
+  bool startTicks(int ti) {
+    int interval = ti;
+    if (ti == 0) interval = 1000;
+    /*size_t devCount = KinoDeviceFactory::getDeviceCount();
+    int totalInterval = (ti == 0) ? (1000*devCount) : ti;
+    int waitInterval = totalInterval  / devCount;
+    if (waitInterval < 1000) {
+      Serial.print(F("Das Intervall ist zu klein. Es sollten mindestens 1000ms Puffer zwischen den einzelnen Geräteabfragen liegen, mit dem gegebenen Intervall sind es aber nur "));
+      Serial.print(waitInterval);
+      Serial.println(F("ms"));
+      return false;
+    }
+    bool ok = true;
+    char devName[32];
+    for (int i=0; i < devCount; i++) {
+      KinoDevice* d = KinoDeviceFactory::getDeviceByIndex(i);
+      KinoDeviceFactory::getDeviceNameByIndex(i, devName, sizeof(devName));
+      KinoError e = d->set("tickInterval", KinoVariant::fromInt(totalInterval));
+      if (e == KinoError::OK) {
+        Serial.print(F("TickInterval for "));
+        Serial.print(devName);
+        Serial.print(F(" is now "));
+        Serial.println(totalInterval);
+      } else {
+        Serial.print(F("could not set tickInterval for device "));
+        Serial.println(devName);
+        ok = false;
+      }
+      delay(waitInterval);
+      yield();
+    }
+    return ok;
+    */
+    Serial.print(F("starting device ticks, wait interval is "));
+    Serial.print(interval);
+    Serial.println(F(" between each device update"));
+    tickInterval = interval;
+    return true;
+  }
+
+  bool stopTicks() {
+    /*size_t devCount = KinoDeviceFactory::getDeviceCount();
+    bool ok = true;
+    char devName[32];
+    for (int i=0; i < devCount; i++) {
+      KinoDevice* d = KinoDeviceFactory::getDeviceByIndex(i);
+      KinoDeviceFactory::getDeviceNameByIndex(i, devName, sizeof(devName));
+      KinoError e = d->set("tickInterval", KinoVariant::fromInt(0));
+      if (e == KinoError::OK) {
+        Serial.print(F("TickInterval for "));
+        Serial.print(devName);
+        Serial.println(F(" is now 0"));
+      } else {
+        Serial.print(F("could not set tickInterval to 0 for device "));
+        Serial.println(devName);
+        ok = false;
+      }
+      delay(20);
+      yield();
+    }
+    return ok;*/
+    Serial.println(F("stopping all ticks now"));
+    tickInterval = 0;
+    return true;
+  }
+
+
   // This method will repeatedly cycle through all available devices and ask them
   // to tick(). Each device will handle its own ticks according to its tickInterval
   // A static int "runner" ensures that only ONE device will tick() in a loop() cycle
   //KinoError handleDeviceTicks(std::function<void(String devname)> cb) {
   KinoError handleDeviceTicks(std::function<void(const char* devname, bool success)> cb) {
     static int runner = 0;
+    static unsigned long lastTick = millis();
+    if (tickInterval == 0) return KinoError::NothingToDo;
+    if (millis() - lastTick < tickInterval) return KinoError::NothingToDo;
+    
     int devCount = KinoDeviceFactory::getDeviceCount();
     KinoDevice* d = KinoDeviceFactory::getDeviceByIndex(runner);
     KinoError tickresult = KinoError::DeviceUnknown;
@@ -211,6 +279,12 @@ namespace KinoAPI {
     }
     runner++;
     if (runner >= devCount) runner=0;
+    // lastTick erst am Ende setzen. So bleibt das Intervall auch nach einem Netzwerk-Timeout gross genug
+    if (tickresult == KinoError::OK) {
+      lastTick = millis();
+    } else {
+      lastTick = millis()+1000;
+    }
     return tickresult;
   }
 

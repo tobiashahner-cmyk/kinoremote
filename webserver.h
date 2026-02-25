@@ -3,8 +3,9 @@
 #include <WebSocketsServer.h>
 #include "KinoAPI.h"
 
+void webserverMacroFinished(bool success);
 
-namespace webserver {
+namespace webserver {  
     KinoError begin();      // initialisiert den Webserver
     void loop();
     void handleRoot();
@@ -14,6 +15,8 @@ namespace webserver {
 
     void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
 
+    void socketMacroFinished(bool success);
+    void socketMacroError(int linenr, const char* cmd, const char* msg);
     void listMacros();
     void createNewMacro();
     void handleMacroEdit();

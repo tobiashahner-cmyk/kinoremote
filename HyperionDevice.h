@@ -24,8 +24,8 @@ public:
 
   
   KinoError tick();
-  bool setTickInterval(int ms);
-  int getTickInterval();
+  //bool setTickInterval(int ms);
+  //int getTickInterval();
 
   size_t getPropertyCount() const override;
     const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
@@ -58,8 +58,8 @@ private:
   bool _ledDeviceStatus = false;
   uint16_t _dirty;
 
-  int  _tickInterval  = 0;
-  unsigned long _lastTick = 0;
+  //int  _tickInterval  = 0;
+  //unsigned long _lastTick = 0;
   StaticJsonDocument<1024> _doc;   // zum Parsen der Json HTTP-Antwort
   static StaticJsonDocument<64> _filter; // Filter für deserializeJson
   static bool _filterInitialized;

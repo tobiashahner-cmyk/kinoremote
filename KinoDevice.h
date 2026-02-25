@@ -127,6 +127,6 @@ public:
     }
 
  protected:
-  bool _refreshing = false;
+  //bool _refreshing = false;
   bool _dirty = false;
 };

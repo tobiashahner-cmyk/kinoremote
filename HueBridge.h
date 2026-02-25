@@ -53,14 +53,14 @@ public:
     
     // Ticker
     KinoError tick();
-    int getTickInterval();
-    bool setTickInterval(int ms);
+    //int getTickInterval();
+    //bool setTickInterval(int ms);
 
     // Lights
     bool readLights();
     HueLight* getLightByName(const char* name);
     HueLight* getLightById(uint8_t id);
-    const std::vector<HueLight*>& getLights() const;
+    //const std::vector<HueLight*>& getLights() const;
     bool sendLightState(uint8_t lightId, const char* jsonPayload);
     int getLightParamCount(const HueLight* l);
     bool getLightParam(const HueLight* l, int paramIndex, char* out, size_t outLen);
@@ -69,7 +69,7 @@ public:
     bool readGroups();
     HueGroup* getGroupById(uint8_t gid);
     HueGroup* getGroupByName(const char* name);
-    const std::vector<HueGroup*>& getGroups() const;
+    //const std::vector<HueGroup*>& getGroups() const;
     bool sendGroupState(uint16_t groupId, const char* jsonPayload);
     int getGroupParamCount(const HueGroup* g);
     bool getGroupParam(const HueGroup* g, int paramIndex, char* out, size_t outLen);
@@ -101,8 +101,8 @@ private:
     std::vector<HueSensor*> _sensors;
 
     // ticker
-    int  _tickInterval  = 0;
-    unsigned long _lastTick = 0;
+    //int  _tickInterval  = 0;
+    //unsigned long _lastTick = 0;
     
     // getter und setter - helper    
     bool splitPath(const char* input, char* dev, size_t devLen, char* name, size_t nameLen, char* act, size_t actLen);
@@ -119,8 +119,8 @@ private:
     bool findNextKey(Stream& stream, char* out, size_t outSize, bool numericOnly);
     size_t _globalDepth;
     // HTTP helper
-    bool waitForData(WiFiClient& client, uint32_t timeout = 2000);
-    bool skipHttpHeader();
+    //bool waitForData(WiFiClient& client, uint32_t timeout = 2000);
+    //bool skipHttpHeader();
     //bool httpGET(WiFiClient& client, const char* path);
     bool httpGET(WiFiClient& wifi, HTTPClient& http, const char* path);
     bool sendState(const char* path, const char* jsonPayload);

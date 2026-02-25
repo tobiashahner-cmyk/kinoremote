@@ -14,8 +14,8 @@ namespace KinoAPI {
   KinoError getMacroCommand(size_t index, char* out, size_t outLen);
   bool startMacroEngine();
   bool handleMacroTicks();
-  bool executeMacro(const char* name, MacroFinishedCallback cb=nullptr);
-  bool testMacro(const char* name, MacroFinishedCallback cb=nullptr);
+  bool executeMacro(const char* name, MacroFinishedCallback cb=nullptr, MacroErrorCallback e=nullptr);
+  bool testMacro(const char* name, MacroFinishedCallback cb=nullptr, MacroErrorCallback e=nullptr);
   bool getCurrentMacroName(char* out, size_t outLen);
   bool createMacro(const char* macroName);
   bool addOrUpdateMacro(const char* json);
@@ -37,6 +37,8 @@ namespace KinoAPI {
   //std::vector<String> getDeviceNames();
   KinoError initDevice(const char* deviceName);
   void showMemory();
+  bool startTicks(int ti=0);
+  bool stopTicks();
   KinoError handleDeviceTicks(std::function<void(const char* devname, bool success)> cb = nullptr);
   KinoError getDeviceType(const char* deviceName, KinoVariant& out);
   KinoError getProperty(const char* deviceName, const char* property, KinoVariant& out);

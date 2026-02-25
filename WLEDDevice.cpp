@@ -116,10 +116,10 @@ bool WLEDDevice::commit() {
 
 KinoError WLEDDevice::get(const char* prop, KinoVariant& out) {
   if (!prop) return KinoError::PropertyNotSupported;
-  if (strcmp(prop,"tickInterval")==0) {
+  /*if (strcmp(prop,"tickInterval")==0) {
     out.setInt(_tickInterval);
     return KinoError::OK;
-  }
+  }*/
   if (strcmp(prop,"ip")==0) {
     char buf[20];
     snprintf(buf,20,"%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
@@ -306,10 +306,10 @@ KinoError WLEDDevice::get(const char* prop, KinoVariant& out) {
 }
 
 KinoError WLEDDevice::set(const char* prop, const KinoVariant& val) {
-  if (strcmp(prop,"tickInterval")==0) {
+  /*if (strcmp(prop,"tickInterval")==0) {
     if (!setTickInterval(val.asInt())) return KinoError::InvalidValue;
     return KinoError::OK;
-  }
+  }*/
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     if (!setPowerStatus(val.asBool())) return KinoError::InvalidValue;
     return KinoError::OK;
@@ -445,13 +445,13 @@ KinoError WLEDDevice::query(const char* property, uint16_t index, KinoVariant& o
   if (strcmp(property,"effectname")==0) {
     char fxFile[48];
     constexpr size_t lineLen = 128;
-    char line[lineLen];
+    //char line[lineLen]; // wir missbrauchen _bodybuffer
 
     // >>> Lazy-Streaming
-    if (!readLineSmart(fxFile, index, line, lineLen)) return KinoError::InvalidValue;
-    stripAfterAt(line);
+    if (!readLineSmart(fxFile, index, _bodybuffer, sizeof(_bodybuffer))) return KinoError::InvalidValue;
+    stripAfterAt(_bodybuffer);
 
-    out.setString(line);
+    out.setString(_bodybuffer);
     return KinoError::OK;
   }
   if ((strcmp(property,"palette")==0)||(strcmp(property,"pal")==0)) {
@@ -487,14 +487,14 @@ void WLEDDevice::paletteFile(char* out, size_t outLen) {
 
 /* countParams(size_t linenr) V2 2026-02-03 : Strings entfernt und durch char* ersetzt */
 int WLEDDevice::countParams(size_t linenr) {
-    char line[128]; 
+    //char line[128];   // wir missbrauchen den _bodybuffer
     char fxfile[48];
     effectsFile(fxfile, sizeof(fxfile));
 
-    if (!FileHelper::readLineAt(fxfile, linenr, line, sizeof(line))) return 0;
+    if (!FileHelper::readLineAt(fxfile, linenr, _bodybuffer, sizeof(_bodybuffer))) return 0;
 
-    char* atPtr = strchr(line, '@');
-    char* semiPtr = strchr(line, ';');
+    char* atPtr = strchr(_bodybuffer, '@');
+    char* semiPtr = strchr(_bodybuffer, ';');
 
     if (atPtr == NULL) return 5; // Fallback für alte WLED
 
@@ -535,16 +535,16 @@ int WLEDDevice::countParams(size_t linenr) {
 // Der String wird direkt aus der Effekt-Datei gelesen. Ist der Parameter aktiv, aber kein spezielles Label
 // dafür definiert, wird der Default "sx", "ix"... zurückgegeben
 bool WLEDDevice::getParamLabel(size_t linenr, size_t paramnr, char* out, size_t outLen) {
-  char line[128]; 
+  //char line[128];   // wir missbrauchen den _bodybuffer
   char fxfile[32];
   effectsFile(fxfile, sizeof(fxfile));
 
-  if (!FileHelper::readLineAt(fxfile, linenr, line, sizeof(line))) return false;
+  if (!FileHelper::readLineAt(fxfile, linenr, _bodybuffer, sizeof(_bodybuffer))) return false;
 
   const char* defaults[] = {"sx", "ix", "c1x", "c2x", "c3x"};
 
-  char* atPos = strchr(line, '@');
-  char* firstSemi = strchr(line, ';');
+  char* atPos = strchr(_bodybuffer, '@');
+  char* firstSemi = strchr(_bodybuffer, ';');
 
   if (!atPos) {
     if (paramnr > 4) return false;
@@ -596,17 +596,18 @@ bool WLEDDevice::getParamLabel(size_t linenr, size_t paramnr, char* out, size_t 
 // Es werden die aktiv unterstützten Parameter zu dem Effekt aus der Effekt-Datei ausgelesen, und der dem
 // paramnr- Index entsprechende Name ("sx","ix"...) zurückgegeben
 bool WLEDDevice::getParamField(size_t linenr, size_t paramnr, char* out, size_t outLen) {
-  char line[128]; // Lokaler Puffer für die Zeile
+  //char line[128]; // Lokaler Puffer für die Zeile
+  // Wir missbrauchen den _bodybuffer, um Stack zu sparen ;-)
   char fxfile[48]; 
   effectsFile(fxfile, sizeof(fxfile));
 
-  if (!FileHelper::readLineAt(fxfile, linenr, line, sizeof(line))) return false;
+  if (!FileHelper::readLineAt(fxfile, linenr, _bodybuffer, sizeof(_bodybuffer))) return false;
 
   const char* defaults[] = {"sx", "ix", "c1x", "c2x", "c3x"};
 
   // Suche nach @ und ; (Ersatz für indexOf)
-  char* atPos = strchr(line, '@');
-  char* firstSemi = strchr(line, ';');
+  char* atPos = strchr(_bodybuffer, '@');
+  char* firstSemi = strchr(_bodybuffer, ';');
 
   if (atPos == nullptr) {
     if (paramnr > 4) return false;
@@ -644,7 +645,7 @@ bool WLEDDevice::getParamField(size_t linenr, size_t paramnr, char* out, size_t 
 
 const KinoPropertyInfo WLEDDevice::_properties[] = {
     { "ip",           "IP",                 Prop_Read },
-    { "tickInterval", "Tick Interval",      Prop_Read | Prop_Write,     0, 20000, 500 },
+    //{ "tickInterval", "Tick Interval",      Prop_Read | Prop_Write,     0, 20000, 500 },
     { "on",           "Power",              Prop_Read | Prop_Write},
     { "live",         "Live Mode",          Prop_Read },
     { "lor",          "Live Override",      Prop_Read | Prop_Write },
@@ -700,14 +701,11 @@ bool WLEDDevice::readEffects(bool forceRefresh/*=false*/) {
   char filePath[48];
   effectsFile(filePath, sizeof(filePath));
 
-  //if (FileHelper::exists(filePath.c_str())) {
   if (FileHelper::exists(filePath)) {
     if (!forceRefresh) return true;
-    //FileHelper::remove(filePath.c_str());
     FileHelper::remove(filePath);
   }
 
-  //NetworkHelper::resetClient(_client);
   WiFiClient client;
   EnsureTimeoutBeforeRequest(200);
   if (!client.connect(_ip, 80)) {
@@ -790,34 +788,33 @@ bool WLEDDevice::readEffects(bool forceRefresh/*=false*/) {
 }
 
 bool WLEDDevice::readPalettes(bool forceRefresh) {
-  //String filePath = paletteFile();
   char filePath[48];
   paletteFile(filePath, sizeof(filePath));
 
-  //if (FileHelper::exists(filePath.c_str())) {
   if (FileHelper::exists(filePath)) {
     if (!forceRefresh) return true;
-    //FileHelper::remove(filePath.c_str());
     FileHelper::remove(filePath);
   }
 
-  //NetworkHelper::resetClient(_client);
-  WiFiClient client;
+  WiFiClient wifi;
   EnsureTimeoutBeforeRequest(200);
-  if (!client.connect(_ip, 80)) {
+  if (!wifi.connect(_ip, 80)) {
     Serial.print("WLED: GET ");
     Serial.println("/json/palettes");
     Serial.println("could not connect");
-    client.stop();
+    //wifi.stop();
+    NetworkHelper::resetWiFiClient(wifi);
+    yield();
+    delay(1000);
     return false;
   }
-  client.printf(
+  wifi.printf(
     "GET /json/palettes HTTP/1.1\r\n"
     "Host: %s\r\n"
     "Connection: close\r\n\r\n",
     _ip
   );
-  if (!NetworkHelper::skipHeader(client)) return false;
+  if (!NetworkHelper::skipHeader(wifi)) return false;
 
   // =============== Palettennamen aus dem Stream extrahieren und wegschreiben
 
@@ -827,9 +824,12 @@ bool WLEDDevice::readPalettes(bool forceRefresh) {
   int count = 0;
 
   // 1. Warte auf Daten (Timeout 5s)
-  while (client.available() == 0) {
+  while (wifi.available() == 0) {
     if (millis() - startTime > 5000) {
-      NetworkHelper::resetClient(client);
+      //NetworkHelper::resetClient(wifi);
+      NetworkHelper::resetWiFiClient(wifi);
+      yield();
+      delay(1000);
       return false;
     }
     delay(1);
@@ -839,9 +839,9 @@ bool WLEDDevice::readPalettes(bool forceRefresh) {
   char currentPalette[128];
   size_t index = 0; // Unser Zeiger innerhalb des Puffers
 
-  while (client.connected() || client.available() > 0) {
-    if (client.available() > 0) {
-      char c = client.read();
+  while (wifi.connected() || wifi.available() > 0) {
+    if (wifi.available() > 0) {
+      char c = wifi.read();
 
       if (c == '"') {
         if (inString) {
@@ -865,8 +865,8 @@ bool WLEDDevice::readPalettes(bool forceRefresh) {
         if (index < sizeof(currentPalette) - 1) {
           if (c == '\\') {
             // Escape-Logik: Nächstes Zeichen direkt lesen
-            if (client.available() > 0 || client.peek() != -1) {
-              currentPalette[index++] = client.read();
+            if (wifi.available() > 0 || wifi.peek() != -1) {
+              currentPalette[index++] = wifi.read();
             }
           } else {
             currentPalette[index++] = c;
@@ -880,7 +880,8 @@ bool WLEDDevice::readPalettes(bool forceRefresh) {
   }
 
   // ========================================================================
-  NetworkHelper::resetClient(client);
+  //NetworkHelper::resetClient(wifi);
+  NetworkHelper::resetWiFiClient(wifi);
   return true;
 }
 
@@ -891,101 +892,86 @@ bool WLEDDevice::getStatus() {
 
 KinoError WLEDDevice::tick() {
   if (WiFi.status() != WL_CONNECTED) return KinoError::NothingToDo;
-  if (_tickInterval == 0) return KinoError::NothingToDo;
-  if (_refreshing) return KinoError::NothingToDo;
+  //if (_tickInterval == 0) return KinoError::NothingToDo;
+  //if (_refreshing) return KinoError::NothingToDo;
 
-  unsigned long now = millis();
-  if (now - _lastTick >= _tickInterval) {
-    _lastTick = now;
-    _refreshing = true;
+  //unsigned long now = millis();
+  //if (now - _lastTick >= _tickInterval) {
+    //_lastTick = now;
+    //_refreshing = true;
     bool ok = readState();
-    _refreshing = false;
+    //_refreshing = false;
     return (ok ? KinoError::OK : KinoError::DeviceNotReady);
-  }
-  return KinoError::NothingToDo;
+  //}
+  //return KinoError::NothingToDo;
 }
-
+/*
 bool WLEDDevice::setTickInterval(int ms) {
   if (ms == 0) { _tickInterval = 0; return true; }
   if (ms < 0) return false;       // nur zur besseren Lesbarkeit hier aufgeführt
   if (ms < 2000) return false;    // unter 2 Sekunden Interval führt zu übermässigem Traffic
   _tickInterval = ms;
+  _lastTick = millis();
   return true;
-}
-
+}*/
+/*
 int WLEDDevice::getTickInterval() {
   return _tickInterval;
-}
+}*/
 
 bool WLEDDevice::getStatusUpdate(const char* devName, JsonObject& root) {
   if (!_dirty) return false;
   static uint8_t part = 0;
+  bool ok = false;
   if (part == 0) {
     uint16_t mask = ON|BRI|FX|SX|IX;
     if ( (_dirty & mask)>0 ) {
       root["dev"].set(devName);
-      //if (_dirty & ON)    root["on"].set(_props["state"]["on"]|false);
       if (_dirty & ON)    root["on"].set(_props.onoff);
-      //if (_dirty & BRI)   root["bri"].set(_props["state"]["bri"]|0);
       if (_dirty & BRI)   root["bri"].set(_props.bri);
-      //if (_dirty & FX)    root["fx"].set(_props["state"]["seg"][0]["fx"]|0);
       if (_dirty & FX)    root["fx"].set(_props.fx);
-      //if (_dirty & SX)    root["sx"].set(_props["state"]["seg"][0]["sx"]|0);
       if (_dirty & SX)    root["sx"].set(_props.sx);
-      //if (_dirty & IX)    root["ix"].set(_props["state"]["seg"][0]["ix"]|0);
       if (_dirty & IX)    root["ix"].set(_props.ix);
-      part = 1;
       _dirty &= ~mask;  // bits löschen
-      return true;
+      ok = true;
     }
     part = 1;
-    return false;
+    return ok;
   }
   if (part == 1) {
     uint16_t mask = FGCOL|BGCOL|FXCOL|PAL;
     if ( (_dirty & mask) > 0) {
       root["dev"].set(devName);
-      //if (_dirty & FGCOL) { JsonVariant col = _props["state"]["seg"][0]["col"][0]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
       if (_dirty & FGCOL) { KinoVariant v = KinoVariant::fromColor(_props.col[0]); root["col1"].set(v.c_str()); }
-      //if (_dirty & BGCOL) { JsonVariant col = _props["state"]["seg"][0]["co2"][1]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
       if (_dirty & BGCOL) { KinoVariant v = KinoVariant::fromColor(_props.col[1]); root["col2"].set(v.c_str()); }
-      //if (_dirty & FXCOL) { JsonVariant col = _props["state"]["seg"][0]["co3"][2]; KinoVariant v = KinoVariant::fromColor(col[0]|0, col[1]|0, col[2]|0); root["col1"].set(v.c_str()); }
       if (_dirty & FXCOL) { KinoVariant v = KinoVariant::fromColor(_props.col[2]); root["col3"].set(v.c_str()); }
-      //if (_dirty & PAL)   root["pal"].set(_props["state"]["seg"][0]["pal"]|0);
       if (_dirty & PAL)   root["pal"].set(_props.pal);
       _dirty &= ~mask;  // bits löschen
-      part = 2;
-      return true;
+      ok = true;
     }
     part = 2;
-    return false;
+    return ok;
   }
   if (part == 2) {
     uint16_t mask = LOR|C1X|C2X|C3X;
     if ( (_dirty & mask) > 0) {
       root["dev"].set(devName);
-      //if (_dirty & LOR)   root["lor"].set(_props["state"]["lor"]|false);
       if (_dirty & LOR)   root["lor"].set(_props.lor);
-      //if (_dirty & C1X)   root["c1x"].set(_props["state"]["seg"][0]["c1x"]|0);
       if (_dirty & C1X)   root["c1x"].set(_props.c1x);
-      //if (_dirty & C2X)   root["c2x"].set(_props["state"]["seg"][0]["c2x"]|0);
       if (_dirty & C2X)   root["c2x"].set(_props.c2x);
-      //if (_dirty & C3X)   root["c3x"].set(_props["state"]["seg"][0]["c3x"]|0);
       if (_dirty & C3X)   root["c3x"].set(_props.c3x);
-      part = 0;
       _dirty &= ~mask;
-      return true;
+      ok = true;
     }
     part = 0;
-    return false;
+    return ok;
   }
-  return false; // nur für den Compiler, hier kommen wir nie an
+  return ok; // nur für den Compiler, hier kommen wir nie an
 }
 
 // ===== Getter =====
 
 bool WLEDDevice::getPowerStatus() const {
-  //return _props["state"]["on"] | false;
   return _props.onoff;
 }
 
@@ -998,86 +984,44 @@ bool WLEDDevice::inPause() const {
 }
 
 uint8_t WLEDDevice::getBrightness() const {
-  //return _props["state"]["bri"] | 0;
   return _props.bri;
 }
 
 bool WLEDDevice::isReceivingLiveData() const {
-  //return _props["info"]["live"] | false;
   return _live;
 }
 
 bool WLEDDevice::isOverridingLiveData() const {
-  //return _props["state"]["lor"] | true;
   return _props.lor;
 }
 
 uint8_t WLEDDevice::getSpeed() const {
-  //return _props["state"]["seg"][0]["sx"] | 0;
   return _props.sx;
 }
 
 uint8_t WLEDDevice::getIntensity() const {
-  //return _props["state"]["seg"][0]["ix"] | 0;
   return _props.ix;
 }
 
 uint16_t WLEDDevice::getEffect() const {
-  //return _props["state"]["seg"][0]["fx"] | 0;
   return _props.fx;
 }
 
 uint8_t WLEDDevice::getPalette() const {
-  //return _props["state"]["seg"][0]["pal"] | 0;
   return _props.pal;
 }
 
 void WLEDDevice::getLiveSource(char* src, size_t srcLen) {
-  //const char* lm = _props["info"]["lm"]|"";
-  //strncpy(src, lm, srcLen);
-  //src[srcLen-1] = '\0';
   strlcpy(src, _livesource, srcLen);
 }
-
-/*
-WLEDColor WLEDDevice::getColFg() const {
-  JsonArrayConst  col = _props["state"]["seg"][0]["col"][0];
-  return {
-    col[0]|0,
-    col[1]|0,
-    col[2]|0
-  };
-}*/
 
 RGBColor WLEDDevice::getColFg() const {
   return _props.col[0];
 }
 
-/*
-WLEDColor WLEDDevice::getColBg() const {
-  JsonArrayConst  col = _props["state"]["seg"][0]["col"][1];
-  return {
-    col[0]|0,
-    col[1]|0,
-    col[2]|0
-  };
-}
-*/
-
 RGBColor WLEDDevice::getColBg() const {
   return _props.col[1];
 }
-
-/*
-WLEDColor WLEDDevice::getColFx() const {
-  JsonArrayConst  col = _props["state"]["seg"][0]["col"][2];
-  return {
-    col[0]|0,
-    col[1]|0,
-    col[2]|0
-  };
-}
-*/
 
 RGBColor WLEDDevice::getColFx() const {
   return _props.col[2];
@@ -1086,7 +1030,6 @@ RGBColor WLEDDevice::getColFx() const {
 // ===== Setter =====
 
 bool WLEDDevice::setPowerStatus(bool onoff) {
-  //_newProps["state"]["on"] = onoff;
   _newProps.onoff = onoff;
   _pendingDirty |= ON;
   return true;
@@ -1096,7 +1039,6 @@ bool WLEDDevice::setBrightness(uint8_t bri) {
   if (bri < 0)   return false;
   if (bri > 255) return false;
 
-  //_newProps["state"]["bri"] = bri;
   _newProps.bri = bri;
   _pendingDirty |= BRI;
   return true;
@@ -1105,13 +1047,11 @@ bool WLEDDevice::setBrightness(uint8_t bri) {
 bool WLEDDevice::setTransitionTime(int tt) {
   if (tt < 0) return false;
   if (tt < 100) tt = 100;
-  //_newProps["state"]["tt"] = (int)(tt/100);
   _tt = (int)(tt/100);
   return true;
 }
 
 bool WLEDDevice::setEffect(uint16_t effect) {
-  //_newProps["state"]["seg"][0]["fx"] = effect;
   _newProps.fx = effect;
   _pendingDirty |= FX;
   return true;
@@ -1120,7 +1060,6 @@ bool WLEDDevice::setEffect(uint16_t effect) {
 bool WLEDDevice::setSpeed(uint8_t sx) {
   if (sx < 0)   return false;
   if (sx > 255) return false;
-  //_newProps["state"]["seg"][0]["sx"] = sx;
   _newProps.sx = sx;
   _pendingDirty |= SX;
   return true;
@@ -1129,7 +1068,6 @@ bool WLEDDevice::setSpeed(uint8_t sx) {
 bool WLEDDevice::setIntensity(uint8_t ix) {
   if (ix < 0)   return false;
   if (ix > 255) return false;
-  //_newProps["state"]["seg"][0]["ix"] = ix;
   _newProps.ix = ix;
   _pendingDirty |= IX;
   return true;
@@ -1137,9 +1075,6 @@ bool WLEDDevice::setIntensity(uint8_t ix) {
 
 bool WLEDDevice::setFgColor(uint8_t R, uint8_t G, uint8_t B) {
   if ((R<0)||(R>255)||(G<0)||(G>255)||(B<0)||(B>255)) return false;
-  //_newProps["state"]["seg"][0]["col"][0][0] = R;
-  //_newProps["state"]["seg"][0]["col"][0][1] = G;
-  //_newProps["state"]["seg"][0]["col"][0][2] = B;
   _newProps.col[0].r = R;
   _newProps.col[0].g = G;
   _newProps.col[0].b = B;
@@ -1147,20 +1082,12 @@ bool WLEDDevice::setFgColor(uint8_t R, uint8_t G, uint8_t B) {
   return true;
 }
 
-/*
-bool WLEDDevice::setFgColor(WLEDColor c) {
-  return setFgColor(c.r, c.g, c.b);
-}
-*/
 bool WLEDDevice::setFgColor(RGBColor c) {
   return setFgColor(c.r, c.g, c.b);
 }
 
 bool WLEDDevice::setBgColor(uint8_t R, uint8_t G, uint8_t B) {
   if ((R<0)||(R>255)||(G<0)||(G>255)||(B<0)||(B>255)) return false;
-  //_newProps["state"]["seg"][0]["col"][1][0] = R;
-  //_newProps["state"]["seg"][0]["col"][1][1] = G;
-  //_newProps["state"]["seg"][0]["col"][1][2] = B;
   _newProps.col[1].r = R;
   _newProps.col[1].g = G;
   _newProps.col[1].b = B;
@@ -1168,20 +1095,12 @@ bool WLEDDevice::setBgColor(uint8_t R, uint8_t G, uint8_t B) {
   return true;
 }
 
-/*
-bool WLEDDevice::setBgColor(WLEDColor c) {
-  return setBgColor(c.r, c.g, c.b);
-}
-*/
 bool WLEDDevice::setBgColor(RGBColor c) {
   return setBgColor(c.r, c.g, c.b);
 }
 
 bool WLEDDevice::setFxColor(uint8_t R, uint8_t G, uint8_t B) {
   if ((R<0)||(R>255)||(G<0)||(G>255)||(B<0)||(B>255)) return false;
-  //_newProps["state"]["seg"][0]["col"][2][0] = R;
-  //_newProps["state"]["seg"][0]["col"][2][1] = G;
-  //_newProps["state"]["seg"][0]["col"][2][2] = B;
   _newProps.col[2].r = R;
   _newProps.col[2].g = G;
   _newProps.col[2].b = B;
@@ -1189,18 +1108,11 @@ bool WLEDDevice::setFxColor(uint8_t R, uint8_t G, uint8_t B) {
   return true;
 }
 
-/*
-bool WLEDDevice::setFxColor(WLEDColor c) {
-  return setFxColor(c.r, c.g, c.b);
-}
-*/
-
 bool WLEDDevice::setFxColor(RGBColor c) {
   return setFxColor(c.r, c.g, c.b);
 }
 
 bool WLEDDevice::setLive(bool onoff) {
-  //_newProps["state"]["lor"] = !onoff;
   _newProps.lor = !onoff;
   _pendingDirty |= LOR;
   return true;
@@ -1258,9 +1170,6 @@ bool WLEDDevice::restoreBackup() {
 }
 
 bool WLEDDevice::setCustom(uint8_t c1x, uint8_t c2x, uint8_t c3x) {
-  //_newProps["state"]["seg"][0]["c1x"] = c1x;
-  //_newProps["state"]["seg"][0]["c2x"] = c2x;
-  //_newProps["state"]["seg"][0]["c3x"] = c3x;
   _newProps.c1x = c1x;
   _newProps.c2x = c2x;
   _newProps.c3x = c3x;
@@ -1269,28 +1178,24 @@ bool WLEDDevice::setCustom(uint8_t c1x, uint8_t c2x, uint8_t c3x) {
 }
 
 bool WLEDDevice::setCustom1(uint8_t c1x) {
-  //_newProps["state"]["seg"][0]["c1x"] = c1x;
   _newProps.c1x = c1x;
   _pendingDirty |= C1X;
   return true;
 }
 
 bool WLEDDevice::setCustom2(uint8_t c2x) {
-  //_newProps["state"]["seg"][0]["c2x"] = c2x;
   _newProps.c2x = c2x;
   _pendingDirty |= C2X;
   return true;
 }
 
 bool WLEDDevice::setCustom3(uint8_t c3x) {
-  //_newProps["state"]["seg"][0]["c3x"] = c3x;
   _newProps.c3x = c3x;
   _pendingDirty |= C3X;
   return true;
 }
 
 bool WLEDDevice::setPalette(uint8_t pal) {
-  //_newProps["state"]["seg"][0]["pal"] = pal;
   _newProps.pal = pal;
   _pendingDirty |= PAL;
   return true;
@@ -1308,102 +1213,7 @@ void WLEDDevice::EnsureTimeoutBeforeRequest(unsigned long timeout) {
   return;
 }
 
-/*
 bool WLEDDevice::readState() {
-  bool onBefore     = _props["state"]["on"] | false;
-  uint8_t briBefore = _props["state"]["bri"] | 0;
-  uint8_t fxBefore  = _props["state"]["seg"][0]["fx"] | 0;
-  uint8_t sxBefore  = _props["state"]["seg"][0]["sx"] | 0;
-  uint8_t ixBefore  = _props["state"]["seg"][0]["ix"] | 0;
-  uint8_t fgRBefore = _props["state"]["seg"][0]["col"][0][0] | 0;
-  uint8_t fgGBefore = _props["state"]["seg"][0]["col"][0][1] | 0;
-  uint8_t fgBBefore = _props["state"]["seg"][0]["col"][0][2] | 0;
-  uint8_t bgRBefore = _props["state"]["seg"][0]["col"][1][0] | 0;
-  uint8_t bgGBefore = _props["state"]["seg"][0]["col"][1][1] | 0;
-  uint8_t bgBBefore = _props["state"]["seg"][0]["col"][1][2] | 0;
-  uint8_t fxRBefore = _props["state"]["seg"][0]["col"][2][0] | 0;
-  uint8_t fxGBefore = _props["state"]["seg"][0]["col"][2][1] | 0;
-  uint8_t fxBBefore = _props["state"]["seg"][0]["col"][2][2] | 0;
-  bool lorBefore    = _props["state"]["lor"] | 0;
-  uint8_t c1xBefore = _props["state"]["seg"][0]["c1x"] | 0;
-  uint8_t c2xBefore = _props["state"]["seg"][0]["c2x"] | 0;
-  uint8_t c3xBefore = _props["state"]["seg"][0]["c3x"] | 0;
-  uint8_t palBefore = _props["state"]["seg"][0]["pal"] | 0;
-  WiFiClient client;
-  EnsureTimeoutBeforeRequest(200);
-  // Verbindung aufbauen mit etwas mehr Zeit (WLAN-Latenz!)
-  client.setTimeout(2000);
-  yield();
-  if (!client.connect(_ip, 80)) {
-    Serial.println(F("WLED: could not connect"));
-    NetworkHelper::resetClient(client);
-    return false;
-  }
-
-  client.print(F("GET /json HTTP/1.1\r\n"));
-  client.print(F("Host: ")); client.print(_ip); client.print(F("\r\n"));
-  client.print(F("Connection: close\r\n\r\n"));
-
-  // 1. Header überspringen (kurzes Timeout ist hier okay)
-  if (!NetworkHelper::skipHeader(client)) {
-    NetworkHelper::resetClient(client);
-    return false;
-  }
-
-  // 2. Timeout für den Body HOCHSETZEN
-  // JSON bei WLED kann groß sein, hier brauchen wir Geduld!
-  initFilter();
-  client.setTimeout(2000); 
-  // deserializeJson liest direkt vom Stream
-  DeserializationError error = deserializeJson(_props, client, DeserializationOption::Filter(_jsonFilter));
-
-  if (!error) {
-    _newProps = _props;
-    NetworkHelper::resetClient(client);
-    bool onAfter     = _props["state"]["on"] | false;
-    uint8_t briAfter = _props["state"]["bri"] | 0;
-    uint8_t fxAfter  = _props["state"]["seg"][0]["fx"] | 0;
-    uint8_t sxAfter  = _props["state"]["seg"][0]["sx"] | 0;
-    uint8_t ixAfter  = _props["state"]["seg"][0]["ix"] | 0;
-    uint8_t fgRAfter = _props["state"]["seg"][0]["col"][0][0] | 0;
-    uint8_t fgGAfter = _props["state"]["seg"][0]["col"][0][1] | 0;
-    uint8_t fgBAfter = _props["state"]["seg"][0]["col"][0][2] | 0;
-    uint8_t bgRAfter = _props["state"]["seg"][0]["col"][1][0] | 0;
-    uint8_t bgGAfter = _props["state"]["seg"][0]["col"][1][1] | 0;
-    uint8_t bgBAfter = _props["state"]["seg"][0]["col"][1][2] | 0;
-    uint8_t fxRAfter = _props["state"]["seg"][0]["col"][2][0] | 0;
-    uint8_t fxGAfter = _props["state"]["seg"][0]["col"][2][1] | 0;
-    uint8_t fxBAfter = _props["state"]["seg"][0]["col"][2][2] | 0;
-    bool lorAfter    = _props["state"]["lor"] | 0;
-    uint8_t c1xAfter = _props["state"]["seg"][0]["c1x"] | 0;
-    uint8_t c2xAfter = _props["state"]["seg"][0]["c2x"] | 0;
-    uint8_t c3xAfter = _props["state"]["seg"][0]["c3x"] | 0;
-    uint8_t palAfter = _props["state"]["seg"][0]["pal"] | 0;
-    if (onBefore != onAfter)    _dirty |= ON;
-    if (briBefore != briAfter)  _dirty |= BRI;
-    if (fxBefore != fxAfter)    _dirty |= FX;
-    if (sxBefore != sxAfter)    _dirty |= SX;
-    if (ixBefore != ixAfter)    _dirty |= IX;
-    if ((fgRBefore != fgRAfter) || (fgGBefore != fgGAfter) || (fgBBefore != fgBAfter)) _dirty |= FGCOL;
-    if ((bgRBefore != bgRAfter) || (bgGBefore != bgGAfter) || (bgBBefore != bgBAfter)) _dirty |= BGCOL;
-    if ((fxRBefore != fxRAfter) || (fxGBefore != fxGAfter) || (fxBBefore != fxBAfter)) _dirty |= FXCOL;
-    if (lorBefore != lorAfter)  _dirty |= LOR;
-    if (c1xBefore != c1xAfter)  _dirty |= C1X;
-    if (c2xBefore != c2xAfter)  _dirty |= C2X;
-    if (c3xBefore != c3xAfter)  _dirty |= C3X;
-    if (palBefore != palAfter)  _dirty |= PAL;
-    return true;
-  } else {
-    Serial.print(F("WLED Parsing error: "));
-    Serial.println(error.c_str());
-  }
-  
-  NetworkHelper::resetClient(client);
-  return false;
-}
-*/
-bool WLEDDevice::readState() {
-  // ... deine "Before"-Variablen bleiben identisch ...
   bool      onBefore  = _props.onoff;
   uint8_t   briBefore = _props.bri;
   uint8_t   fxBefore  = _props.fx;
@@ -1417,50 +1227,46 @@ bool WLEDDevice::readState() {
   uint8_t   c2xBefore = _props.c2x;
   uint8_t   c3xBefore = _props.c3x;
   uint8_t   palBefore = _props.pal;
-  // BEFORE- Variablen Ende
-  WiFiClient client;
+  WiFiClient wifi;
   HTTPClient http;
   
   EnsureTimeoutBeforeRequest(200);
 
-  // URL generieren (http://ip/json)
-  //String url = "http://" + _ip.toString() + "/json";
   char url[32];
   snprintf(url, sizeof(url), "http://%d.%d.%d.%d/json", _ip[0], _ip[1], _ip[2], _ip[3]);
   
-  http.setTimeout(3000); // Großzügiges Timeout für WLED 0.13 SR
+  http.setTimeout(3000);
   
-  if (http.begin(client, url)) {
+  if (http.begin(wifi, url)) {
     int httpCode = http.GET();
 
     if (httpCode == HTTP_CODE_OK) {
       initFilter();
-      // Direkt vom Stream des HTTPClient deserialisieren
-      StaticJsonDocument<1024> json;
-      DeserializationError error = deserializeJson(json, http.getStream(), DeserializationOption::Filter(_jsonFilter));
+      _jsonResponse.clear();
+      DeserializationError error = deserializeJson(_jsonResponse, http.getStream(), DeserializationOption::Filter(_jsonFilter));
 
       if (!error) {
-        _props.onoff        = json["state"]["on"] | false;
-        _props.bri          = json["state"]["bri"] | 0;
-        _props.fx           = json["state"]["seg"][0]["fx"] | 0;
-        _props.sx           = json["state"]["seg"][0]["sx"] | 0;
-        _props.ix           = json["state"]["seg"][0]["ix"] | 0;
-        _props.col[0].r     = json["state"]["seg"][0]["col"][0][0] | 0;
-        _props.col[0].g     = json["state"]["seg"][0]["col"][0][1] | 0;
-        _props.col[0].b     = json["state"]["seg"][0]["col"][0][2] | 0;
-        _props.col[1].r     = json["state"]["seg"][0]["col"][1][0] | 0;
-        _props.col[1].g     = json["state"]["seg"][0]["col"][1][1] | 0;
-        _props.col[1].b     = json["state"]["seg"][0]["col"][1][2] | 0;
-        _props.col[2].r     = json["state"]["seg"][0]["col"][2][0] | 0;
-        _props.col[2].g     = json["state"]["seg"][0]["col"][2][1] | 0;
-        _props.col[2].b     = json["state"]["seg"][0]["col"][2][2] | 0;
-        _props.lor          = json["state"]["lor"] | 0;
-        _props.c1x          = json["state"]["seg"][0]["c1x"] | 0;
-        _props.c2x          = json["state"]["seg"][0]["c2x"] | 0;
-        _props.c3x          = json["state"]["seg"][0]["c3x"] | 0;
-        _props.pal          = json["state"]["seg"][0]["pal"] | 0;
-        strlcpy(_livesource,  json["info"]["lm"]|"", sizeof(_livesource));
-        _live               = json["info"]["live"]|false;
+        _props.onoff        = _jsonResponse["state"]["on"] | false;
+        _props.bri          = _jsonResponse["state"]["bri"] | 0;
+        _props.fx           = _jsonResponse["state"]["seg"][0]["fx"] | 0;
+        _props.sx           = _jsonResponse["state"]["seg"][0]["sx"] | 0;
+        _props.ix           = _jsonResponse["state"]["seg"][0]["ix"] | 0;
+        _props.col[0].r     = _jsonResponse["state"]["seg"][0]["col"][0][0] | 0;
+        _props.col[0].g     = _jsonResponse["state"]["seg"][0]["col"][0][1] | 0;
+        _props.col[0].b     = _jsonResponse["state"]["seg"][0]["col"][0][2] | 0;
+        _props.col[1].r     = _jsonResponse["state"]["seg"][0]["col"][1][0] | 0;
+        _props.col[1].g     = _jsonResponse["state"]["seg"][0]["col"][1][1] | 0;
+        _props.col[1].b     = _jsonResponse["state"]["seg"][0]["col"][1][2] | 0;
+        _props.col[2].r     = _jsonResponse["state"]["seg"][0]["col"][2][0] | 0;
+        _props.col[2].g     = _jsonResponse["state"]["seg"][0]["col"][2][1] | 0;
+        _props.col[2].b     = _jsonResponse["state"]["seg"][0]["col"][2][2] | 0;
+        _props.lor          = _jsonResponse["state"]["lor"] | 0;
+        _props.c1x          = _jsonResponse["state"]["seg"][0]["c1x"] | 0;
+        _props.c2x          = _jsonResponse["state"]["seg"][0]["c2x"] | 0;
+        _props.c3x          = _jsonResponse["state"]["seg"][0]["c3x"] | 0;
+        _props.pal          = _jsonResponse["state"]["seg"][0]["pal"] | 0;
+        strlcpy(_livesource,  _jsonResponse["info"]["lm"]|"", sizeof(_livesource));
+        _live               = _jsonResponse["info"]["live"]|false;
         if (_props.onoff    != onBefore)    _dirty |= ON;
         if (_props.bri      != briBefore)   _dirty |= BRI;
         if (_props.fx       != fxBefore)    _dirty |= FX;
@@ -1476,9 +1282,10 @@ bool WLEDDevice::readState() {
         if (_props.pal      != palBefore)   _dirty |= PAL;
 
         syncNewPropsAfterReadState();
-        // Vergleichs-Logik-Block Ende
         
-        http.end();
+        //http.end();
+        //wifi.stop();
+        NetworkHelper::resetClients(wifi, http, true);
         return true;
       } else {
         Serial.printf("WLED Parsing error: %s\n", error.c_str());
@@ -1486,8 +1293,11 @@ bool WLEDDevice::readState() {
     } else {
       Serial.printf("WLED HTTP failed, error: %s\n", http.errorToString(httpCode).c_str());
     }
-    http.end(); // Schließt Verbindung und räumt Puffer auf
+    //http.end();
+    //wifi.stop();
+    //NetworkHelper::resetClients(wifi, http, false);
   }
+  NetworkHelper::resetClients(wifi, http, false);
   return false;
 }
 
@@ -1507,89 +1317,62 @@ void WLEDDevice::syncNewPropsAfterReadState() {
   if (!(_pendingDirty & PAL))   _newProps.pal   = _props.pal;
 }
 
-/*
-bool WLEDDevice::applyChanges() {
-  WiFiClient client;
-  EnsureTimeoutBeforeRequest(200);
-  if (!client.connect(_ip, 80)) {NetworkHelper::resetClient(client); return false;}
-
-  client.printf(
-    "POST /json/state HTTP/1.1\r\n"
-    "Host: %s\r\n"
-    "Content-Type: application/json\r\n"
-    "Content-Length: %d\r\n"
-    "Connection: close\r\n\r\n",
-    _ip,
-    measureJson(_newProps["state"])
-  );
-
-  serializeJson(_newProps["state"], client);
-
-  bool success = client.find("HTTP/1.1 200");
-  NetworkHelper::resetClient(client);
-  bool lor = _newProps["state"]["lor"];
-  if (success) {
-    _props.clear();
-    _props = _newProps;
-    _dirty |= _pendingDirty;
-  } else {
-    _newProps.clear();
-    _newProps = _props;
-    _pendingDirty = NONE;
-  }
-
-  return success;
-}
-*/
 bool WLEDDevice::applyChanges() {
   if (_pendingDirty == NONE) return true;
 
-  char buffer[256]; // Sicher auf dem Stack
   int pos = 0;
 
   // Start des JSON
-  pos += snprintf(buffer + pos, sizeof(buffer) - pos, "{\"on\":%s,\"bri\":%d,\"lor\":%s", 
+  pos += snprintf(_bodybuffer + pos, sizeof(_bodybuffer) - pos, "{\"on\":%s,\"bri\":%d,\"lor\":%s", 
                   _newProps.onoff ? "true" : "false", _newProps.bri, _newProps.lor ? "true" : "false");
 
   // Segment-Daten (FX, Speed, Intensity, Palette, Farben, etc.)
   // Wir prüfen, ob IRGENDEIN Segment-relevanter Wert dirty ist
   if (_pendingDirty & (FX | SX | IX | PAL | C1X | C2X | C3X | FGCOL | BGCOL | FXCOL)) {
-    pos += snprintf(buffer + pos, sizeof(buffer) - pos, ",\"seg\":[{\"fx\":%d,\"sx\":%d,\"ix\":%d,\"pal\":%d,\"c1x\":%d,\"c2x\":%d,\"c3x\":%d",
+    pos += snprintf(_bodybuffer + pos, sizeof(_bodybuffer) - pos, ",\"seg\":[{\"fx\":%d,\"sx\":%d,\"ix\":%d,\"pal\":%d,\"c1x\":%d,\"c2x\":%d,\"c3x\":%d",
                     _newProps.fx, _newProps.sx, _newProps.ix, _newProps.pal, _newProps.c1x, _newProps.c2x, _newProps.c3x);
     
     // Farben nur mitschicken, wenn eine davon dirty ist (WLED erwartet bei "col" ein Array von Arrays)
     if (_pendingDirty & (FGCOL | BGCOL | FXCOL)) {
-      pos += snprintf(buffer + pos, sizeof(buffer) - pos, ",\"col\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]",
+      pos += snprintf(_bodybuffer + pos, sizeof(_bodybuffer) - pos, ",\"col\":[[%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]",
                       _newProps.col[0].r, _newProps.col[0].g, _newProps.col[0].b,
                       _newProps.col[1].r, _newProps.col[1].g, _newProps.col[1].b,
                       _newProps.col[2].r, _newProps.col[2].g, _newProps.col[2].b);
     }
-    pos += snprintf(buffer + pos, sizeof(buffer) - pos, "}]");
+    pos += snprintf(_bodybuffer + pos, sizeof(_bodybuffer) - pos, "}]");
   }
   
-  pos += snprintf(buffer + pos, sizeof(buffer) - pos, "}");
+  pos += snprintf(_bodybuffer + pos, sizeof(_bodybuffer) - pos, "}");
 
-  // Netzwerk-Teil
-  WiFiClient client;
+  WiFiClient wifi;
   HTTPClient http;
   char url[32];
   snprintf(url, sizeof(url), "http://%d.%d.%d.%d/json/state", _ip[0], _ip[1], _ip[2], _ip[3]);
 
-  if (http.begin(client, url)) {
+  if (http.begin(wifi, url)) {
     http.addHeader(F("Content-Type"), F("application/json"));
     
-    int httpCode = http.POST((uint8_t*)buffer, pos);
+    int httpCode = http.POST((uint8_t*)_bodybuffer, pos);
     bool success = (httpCode == HTTP_CODE_OK || httpCode == 204 || httpCode == 207);
 
     if (success) {
       _props = _newProps; // Synchronisieren
       _pendingDirty = NONE;
     }
-    http.end();
+    //http.end();
+    //wifi.stop();
+    NetworkHelper::resetClients(wifi, http, success);
     return success;
   }
+  NetworkHelper::resetClients(wifi, http, false);
   return false;
 }
+
+// statischer Puffer für Anfragen (kann ggf missbraucht werden, um Stack zu sparen)
+char WLEDDevice::_bodybuffer[256];
+
+// statisches JsonDocument für das Parsen von Serverantworten
+StaticJsonDocument<1024> WLEDDevice::_jsonResponse;
 
 // Json Filter für die Properties und pending
 StaticJsonDocument<512> WLEDDevice::_jsonFilter;

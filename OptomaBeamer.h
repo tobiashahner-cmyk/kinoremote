@@ -54,7 +54,7 @@ class OptomaBeamer : public KinoDevice {
     const char* getSourceString();
     DisplayMode getDisplayMode() const;
     int getLampHours() const;
-    int getTickInterval();
+    //int getTickInterval();
   
     // Setter
     bool setPower(bool onoff);
@@ -62,7 +62,7 @@ class OptomaBeamer : public KinoDevice {
     bool setSource(const char* srcName);
     bool setDisplayMode(DisplayMode dm);
     bool freeze(bool onoff);
-    bool setTickInterval(int ms);
+    //bool setTickInterval(int ms);
   
   private:
     // Verbindung / Identität
@@ -70,8 +70,8 @@ class OptomaBeamer : public KinoDevice {
     uint8_t _id;
   
     // Status refresh
-    unsigned long _tickInterval  = 0;
-    unsigned long _lastTick = 0;
+    //unsigned long _tickInterval  = 0;
+    //unsigned long _lastTick = 0;
     
     bool _powerState = false;
     InputSource _source = InputSource::Unknown;
