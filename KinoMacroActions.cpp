@@ -49,12 +49,12 @@ ActionResult MacroActions::execute(const JsonObject& action, bool testing) {
       /*
       Serial.print("(DEBUG) : KinoAPI::");
       Serial.print(cmd);
-      Serial.print("(\""); Serial.print(dev); Serial.print("\", \""); Serial.print(paramname); Serial.print("\", "); Serial.print(paramval.toString()); Serial.println(")");
+      Serial.print("(\""); Serial.print(dev); Serial.print("\", \""); Serial.print(paramname); Serial.print("\", "); Serial.print(paramval.c_str()); Serial.println(")");
       */
       if (strcmp(cmd,"set")==0) {
         executionError = KinoAPI::setProperty(dev,paramname,paramval);
         if (executionError != KinoError::OK) {
-          Serial.printf("Error in Macro: KinoAPI::setProperty(%s,%s,%s) failed\n",dev,paramname,paramval.toString());
+          Serial.printf("Error in Macro: KinoAPI::setProperty(%s,%s,%s) failed\n",dev,paramname,paramval.c_str());
           return { ActionError::ExecutionFailed, kinoErrorToString(executionError) };
         }
         yield();

@@ -26,6 +26,7 @@ enum KinoPropertyFlags : uint16_t {
   Prop_Query       = 1 << 2,   // hat query/queryCount
   Prop_Internal    = 1 << 3,   // nicht für UI
   Prop_Status      = 1 << 4,   // Anzeige-only
+  Prop_Optional    = 1 << 5,   // Nur unter bestimmten Voraussetzungen verfügbar
   Prop_hasLabel    = 1 << 14,  // Es gibt Anzeigelabel (für jede Option, falls vorhanden (Prop_Query)
   Prop_hasParams   = 1 << 15
 };
@@ -92,6 +93,10 @@ public:
 
     virtual const KinoPropertyInfo* getPropertyInfo(size_t index) const {
       return nullptr;
+    }
+
+    virtual bool OptionalAvailable(const char* propId) {
+      return true;
     }
 
     virtual bool hasProperty(const char* id) {

@@ -70,6 +70,7 @@ class YamahaReceiver : public KinoDevice {
     KinoError query(const char* property, uint16_t index, KinoVariant& out) override;
     size_t getPropertyCount() const override;
     const KinoPropertyInfo* getPropertyInfo(size_t index) const override;
+    bool OptionalAvailable(const char* propId) override;
 
     IPAddress getIp() const;
     bool begin();

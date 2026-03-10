@@ -1,17 +1,20 @@
 #include "config.h"
 #include <ESP8266WiFi.h>
+#include <ArduinoJson.h>
 #include "KinoAPI.h"
 #include "KinoMacroEngine.h"
 #include "SerialCommandDispatcher.h"
 #include "KinoDeviceFactory.h"
 #include "webserver.h"
-//#include "tests.h"
+#include "rotary.h"
+#include "oled.h"
 
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 
 bool isReconnecting = false;
 bool isConnected = false;
+StaticJsonDocument<2048> httpJson;
 
 void connectWiFi() {
   IPAddress ip(192, 168, 0, 227);   // IP fest einstellen
@@ -91,6 +94,11 @@ void setup() {
 
     webserver::begin();
     //randomSeed(analogRead(A0)); 
+
+    rotary::begin();
+    rotary::setDeviceProperty("yamaha", "vol");
+    //rotary::setDeviceProperty("hue","bri");
+    oled::begin();
 }
 
 int tickFailures = 0;
@@ -98,7 +106,14 @@ int tickFailures = 0;
 
 void loop() {
   handleSerialCommands();
-  
+  rotary::handleRotation();
+  if (rotary::hasChanged() && !rotary::isInMenuMode()) {
+    bool rempd = rotary::isRemapped();
+    oled::showRotary(rotary::getDeviceName(), rotary::getPropKey(), rotary::getPosition(), rempd);
+    if (rempd) rotary::clearRemapped();
+    rotary::clearChanged();
+  }
+    
   // Wenn wir im Reconnect-Modus sind: ALLES andere pausieren!
   if (isReconnecting) {
     if (WiFi.status() != WL_CONNECTED) {

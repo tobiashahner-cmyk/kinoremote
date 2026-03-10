@@ -12,9 +12,7 @@ OptomaBeamer::OptomaBeamer(const String& ip, uint8_t beamerId)
   _dirty = NONE;
 }
 
-// neue Public API, als Wrapper auf alte Public API
-const KinoPropertyInfo OptomaBeamer::_properties[] = {
-  //{ "tickInterval", "Aktualisierung [ms]", Prop_Read | Prop_Write , 0, 20000, 500},
+const KinoPropertyInfo OptomaBeamer::_properties[] PROGMEM = {
   { "ip",         "IP",             Prop_Read                         },
   { "on",         "Power",          Prop_Read  | Prop_Write           },
   { "uptime",     "Lampenstunden",  Prop_Read                         },
@@ -27,15 +25,15 @@ size_t OptomaBeamer::getPropertyCount() const {
 
 const KinoPropertyInfo* OptomaBeamer::getPropertyInfo(size_t index) const {
   if (index >= getPropertyCount()) return nullptr;
-  return &_properties[index];
+  //return &_properties[index];
+  static KinoPropertyInfo buffer; 
+  memcpy_P(&buffer, &_properties[index], sizeof(KinoPropertyInfo));
+  
+  return &buffer;
 }
 
 KinoError OptomaBeamer::get(const char* prop, KinoVariant& out) {
   if (!prop) return KinoError::PropertyNotSupported;
-  /*if (strcmp(prop,"tickInterval")==0) {
-    out.setInt(_tickInterval);
-    return KinoError::OK;
-  }*/
   if (strcmp(prop,"ip")==0) {
     char buf[20];
     snprintf(buf, 20, "%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
@@ -58,10 +56,6 @@ KinoError OptomaBeamer::get(const char* prop, KinoVariant& out) {
 }
 
 KinoError OptomaBeamer::set(const char* prop, const KinoVariant& value) {
-  /*if (strcmp(prop,"tickInterval")==0) {
-    if (!setTickInterval(value.asInt())) return KinoError::InvalidValue;
-    return KinoError::OK;
-  }*/
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     if (!setPower(value.asBool())) return KinoError::InvalidValue;
     return KinoError::OK;
@@ -93,7 +87,7 @@ KinoError OptomaBeamer::query(const char* property, uint16_t index, KinoVariant 
 
 bool OptomaBeamer::getStatusUpdate(const char* devName, JsonObject& root) {
   if (_dirty > 0) {
-    root["dev"].set(devName);
+    root["dev"].set((char*)devName);
     if (_dirty & ON)      root["on"].set(_powerState);
     if (_dirty & SOURCE)  root["input"].set(OptomaSourceLookup::toString(_source));
     if (_dirty & UPTIME)  root["uptime"].set(_lampHours);
@@ -102,8 +96,6 @@ bool OptomaBeamer::getStatusUpdate(const char* devName, JsonObject& root) {
   }
   return false;
 }
-
-// ===== Public API =====
 
 bool OptomaBeamer::begin() {
   return getStatus();
@@ -124,17 +116,8 @@ bool OptomaBeamer::getStatus() {
 
 KinoError OptomaBeamer::tick() {
   if (WiFi.status() != WL_CONNECTED) return KinoError::NothingToDo;
-  //if (_tickInterval == 0) return KinoError::NothingToDo;
-  //if (_refreshing) return KinoError::NothingToDo;
-  //unsigned long now = millis();
-  //if (now - _lastTick >= _tickInterval) {
-    //_lastTick = now;
-    //_refreshing = true;
-    bool ok = getStatus();
-    //_refreshing = false;
-    return (ok ? KinoError::OK : KinoError::DeviceNotReady);
-  //}
-  //return KinoError::NothingToDo;
+  bool ok = getStatus();
+  return (ok ? KinoError::OK : KinoError::DeviceNotReady);
 }
 
 bool OptomaBeamer::setPower(bool onoff) {
@@ -187,17 +170,6 @@ bool OptomaBeamer::freeze(bool onoff) {
   char response[3];
   return sendCommand("04", onoff ? 1 : 0, response, sizeof(response));
 }
-/*
-bool OptomaBeamer::setTickInterval(int ms) {
-  if (ms == 0) { _tickInterval = 0; return true; }
-  if (ms < 0) return false;       // nur für bessere Lesbarkeit hier. negative Werte sind unerlaubt
-  if (ms < 2000) return false;    // schneller als alle 2 Sekunden erzeugt zu viel Traffic
-  _tickInterval = ms;
-  _lastTick = millis();
-  return true;
-}*/
-
-// ===== Getter =====
 
 bool OptomaBeamer::getPowerStatus() const {
   return _powerState;
@@ -218,12 +190,6 @@ OptomaBeamer::DisplayMode OptomaBeamer::getDisplayMode() const {
 int OptomaBeamer::getLampHours() const {
   return _lampHours;
 }
-/*
-int OptomaBeamer::getTickInterval() {
-  return _tickInterval;
-}*/
-
-// ===== Helper =====
 
 void OptomaBeamer::EnsureTimeoutBeforeRequest(unsigned long timeout) {
   static unsigned long LastRequest = 0;
@@ -236,11 +202,10 @@ void OptomaBeamer::EnsureTimeoutBeforeRequest(unsigned long timeout) {
 }
 
 bool OptomaBeamer::sendCommand(const char* command, const int parameter, char* response, size_t responseLen) {
-  EnsureTimeoutBeforeRequest(200); // Deine bestehende Logik
+  EnsureTimeoutBeforeRequest(200);
   
   WiFiClient wifi;
   if (!wifi.connect(_ip, 23)) {
-    //NetworkHelper::resetClient(wifi);
     NetworkHelper::resetWiFiClient(wifi);
     yield();
     delay(1000);
@@ -284,7 +249,6 @@ bool OptomaBeamer::sendCommand(const char* command, const int parameter, char* r
   // Null-Terminator immer setzen!
   if ((response != nullptr) && (index < responseLen)) response[index] = '\0';
 
-  //NetworkHelper::resetClient(client);
   NetworkHelper::resetWiFiClient(wifi);
   
   if (!foundDelimiter && index == 0) return false; // Timeout ohne Daten
@@ -295,8 +259,6 @@ bool OptomaBeamer::sendCommand(const char* command, const int parameter, char* r
 bool OptomaBeamer::isOkResponse(const char* response) {
   return (strncasecmp(response,"OK",2)==0);
 }
-
-// ===== Parsing =====
 
 bool OptomaBeamer::parseStatusResponse(const char* response) {
   // 1. Plausibilitäts-Check (Länge und OK-Status)
@@ -317,19 +279,13 @@ bool OptomaBeamer::parseStatusResponse(const char* response) {
   return true;
 }
 
-/**
- * Liest aus str die length Zeichen ab start und übersetzt sie nach int
- */
 int OptomaBeamer::parseFixedInt(const char* str, size_t start, size_t length) {
     char temp[8]; 
     strncpy(temp, str + start, length);
     temp[length] = '\0';
     
-    // strtol(String, EndPointer, Basis)
     return (int)strtol(temp, nullptr, 10); 
 }
-
-// ===== Encoding =====
 
 uint8_t OptomaBeamer::encodeDisplayMode(DisplayMode dm) const {
   switch (dm) {

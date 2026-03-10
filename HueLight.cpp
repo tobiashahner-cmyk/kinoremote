@@ -78,6 +78,7 @@ void HueLight::forceBri(uint8_t value) {
     _bri = value; 
   }
 }
+
 void HueLight::forceCT(uint16_t value) { 
   if (_hasCT) {
     if (_ct != value) _dirty |= CT;

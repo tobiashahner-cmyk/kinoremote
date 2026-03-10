@@ -1,6 +1,7 @@
 #include "KinoMacroEngine.h"
 #include "KinoAPI.h"
 
+extern StaticJsonDocument<2048> httpJson;
 
 // --------------------------------------------------
 // lifecycle
@@ -86,8 +87,10 @@ void KinoMacroEngine::tick() {
     return;
   }
   
-  _actionDoc.clear();
-  DeserializationError err = deserializeJson(_actionDoc, line);
+  //_actionDoc.clear();
+  httpJson.clear();
+  //DeserializationError err = deserializeJson(_actionDoc, line);
+  DeserializationError err = deserializeJson(httpJson, line);
   if (err) {
     _addError(runtime.line, "JSON", err.c_str());
     runtime.running = false;
@@ -97,8 +100,9 @@ void KinoMacroEngine::tick() {
     }
     return;
   }
-  _executeAction(_actionDoc.as<JsonObject>(), runtime.line);
-  
+  //_executeAction(_actionDoc.as<JsonObject>(), runtime.line);
+  _executeAction(httpJson.as<JsonObject>(), runtime.line);
+  httpJson.clear();
   runtime.line++;
   yield();
 }

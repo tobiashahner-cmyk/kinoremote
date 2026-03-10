@@ -142,6 +142,26 @@ namespace KinoAPI {
   const MacroError& getMacroError(size_t i) {
     return macroEngine.getError(i);
   }
+
+  bool setRotaryProperty(const char* deviceName, const char* propKey) {
+    return rotary::setDeviceProperty(deviceName, propKey);
+  }
+
+  void setRotaryMenuMode(int minvalue, int maxvalue, int actpos) {
+    rotary::setMenuMode(minvalue, maxvalue, actpos);
+  }
+
+  void clearRotaryMenuMode() {
+    rotary::clearMenuMode();
+  }
+
+  bool displayDevices() {
+    int devCount = KinoDeviceFactory::getDeviceCount();
+    if (!rotary::isInMenuMode()) rotary::setMenuMode(0, devCount, 1); // set to position 1, as 0 is "back"
+    int selectedIndex = rotary::getPosition();
+    oled::showDevices(selectedIndex);
+    return true;
+  }
   
   // neue API: ein grosser Getter und Setter, und eine Query
   // als dynamischer Wrapper für alle KinoDevices
@@ -192,36 +212,6 @@ namespace KinoAPI {
   bool startTicks(int ti) {
     int interval = ti;
     if (ti == 0) interval = 1000;
-    /*size_t devCount = KinoDeviceFactory::getDeviceCount();
-    int totalInterval = (ti == 0) ? (1000*devCount) : ti;
-    int waitInterval = totalInterval  / devCount;
-    if (waitInterval < 1000) {
-      Serial.print(F("Das Intervall ist zu klein. Es sollten mindestens 1000ms Puffer zwischen den einzelnen Geräteabfragen liegen, mit dem gegebenen Intervall sind es aber nur "));
-      Serial.print(waitInterval);
-      Serial.println(F("ms"));
-      return false;
-    }
-    bool ok = true;
-    char devName[32];
-    for (int i=0; i < devCount; i++) {
-      KinoDevice* d = KinoDeviceFactory::getDeviceByIndex(i);
-      KinoDeviceFactory::getDeviceNameByIndex(i, devName, sizeof(devName));
-      KinoError e = d->set("tickInterval", KinoVariant::fromInt(totalInterval));
-      if (e == KinoError::OK) {
-        Serial.print(F("TickInterval for "));
-        Serial.print(devName);
-        Serial.print(F(" is now "));
-        Serial.println(totalInterval);
-      } else {
-        Serial.print(F("could not set tickInterval for device "));
-        Serial.println(devName);
-        ok = false;
-      }
-      delay(waitInterval);
-      yield();
-    }
-    return ok;
-    */
     Serial.print(F("starting device ticks, wait interval is "));
     Serial.print(interval);
     Serial.println(F(" between each device update"));
@@ -230,26 +220,6 @@ namespace KinoAPI {
   }
 
   bool stopTicks() {
-    /*size_t devCount = KinoDeviceFactory::getDeviceCount();
-    bool ok = true;
-    char devName[32];
-    for (int i=0; i < devCount; i++) {
-      KinoDevice* d = KinoDeviceFactory::getDeviceByIndex(i);
-      KinoDeviceFactory::getDeviceNameByIndex(i, devName, sizeof(devName));
-      KinoError e = d->set("tickInterval", KinoVariant::fromInt(0));
-      if (e == KinoError::OK) {
-        Serial.print(F("TickInterval for "));
-        Serial.print(devName);
-        Serial.println(F(" is now 0"));
-      } else {
-        Serial.print(F("could not set tickInterval to 0 for device "));
-        Serial.println(devName);
-        ok = false;
-      }
-      delay(20);
-      yield();
-    }
-    return ok;*/
     Serial.println(F("stopping all ticks now"));
     tickInterval = 0;
     return true;
@@ -395,27 +365,9 @@ namespace KinoAPI {
     return KinoError::OutOfRange;
   }
 
-
-
-  bool isInternal(const KinoPropertyInfo*& prop) {
-    return ((prop->flags & KinoPropertyFlags::Prop_Internal) > 0);
-  }
-  bool isStatus(const KinoPropertyInfo*& prop) {
-    return ((prop->flags & KinoPropertyFlags::Prop_Status) > 0);
-  }
-  bool hasValue(const KinoPropertyInfo*& prop) {
-    return ((prop->flags & KinoPropertyFlags::Prop_Read) > 0);
-  }
-  bool isWritable(const KinoPropertyInfo*& prop) {
-    return ((prop->flags & KinoPropertyFlags::Prop_Write) > 0);
-  }
-  bool hasLabel(const KinoPropertyInfo*& prop) {
-    return ((prop->flags & KinoPropertyFlags::Prop_hasLabel) > 0);
-  }
-  bool hasQuery(const KinoPropertyInfo*& prop) {
-    return ((prop->flags & KinoPropertyFlags::Prop_Query) > 0);
-  }
-  bool hasParam(const KinoPropertyInfo*& prop) {
-    return ((prop->flags & KinoPropertyFlags::Prop_hasParams) > 0);
+  bool isAvailable(const char* deviceName, const char* propKey) {
+    KinoDevice* d = KinoDeviceFactory::getDeviceByName(deviceName);
+    if (!d) return false;
+    return d->OptionalAvailable(propKey);
   }
 }

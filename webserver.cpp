@@ -12,7 +12,7 @@ namespace webserver {
   StaticJsonDocument<1024> _settings;         // Container für Werte von Properties und Parametern, die innerhalb eines Makros gesetzt werden
   StaticJsonDocument<256>  _lineSettings;     // Container für Werte von Properties und Parametern, die innerhalb einer Makrozeile gesetzt werden
   StaticJsonDocument<256>  _lineKeys;         // Merkliste für Funktions-Selects, die für eine Makrozeile schon angezeigt wurden
-  StaticJsonDocument<512> _parseContainer;   // Puffer für diverse kleine Jsons (macroLine, Websocket Push)
+  StaticJsonDocument<512> _parseContainer;    // Puffer für diverse kleine Jsons (macroLine, Websocket Push)
 
   
   const int _paramPathLen = 128;
@@ -1674,6 +1674,9 @@ void handleDevice(const char* deviceName) {
     bool isInternal   = KinoAPI::isInternal(pi);
     bool isStatus     = KinoAPI::isStatus(pi);
     bool hasParams    = KinoAPI::hasParam(pi);
+    bool isOptional   = KinoAPI::isOptional(pi);
+
+    if (isOptional && (!KinoAPI::isAvailable(deviceName, pi->key))) continue;
 
     KinoVariant propValue;
     /*if (hasValue) {
@@ -1879,6 +1882,7 @@ void showParameters(const char* deviceName, const char* paramPath) {
 void pageStart(const char* title) {
   Serial.print("start serving page: ");
   Serial.println(title);
+    _server.sendHeader("Connection", "close");
     _server.setContentLength(CONTENT_LENGTH_UNKNOWN); // Stream-Modus
     _server.send(200, "text/html", "<!DOCTYPE html>");
     _server.sendContent(F("<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"));

@@ -2,6 +2,8 @@
 #include <ArduinoJson.h>
 #include "NetworkHelper.h"
 
+extern StaticJsonDocument<2048> httpJson;
+
 // ===== Konstruktoren =====
 
 HueBridge::HueBridge(const IPAddress& ip, const char* user)
@@ -52,9 +54,9 @@ bool HueBridge::splitPath(const char* input, char* dev, size_t devLen, char* nam
     return true;
 }
 
-const KinoPropertyInfo HueBridge::_properties[] = {
+const KinoPropertyInfo HueBridge::_properties[] PROGMEM = {
   { "on",         "Power",      Prop_Read  | Prop_Write           },
-  { "bri",        "Helligkeit", Prop_Read  | Prop_Write           },
+  { "bri",        "Helligkeit", Prop_Read  | Prop_Write , 0, 255, 2         },
   { "lights",     "Lampen",     Prop_Query | Prop_hasLabel | Prop_hasParams },
   { "groups",     "Gruppen",    Prop_Query | Prop_hasLabel | Prop_hasParams },
   { "sensors",    "Sensoren",   Prop_Query | Prop_hasLabel | Prop_hasParams },
@@ -62,24 +64,28 @@ const KinoPropertyInfo HueBridge::_properties[] = {
   { "ip",         "IP",         Prop_Read                         },
   { "daylight",   "Tageslicht", Prop_Read | Prop_Status                        },
   { "temp",       "Temperatur", Prop_Read | Prop_Status                        }
-  //{ "tickInterval", "Aktualisierung [ms]", Prop_Read | Prop_Write , 0 , 20000, 500}
 };
 
 size_t HueBridge::getPropertyCount() const {
   return sizeof(_properties) / sizeof(_properties[0]);
 }
 
+/*
 const KinoPropertyInfo* HueBridge::getPropertyInfo(size_t index) const {
   if (index >= getPropertyCount()) return nullptr;
   return &_properties[index];
+}*/
+const KinoPropertyInfo* HueBridge::getPropertyInfo(size_t index) const {
+  if (index >= getPropertyCount()) return nullptr;
+
+  static KinoPropertyInfo buffer; 
+  memcpy_P(&buffer, &_properties[index], sizeof(KinoPropertyInfo));
+  
+  return &buffer;
 }
 
 KinoError HueBridge::get(const char* prop, KinoVariant& out) {
-  // zuerst Einstellungen, die technisch die Gruppe "ALL" betreffen
-  /*if (strcmp(prop,"tickInterval")==0){
-    out.setInt(_tickInterval);
-    return KinoError::OK;
-  }*/
+  if (!prop) return KinoError::PropertyNotSupported;
   if (strcmp(prop,"ip")==0) {
     char buf[20];
     snprintf(buf, 20, "%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
@@ -128,7 +134,8 @@ KinoError HueBridge::get(const char* prop, KinoVariant& out) {
     int foundSensors = 0;
     for (auto* s : _sensors) {
       if (s->hasValue("temperature")) {
-        temp += s->getValue("temperature").as<int>();
+        //temp += s->getValue("temperature").as<int>();
+        temp += (int)s->getValue("temperature");
         foundSensors++;
       }
     }
@@ -142,7 +149,8 @@ KinoError HueBridge::get(const char* prop, KinoVariant& out) {
   if (strcmp(prop, "daylight")==0) {
     for (auto* s : _sensors) {
       if (s->hasValue("daylight")) {
-        out.setFromJsonVariant(s->getValue("daylight"));
+        //out.setFromJsonVariant(s->getValue("daylight"));
+        out.setBool(s->getValue("daylight"));
         return KinoError::OK;
       }
     }
@@ -399,8 +407,34 @@ KinoError HueBridge::get(const char* prop, KinoVariant& out) {
       out.setBool(s->isWritable());
       return KinoError::OK;
     }
-    if (s->hasValue(act)) {
+    /*if (s->hasValue(act)) {
       out.setFromJsonVariant(s->getValue(act));
+      return KinoError::OK;
+    }*/
+    if (s->hasValue(act)) {
+      // Spezialbehandlung für den Zeitstempel
+      if (strcmp(act, "lastupdated") == 0) {
+        uint32_t ts = s->getLastUpdated();
+        if (ts == 0) {
+          out.setString("none");
+        } else {
+          static char timeBuf[20];
+          time_t rawTime = (time_t)ts;
+          struct tm *timeinfo = localtime(&rawTime);
+          if (timeinfo) {
+            strftime(timeBuf, sizeof(timeBuf), "%d.%m.%Y, %H:%M", timeinfo);
+            out.setString(timeBuf);
+          }
+        }
+        return KinoError::OK;
+      } 
+      const HueSensorValue& sv = s->getRawValue(act);
+      switch(sv.type) {
+        case 1: out.setBool(sv.value > 0.5f); break;
+        case 2: out.setInt((int32_t)sv.value); break;
+        case 3: out.setFloat(sv.value); break;
+        default: out.setFloat(sv.value);
+      }
       return KinoError::OK;
     }
     int paramIndex; char rest[32];
@@ -548,10 +582,6 @@ KinoError HueBridge::get(const char* prop, KinoVariant& out) {
 }
 
 KinoError HueBridge::set(const char* prop, const KinoVariant& val) {
-  /*if (strcmp(prop,"tickInterval")==0) {
-    if (!setTickInterval(val.asInt())) return KinoError::InternalError;
-    return KinoError::OK;
-  }*/
   // zuerst Einstellungen, die technisch die Gruppe "ALL" betreffen
   if ((strcmp(prop, "power")==0)||(strcmp(prop,"on")==0)) {
     char jsonString[20];
@@ -787,7 +817,7 @@ KinoError HueBridge::query(const char* property, uint16_t index, KinoVariant &ou
     HueSensor *s = getSensorByName(tmpName);
     if (!s) return KinoError::DeviceNotReady;
     if (strcmp(rest,"states")==0) {
-      JsonObjectConst sensorState = s->getState();
+      /*JsonObjectConst sensorState = s->getState();
       if (index > sensorState.size()) return KinoError::OutOfRange;
       int i=0;
       for (JsonPairConst kv : sensorState) { 
@@ -797,6 +827,10 @@ KinoError HueBridge::query(const char* property, uint16_t index, KinoVariant &ou
         }
         i++;
       }
+      return KinoError::OK;*/
+      const HueSensorValue& sv = s->getValueAt(index);
+      if (sv.key[0] == '\0') return KinoError::OutOfRange;
+      out.setString(sv.key);
       return KinoError::OK;
     }
     return KinoError::PropertyNotSupported;
@@ -815,76 +849,129 @@ bool HueBridge::getStatusUpdate(const char* devName, JsonObject& root) {
   static size_t nextLight = 0;
   static size_t nextGroup = 0;
   static size_t nextSensor = 0;
-  static int scan = 0;  // 0=lights, 1=groups, 2=sensors
+  static int scan = 0;  // 0=lights, 1=groups, 2=sensors, 3=hue (anyOn, bri)
 
-  if ((scan == 0)&&(_lights.size()>0)) {
+  //if ((scan == 0)&&(_lights.size()>0)) {
+  if (scan == 0) {
     scan = 1;
-    HueLight* l = _lights[nextLight];
-    nextLight++;
-    if (nextLight == _lights.size()) nextLight = 0;
-    
-    if (!l) return false;
-
-    if (l->isDirty()) {
-      root["dev"].set(devName);
-      char path[32];
-      snprintf(path, sizeof(path), "lights/%s", l->getName());
-      path[sizeof(path)-1] = '\0';
-      root["path"].set(path);
-      return l->getStatusUpdate(root);
+    if (_lights.size() > 0) {
+      HueLight* l = _lights[nextLight];
+      nextLight++;
+      if (nextLight == _lights.size()) nextLight = 0;
+      
+      if (!l) return false;
+  
+      if (l->isDirty()) {
+        _dirty = true;  // marker for recalculating anyOn and bri
+        root["dev"].set((char*)devName);
+        char path[32];
+        snprintf(path, sizeof(path), "lights/%s", l->getName());
+        path[sizeof(path)-1] = '\0';
+        root["path"].set(path);
+        return l->getStatusUpdate(root);
+      }
+      return false;
     }
-    return false;
-  } else if ((scan ==1)&&(_groups.size()>0)) {
+  } //else if ((scan ==1)&&(_groups.size()>0)) {
+  else if (scan == 1) {
     scan = 2;
-    HueGroup* g = _groups[nextGroup];
-    nextGroup++;
-    if (nextGroup == _groups.size()) nextGroup = 0;
-    if (!g) return false;
-    if (g->isDirty()) {
-      root["dev"].set(devName);
-      char path[32];
-      snprintf(path, sizeof(path), "groups/%s", g->getName());
-      path[sizeof(path)-1] = '\0';
-      root["path"].set(path);
-      bool anyOn = false;
-      int totalBri = 0; size_t lCount = 0;
-      for (uint8_t lid : g->getLightIds()) {
-        HueLight* l = getLightById(lid);
-        if (!l) continue;
-        if (l->isOn()) {
-          anyOn = true;
-          totalBri += l->isDimmable() ? l->getBrightness() : 255;
+    if (_groups.size() > 0) {
+      HueGroup* g = _groups[nextGroup];
+      nextGroup++;
+      if (nextGroup == _groups.size()) nextGroup = 0;
+      if (!g) return false;
+      if (g->isDirty()) {
+        _dirty = true;  // marker for recalculating anyOn and bri
+        root["dev"].set((char*)devName);
+        char path[32];
+        snprintf(path, sizeof(path), "groups/%s", g->getName());
+        path[sizeof(path)-1] = '\0';
+        root["path"].set(path);
+        bool anyOn = false;
+        int totalBri = 0; size_t lCount = 0;
+        for (uint8_t lid : g->getLightIds()) {
+          HueLight* l = getLightById(lid);
+          if (!l) continue;
+          if (l->isOn()) {
+            anyOn = true;
+            totalBri += l->isDimmable() ? l->getBrightness() : 255;
+          }
+          lCount++;
         }
-        lCount++;
+        root["on"].set(anyOn);
+        if (lCount > 0) root["bri"].set((int)(totalBri/lCount));
+        g->clearDirty();
+        return true;
       }
-      root["on"].set(anyOn);
-      if (lCount > 0) root["bri"].set((int)(totalBri/lCount));
-      g->clearDirty();
-      return true;
+      return false;
     }
-    return false;
-  } else if ((scan == 2)&&(_sensors.size()>0)) {
+  } //else if ((scan == 2)&&(_sensors.size()>0)) {
+  else if (scan == 2) {
     // check sensor
-    scan = 0;
-    HueSensor* s = _sensors[nextSensor];
-    nextSensor++;
-    if (nextSensor == _sensors.size()) nextSensor = 0;
-    if (!s) return false;
-    if (s->isDirty()) {
-      root["dev"].set(devName);
-      char path[32];
-      snprintf(path, sizeof(path), "sensors/%s", s->getName());
-      path[sizeof(path)-1] = '\0';
-      root["path"].set(path);
-      JsonObjectConst curState = s->getState();
-      for (JsonPairConst kv : curState) {
-        if (kv.value().is<const char*>()) {
-          root[kv.key().c_str()] = kv.value().as<String>();
-        } else {
-          root[kv.key().c_str()] = kv.value();
+    scan = 3;
+    if (_sensors.size()>0) {
+      HueSensor* s = _sensors[nextSensor];
+      nextSensor++;
+      if (nextSensor == _sensors.size()) nextSensor = 0;
+      if (!s) return false;
+      if (s->isDirty()) {
+        root["dev"].set((char*)devName);
+        char path[32];
+        snprintf(path, sizeof(path), "sensors/%s", s->getName());
+        path[sizeof(path)-1] = '\0';
+        root["path"].set(path);
+        int stateSize = s->getStateSize();
+      for (int i=0; i < stateSize; i++) {
+        const HueSensorValue& sv = s->getValueAt(i);
+        if (sv.key[0] == '\0') continue;
+        if (strcmp(sv.key, "lastupdated") == 0) {
+          uint32_t ts = s->getLastUpdated();
+          if (ts == 0) {
+            root[sv.key] = "none";
+          } else {
+            static char timeBuf[20];
+            time_t rawTime = (time_t)ts;
+            struct tm *timeinfo = localtime(&rawTime);
+            if (timeinfo) {
+              strftime(timeBuf, sizeof(timeBuf), "%d.%m.%Y, %H:%M", timeinfo);
+              root[sv.key].set((char*)timeBuf);
+            }
+          }
+          continue;
+        }
+        switch(sv.type) {
+          case 0: // NONE
+              break;
+          case 1: // BOOL
+              root[sv.key].set(sv.value > 0);
+              break;
+          case 2: // INT
+              root[sv.key].set((int)sv.value);
+              break;
+          case 3: // FLOAT (würde auch im default behandelt werden, aber für bessere Lesbarkeit mal explizit aufgeführt)
+              root[sv.key].set(sv.value);
+              break;
+          default:
+              root[sv.key].set(sv.value);
+              break;
         }
       }
-      s->clearDirty();
+        s->clearDirty();
+        return true;
+      }
+    }
+  } //else if ((scan == 3)&&(_dirty)) {
+  else if (scan == 3) {
+    scan = 0;
+    if (_dirty) {
+      // any of the lights or groups was dirty, so recalc anyOn and global bri
+      root["dev"].set((char*)devName);
+      KinoVariant tmp;
+      get("bri",tmp);
+      root["bri"].set(tmp.asInt());
+      get("on",tmp);
+      root["on"].set(tmp.asBool());
+      _dirty = false;
       return true;
     }
   }
@@ -929,7 +1016,7 @@ bool HueBridge::getLightParam(const HueLight* l, int paramIndex, char* out, size
   else if ((l->isDimmable() || l->hasCTColor() || l->hasXYColor()) && paramIndex == count++) result = "tt";
 
   if (result) {
-    strlcpy(out, result, outLen); // strlcpy ist sicherer als strncpy
+    strlcpy(out, result, outLen);
     return true;
   }
 
@@ -998,10 +1085,9 @@ bool HueBridge::getGroupParam(const HueGroup* g, int paramIndex, char* out, size
 bool HueBridge::getSensorParam(const HueSensor* s, int paramIndex, char* out, size_t outLen) {
   const char* result = nullptr;
   int count = 0;
-  JsonObjectConst states = s->getState();
-  for (JsonPairConst kv : states) {
-    if (paramIndex == count++) { result = kv.key().c_str(); break; }
-  }
+  const HueSensorValue& sv = s->getValueAt(paramIndex);
+  if (sv.key[0] == '\0') return false;
+  result = sv.key;
   if (result) {
     strlcpy(out, result, outLen);
     return true;
@@ -1009,7 +1095,6 @@ bool HueBridge::getSensorParam(const HueSensor* s, int paramIndex, char* out, si
   if (outLen > 0) out[0] = '\0';
   return false;
 }
-// ===== Public API =====
 
 bool HueBridge::begin() {
     return (init()==KinoError::OK);
@@ -1025,32 +1110,10 @@ KinoError HueBridge::init() {
 
 KinoError HueBridge::tick() {
   if (WiFi.status() != WL_CONNECTED) return KinoError::NothingToDo;
-  //if (_tickInterval == 0) return KinoError::NothingToDo;
-  //if (_refreshing) return KinoError::NothingToDo;
-  //unsigned long now = millis();
-  //if (now - _lastTick >= _tickInterval) {
-    //_lastTick = now;
-    //_refreshing = true;
-    bool ok = (readLights()&&readSensors());
-    //_refreshing = false;
-    return (ok ? KinoError::OK : KinoError::DeviceNotReady);
-  //}
-  //return KinoError::NothingToDo;
-}
-/*
-bool HueBridge::setTickInterval(int ms) {
-  if (ms == 0) { _tickInterval = 0; return true; }
-  if (ms < 0) return false;       // nur für bessere Lesbarkeit hier. negative Werte sind unerlaubt
-  if (ms < 2000) return false;    // schneller als alle 2 Sekunden erzeugt zu viel Traffic
-  _tickInterval = ms;
-  _lastTick = millis();
-  return true;
+  bool ok = (readLights()&&readSensors());
+  return (ok ? KinoError::OK : KinoError::DeviceNotReady);
 }
 
-int HueBridge::getTickInterval() {
-  return _tickInterval;
-}
-*/
 void HueBridge::EnsureTimeoutBeforeRequest(unsigned long timeout) {
   static unsigned long LastRequest = 0;
   unsigned long now = millis();
@@ -1071,8 +1134,6 @@ bool HueBridge::readLights() {
 
   if (!httpGET(wifi, http, path)) {
     Serial.println(F("HueBridge: could not read lights"));
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return false;
   }
@@ -1085,13 +1146,13 @@ bool HueBridge::readLights() {
   
   // Wichtig: findNextKey muss 'true' für numericOnly erhalten
   while (findNextKey(*stream, idStr, sizeof(idStr), true)) {
-    _httpJson.clear();
+    httpJson.clear();
     
     // deserializeJson liest ab der '{' das KOMPLETTE Objekt der Lampe
-    DeserializationError err = deserializeJson(_httpJson, *stream, DeserializationOption::Filter(_filter));
+    DeserializationError err = deserializeJson(httpJson, *stream, DeserializationOption::Filter(_filter));
     _globalDepth = 1;
     if (err == DeserializationError::Ok) {
-      updateOrAddLight(atoi(idStr), _httpJson);
+      updateOrAddLight(atoi(idStr), httpJson);
     } else {
       Serial.print(F("JSON Error for Light ID "));
       Serial.print(idStr);
@@ -1104,9 +1165,6 @@ bool HueBridge::readLights() {
     // Den Such-Puffer in findNextKey kann man nicht von hier löschen, 
     // aber findNextKey fängt beim nächsten Aufruf eh frisch an zu sammeln.
   }
-  
-  //http.end();
-  //wifi.stop();
   NetworkHelper::resetClients(wifi, http, true);
   return !_lights.empty();
 }
@@ -1155,16 +1213,11 @@ HueLight* HueBridge::getLightById(uint8_t id) {
 
 HueLight* HueBridge::getLightByName(const char* name) {
   for (auto* l : _lights) {
-    //if (l->getName() == name) return l;
     if (strcmp(l->getName(), name)==0) return l;
   }
   return nullptr;
 }
-/*
-const std::vector<HueLight*>& HueBridge::getLights() const {
-  return _lights;
-}
-*/
+
 HueGroup* HueBridge::getGroupById(uint8_t gid) {
   for (auto* g : _groups) {
     if (g->getId() == gid) return g;
@@ -1174,16 +1227,11 @@ HueGroup* HueBridge::getGroupById(uint8_t gid) {
 
 HueGroup* HueBridge::getGroupByName(const char* name) {
   for (auto* g : _groups) {
-    //if (g->getName() == name) return g;
     if (strcmp(g->getName(), name)==0) return g;
   }
   return nullptr;
 }
-/*
-const std::vector<HueGroup*>& HueBridge::getGroups() const {
-  return _groups;
-}
-*/
+
 bool HueBridge::readGroups() {
   _globalDepth = 0;
   WiFiClient wifi;
@@ -1192,8 +1240,6 @@ bool HueBridge::readGroups() {
   snprintf(path, sizeof(path), "/api/%s/groups", _user);
   if (!httpGET(wifi, http, path)) {
     Serial.println(F("HueBridge: could not read groups"));
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return false;
   }
@@ -1205,26 +1251,20 @@ bool HueBridge::readGroups() {
   WiFiClient* stream = http.getStreamPtr();
   
   while (findNextKey(*stream, idStr, sizeof(idStr),true)) {
-    //doc.clear();
-    _httpJson.clear();
-    if (deserializeJson(_httpJson, *stream, DeserializationOption::Filter(_filter)) == DeserializationError::Ok) {
+    httpJson.clear();
+    if (deserializeJson(httpJson, *stream, DeserializationOption::Filter(_filter)) == DeserializationError::Ok) {
       _globalDepth = 1;
-      // Logik zum Extrahieren der Light-IDs bleibt in addGroup
-      updateOrAddGroup(atoi(idStr), _httpJson);
+      updateOrAddGroup(atoi(idStr), httpJson);
     } else {
       Serial.print(F("Deserialization failed for group "));
       Serial.println(idStr);
     }
   }
-  //http.end();
-  //wifi.stop();
   NetworkHelper::resetClients(wifi, http, true);
   return !_groups.empty();
 }
 
 void HueBridge::updateOrAddGroup(int id, JsonVariant doc) {
-  //serializeJson(doc, Serial); 
-  //Serial.println();
   const char* name = doc["name"] | "";
   std::vector<uint8_t> lightIds;
 
@@ -1250,8 +1290,6 @@ bool HueBridge::readScenes() {
   snprintf(path, sizeof(path), "/api/%s/scenes", _user);
   if (!httpGET(wifi, http, path)) {
     Serial.println(F("HueBridge: could not read scenes"));
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return false;
   }
@@ -1266,22 +1304,17 @@ bool HueBridge::readScenes() {
   WiFiClient* stream = http.getStreamPtr();
   
   while (findNextKey(*stream, idStr, sizeof(idStr),false)) {
-    _httpJson.clear();
-    if (deserializeJson(_httpJson, *stream, DeserializationOption::Filter(_filter)) == DeserializationError::Ok) {
-      // Hier übergeben wir idStr direkt als const char*
-      addScene(idStr, _httpJson); 
+    httpJson.clear();
+    if (deserializeJson(httpJson, *stream, DeserializationOption::Filter(_filter)) == DeserializationError::Ok) {
+      addScene(idStr, httpJson); 
     }
     _globalDepth = 1;
   }
-  //http.end();
-  //wifi.stop();
   NetworkHelper::resetClients(wifi, http, true);
   return !_scenes.empty();
 }
 
 void HueBridge::addScene(const char* idStr, JsonVariant doc) {
-  //serializeJson(doc, Serial); 
-  //Serial.println();
   const char* type = doc["type"] | "";
   if (strcmp(type, "LightScene") == 0) {
     const char* name = doc["name"] | "";
@@ -1298,16 +1331,13 @@ void HueBridge::addScene(const char* idStr, JsonVariant doc) {
   }
 }
 
-/* getSceneByName() V2 Strings entfernt */
 HueScene* HueBridge::getSceneByName(const char* name) {
   for (auto* s : _scenes) {
-    //if (strcmp(tmpname, name)==0) return s;
     if (strcmp(s->getName(), name)==0) return s;
   }
   return nullptr;
 }
 
-/* setScene() V2 Strings entfernt */
 bool HueBridge::setScene(const char* sceneName) {
   HueScene* s = getSceneByName(sceneName);
   if (s) return s->setActive(this);
@@ -1323,14 +1353,10 @@ std::map<uint8_t, bool> HueBridge::getScenePowerStates(const char* sceneId) {
   bool httpok = false;
   if (httpGET(wifi, http, path)) {
     httpok = true;
-    // Filter erstellen: Wir wollen nur "lightstates" -> "alle IDs" -> "on"
-    //StaticJsonDocument<128> filter;
     _filter.clear();
     _filter["lightstates"][true]["on"] = true;
 
     WiFiClient* stream = http.getStreamPtr();
-    // Dank Filter reicht jetzt ein deutlich kleineres Dokument!
-    // 1024-2048 Bytes sollten selbst für viele Lampen dicke reichen.
     DynamicJsonDocument doc(2048); 
     DeserializationError error = deserializeJson(doc, *stream, DeserializationOption::Filter(_filter));
 
@@ -1341,8 +1367,6 @@ std::map<uint8_t, bool> HueBridge::getScenePowerStates(const char* sceneId) {
       }
     }
   }
-  //http.end();
-  //wifi.stop();
   NetworkHelper::resetClients(wifi, http, httpok);
   return results;
 }
@@ -1357,19 +1381,13 @@ SceneLightStates HueBridge::getSceneLightStates(const char* sceneId) {
 
   if (!httpGET(wifi, http, path)) {
     Serial.println(F("HueBridge: could not read scene"));
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return result; 
   }
 
   WiFiClient* stream = http.getStreamPtr();
-  // Filter erstellen: Wir wollen nur den "lightstates"-Zweig
-  // Innerhalb der IDs interessieren uns nur on, bri und ct
-  //StaticJsonDocument<192> filter;
   _filter.clear();
   JsonObject lightstatesFilter = _filter.createNestedObject("lightstates");
-  // [true] ist ein Platzhalter für "alle Keys in diesem Objekt"
   JsonObject idPattern = lightstatesFilter.createNestedObject("*"); 
   idPattern["on"] = true;
   idPattern["bri"] = true;
@@ -1405,9 +1423,7 @@ SceneLightStates HueBridge::getSceneLightStates(const char* sceneId) {
     Serial.print(F("Hue Scene Parsing Error: "));
     Serial.println(error.c_str());
   }
-
-  //http.end();
-  //wifi.stop();
+  doc.clear();  // help cleaning up
   NetworkHelper::resetClients(wifi, http, true);
   return result;
 }
@@ -1421,15 +1437,12 @@ bool HueBridge::readSensors() {
 
     if (!httpGET(wifi, http, path)) {
       Serial.println(F("HueBridge: could not read sensors"));
-      //http.end();
-      //wifi.stop();
       NetworkHelper::resetClients(wifi, http, false);
       return false;
     }
 
     char idStr[16];
     
-    // Filter definieren, um den RAM-Bedarf pro Sensor zu drücken
     _filter.clear();
     _filter["name"] = true;
     _filter["type"] = true;
@@ -1438,13 +1451,13 @@ bool HueBridge::readSensors() {
     WiFiClient* stream = http.getStreamPtr();
     
     while (findNextKey(*stream, idStr, sizeof(idStr), true)) {
-        _httpJson.clear();
-        DeserializationError err = deserializeJson(_httpJson, *stream, DeserializationOption::Filter(_filter));
+        httpJson.clear();
+        DeserializationError err = deserializeJson(httpJson, *stream, DeserializationOption::Filter(_filter));
         
         _globalDepth = 1; // "Back to track" Synchronisation
 
         if (err == DeserializationError::Ok) {
-            updateOrAddSensor(atoi(idStr), _httpJson);
+            updateOrAddSensor(atoi(idStr), httpJson);
         } else {
             Serial.print(F("Sensor JSON Error ID "));
             Serial.print(idStr);
@@ -1457,15 +1470,11 @@ bool HueBridge::readSensors() {
             stream->find((char*)"},"); // Versuche zum nächsten Geschwister-Element zu springen
         }
     }
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, true);
     return !_sensors.empty();
 }
 
 void HueBridge::updateOrAddSensor(int id, JsonVariant doc) {
-  //serializeJson(doc, Serial); 
-  //Serial.println();
   HueSensor* s = getSensorById(id);
   
   if (!s) {
@@ -1504,17 +1513,11 @@ HueSensor* HueBridge::getSensorByName(const char* name) {
   return nullptr;
 }
 
-/* setSensorState() V2 Strings entfernt */
-bool HueBridge::setSensorState(uint16_t id, const JsonObject& state) {
-    char path[128];
-    snprintf(path, sizeof(path), "/api/%s/sensors/%d/state", _user, id);
-    char payload[256];
-    serializeJson(state, payload);
-
-    return sendState(path, payload);
+bool HueBridge::setSensorState(uint16_t id, const char* payload) {
+  char path[128];
+  snprintf(path, sizeof(path), "/api/%s/sensors/%d/state", _user, id);
+  return sendState(path, payload);
 }
-
-// ===== HTTP =====
 
 bool HueBridge::findNextKey(Stream& stream, char* out, size_t outSize, bool numericOnly) {
   char buffer[64]; 
@@ -1584,8 +1587,6 @@ bool HueBridge::httpGET(WiFiClient& wifi, HTTPClient& http, const char* path) {
 
   if (!http.begin(wifi, url)) {
     Serial.println(F("[HueBridge::get] could not connect"));
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return false;
   }
@@ -1593,22 +1594,19 @@ bool HueBridge::httpGET(WiFiClient& wifi, HTTPClient& http, const char* path) {
   int httpCode = http.GET();
 
   if (httpCode != HTTP_CODE_OK) {
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return false;
   }
+  // http ist hier noch offen für die weitere Verwendung
   return true;
 }
 
 bool HueBridge::sendLightState(uint8_t lightId, const char* jsonPayload) {
-  //String path = "/api/" + _user + "/lights/" + String(lightId) + "/state";
   char path[128];
   snprintf(path, sizeof(path), "/api/%s/lights/%d/state", _user, lightId);
   return sendState(path, jsonPayload);
 }
 
-/* sendGroupState V2: Strings entfernt */
 bool HueBridge::sendGroupState(uint16_t groupId, const char* jsonPayload) {
   char path[64];
   snprintf(path, sizeof(path), "/api/%s/groups/%d/action", _user, groupId);
@@ -1616,7 +1614,6 @@ bool HueBridge::sendGroupState(uint16_t groupId, const char* jsonPayload) {
 }
 
 bool HueBridge::saveScene(const char* sceneId, const char* jsonPayload) {
-    //String path = "/api/" + _user + "/scenes/" + sceneId;
     char path[128];
     snprintf(path, sizeof(path), "/api/%s/scenes/%s", _user, jsonPayload);
     return sendState(path, jsonPayload);
@@ -1631,8 +1628,6 @@ bool HueBridge::sendState(const char* path, const char* jsonPayload) {
            _ip[0], _ip[1], _ip[2], _ip[3], path);
 
   if (!http.begin(wifi, url)) {
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return false;
   }
@@ -1642,8 +1637,6 @@ bool HueBridge::sendState(const char* path, const char* jsonPayload) {
   int httpCode = http.PUT((uint8_t*)jsonPayload, len);
   bool success = (httpCode == HTTP_CODE_OK);
   
-  //http.end();
-  //wifi.stop();
   NetworkHelper::resetClients(wifi, http, true);
   return success;
 }
@@ -1653,7 +1646,7 @@ bool HueBridge::setPower(bool onoff) {
     if (anyOn()) return true;   // no action needed, light is already on
     HueSensor* sensor = getSensorByName("Daylight");
     // Tageslicht?
-    bool day = (sensor && sensor->hasValue("daylight")) ? sensor->getValue("daylight").as<bool>() : false;
+    bool day = (sensor && sensor->hasValue("daylight")) ? sensor->getValue("daylight")>0 : false;
     if (day) return setScene("Standard");  // Tagsüber: verhalte Dich wie der Lichtschalter
     return setScene("Nachtlicht");         // Nachts: setze Nachtlicht, um einen Schock zu verhindern ;-)
   }

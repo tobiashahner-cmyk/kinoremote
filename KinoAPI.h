@@ -2,6 +2,8 @@
 #include <Arduino.h>
 #include "KinoDevice.h"
 #include "KinoMacroEngine.h"
+#include "rotary.h"
+#include "oled.h"
 
 namespace KinoAPI {
   // Macros
@@ -30,6 +32,12 @@ namespace KinoAPI {
   size_t getMacroErrorCount();
   const MacroError& getMacroError(size_t i);
 
+  bool setRotaryProperty(const char* deviceName, const char* propKey);
+  void setRotaryMenuMode(int minvalue, int maxvalue, int actpos);
+  void clearRotaryMenuMode();
+
+  bool displayDevices();
+
   // neue API: ein grosser Getter und Setter, und eine Query
   // als dynamischer Wrapper für alle KinoDevices
   KinoError getDeviceCount(size_t& out);
@@ -50,13 +58,32 @@ namespace KinoAPI {
   KinoError getPropertyCount(const char* deviceName, size_t &out);
   KinoError getPropertyInfo(const char* deviceName, size_t index, const KinoPropertyInfo*& out);
   KinoError getPropertyInfoByName(const char* deviceName, const char* propertyName, const KinoPropertyInfo*& out);
-  bool hasLabel(const KinoPropertyInfo*& prop);
-  bool hasQuery(const KinoPropertyInfo*& prop);
-  bool hasParam(const KinoPropertyInfo*& prop);
-  bool hasValue(const KinoPropertyInfo*& prop);
-  bool isWritable(const KinoPropertyInfo*& prop);
-  bool isInternal(const KinoPropertyInfo*& prop);
-  bool isStatus(const KinoPropertyInfo*& prop);
+  inline bool isInternal(const KinoPropertyInfo* prop) {
+    return ((prop->flags & KinoPropertyFlags::Prop_Internal) > 0);
+  }
+  inline bool isStatus(const KinoPropertyInfo* prop) {
+    return ((prop->flags & KinoPropertyFlags::Prop_Status) > 0);
+  }
+  inline bool hasValue(const KinoPropertyInfo* prop) {
+    return ((prop->flags & KinoPropertyFlags::Prop_Read) > 0);
+  }
+  inline bool isWritable(const KinoPropertyInfo* prop) {
+    return ((prop->flags & KinoPropertyFlags::Prop_Write) > 0);
+  }
+  inline bool hasLabel(const KinoPropertyInfo* prop) {
+    return ((prop->flags & KinoPropertyFlags::Prop_hasLabel) > 0);
+  }
+  inline bool hasQuery(const KinoPropertyInfo* prop) {
+    return ((prop->flags & KinoPropertyFlags::Prop_Query) > 0);
+  }
+  inline bool hasParam(const KinoPropertyInfo* prop) {
+    return ((prop->flags & KinoPropertyFlags::Prop_hasParams) > 0);
+  }
+
+  inline bool isOptional(const KinoPropertyInfo* prop) {
+    return ((prop->flags & KinoPropertyFlags::Prop_Optional) > 0);
+  }
+  bool isAvailable(const char* deviceName, const char* propKey);
 
   KinoError getJsonUpdates(JsonDocument& doc);
 

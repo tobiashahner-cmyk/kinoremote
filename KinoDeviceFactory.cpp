@@ -9,13 +9,14 @@
 #include "HyperionDevice.h"
 #include "HueBridge.h"
 
+extern StaticJsonDocument<2048> httpJson;
 
 std::vector<KinoDeviceFactory::DeviceEntry> KinoDeviceFactory::_devices;
 
 // ------------------------------------------------------------
 // public API
 // ------------------------------------------------------------
-
+/*
 bool KinoDeviceFactory::initDevices() {
   _devices.clear();
 
@@ -63,6 +64,63 @@ bool KinoDeviceFactory::initDevices() {
   }
 
   return true;
+}*/
+
+bool KinoDeviceFactory::initDevices() {
+  _devices.clear();
+
+  //DynamicJsonDocument doc(2048);
+  if (!loadDevicesJson(httpJson)) {
+    Serial.println(F("DeviceFactory: failed to load devices.json"));
+    return false;
+  }
+
+  JsonArray arr = httpJson["devices"].as<JsonArray>();    // missbrauche globales httpJson
+  if (!arr) {
+    Serial.println(F("DeviceFactory: no devices array"));
+    return false;
+  }
+
+  for (JsonObject d : arr) {
+    if ( (!d.containsKey("name")) || (!d.containsKey("class")) ) {
+      Serial.println(F("DeviceFactory: invalid device entry"));
+      continue;
+    }
+    
+    DeviceEntry e;
+    strlcpy(e.name, d["name"]|"", sizeof(e.name));
+    strlcpy(e.className, d["class"]|"", sizeof(e.className));
+
+    
+
+    Serial.print(F("DeviceFactory: creating ")); Serial.print(e.className); Serial.print(F(" ")); Serial.println(e.name);
+    e.device = createDeviceFromJson(e.className, d);
+    if (!e.device) {
+      Serial.printf("DeviceFactory: unknown class '%s'\n",
+                    e.className);
+      continue;
+    }
+    _devices.push_back(e);
+  }
+
+  for (DeviceEntry& e : _devices) {
+    Serial.print(F("initializing ")); Serial.print(e.name);
+    KinoError err = e.device->init();
+    e.initOk = (err == KinoError::OK);
+
+    if (!e.initOk) {
+      Serial.println(F(" : init failed"));
+    } else {
+      Serial.println(F(" : OK"));
+    }
+    // time for cleanup after device init
+    yield();
+    delay(1000);
+    yield();
+    httpJson.clear(); // clean up the shared document after use
+  }
+
+  return true;
 }
 
 KinoDevice* KinoDeviceFactory::getDeviceByName(const char* name) {
@@ -72,7 +130,7 @@ KinoDevice* KinoDeviceFactory::getDeviceByName(const char* name) {
     if (strcmp(d.name, name)==0) {
       if (!d.initOk && d.device) {
         // Lazy re-init
-        Serial.print(F("re-initializing preciously unsuccessful "));
+        Serial.print(F("re-initializing previously unsuccessful "));
         Serial.println(name);
         d.initOk = (d.device->init() == KinoError::OK);
       }
@@ -139,8 +197,7 @@ void printFile() {
   file.close(); // Wichtig: Datei wieder schließen
 }
 
-
-bool KinoDeviceFactory::loadDevicesJson(DynamicJsonDocument& doc) {
+bool KinoDeviceFactory::loadDevicesJson(JsonDocument& doc) {
   if (!LittleFS.begin()) {
     Serial.println(F("LittleFS mount failed"));
     return false;

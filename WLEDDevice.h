@@ -190,6 +190,6 @@ class WLEDDevice : public KinoDevice {
     bool getParamLabel(size_t linenr, size_t paramnr, char* out, size_t outLen);
     bool getParamField(size_t linenr, size_t paramnr, char* out, size_t outLen);
     static char _bodybuffer[256];
-    static StaticJsonDocument<1024> _jsonResponse;
+    //static StaticJsonDocument<1024> _jsonResponse;
     static StaticJsonDocument<512> _jsonFilter; 
 };

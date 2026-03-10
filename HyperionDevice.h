@@ -60,7 +60,7 @@ private:
 
   //int  _tickInterval  = 0;
   //unsigned long _lastTick = 0;
-  StaticJsonDocument<1024> _doc;   // zum Parsen der Json HTTP-Antwort
+  //StaticJsonDocument<1024> _doc;   // zum Parsen der Json HTTP-Antwort
   static StaticJsonDocument<64> _filter; // Filter für deserializeJson
   static bool _filterInitialized;
   void setupFilter();

@@ -108,7 +108,7 @@ std::vector<MacroError> _errors;
 MacroFinishedCallback _onFinished;
 MacroErrorCallback _onError;
 
-StaticJsonDocument<1024> _actionDoc;
+//StaticJsonDocument<1024> _actionDoc;
 
 // helpers
 bool _executeAction(const JsonObject& action, uint16_t index);

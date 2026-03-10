@@ -30,7 +30,7 @@ private:
   static std::vector<DeviceEntry> _devices;
 
   // JSON helpers
-  static bool loadDevicesJson(DynamicJsonDocument& doc);
+  static bool loadDevicesJson(JsonDocument& doc);
   static bool createDefaultDevicesFile();
 
   // Device-Erzeugung

@@ -1,6 +1,8 @@
 #include "HyperionDevice.h"
 #include "NetworkHelper.h"
 
+extern StaticJsonDocument<2048> httpJson;
+
 // ===== Konstruktoren =====
 
 HyperionDevice::HyperionDevice(const IPAddress& ip)
@@ -13,35 +15,11 @@ HyperionDevice::HyperionDevice(const String& ip) {
 
 KinoError HyperionDevice::tick() {
   if (WiFi.status() != WL_CONNECTED) return KinoError::NothingToDo;
-  //if (_tickInterval == 0) return KinoError::NothingToDo;
-  //if (_refreshing) return KinoError::NothingToDo;
-  
-  //unsigned long now = millis();
-  //if (now - _lastTick >= _tickInterval) {
-    //_lastTick = now;
-    //_refreshing = true;
-    bool ok = getStatus();
-    //_refreshing = false;
-    return (ok ? KinoError::OK : KinoError::DeviceNotReady);
-  //}
-  //return KinoError::NothingToDo;
-}
-/*
-bool HyperionDevice::setTickInterval(int ms) {
-  if (ms == 0) { _tickInterval = 0; return true; }
-  if (ms < 0) return false;       // nur zur besseren Lesbarkeit hier aufgeführt
-  if (ms < 2000) return false;    // unter 2 Sekunden Interval führt zu übermässigem Traffic
-  _tickInterval = ms;
-  _lastTick = millis();
-  return true;
+  bool ok = getStatus();
+  return (ok ? KinoError::OK : KinoError::DeviceNotReady);
 }
 
-int HyperionDevice::getTickInterval() {
-  return _tickInterval;
-}*/
-
-// ===== neue Public API, als Wrapper auf alte Public API ===
-const KinoPropertyInfo HyperionDevice::_properties[] = {
+const KinoPropertyInfo HyperionDevice::_properties[] PROGMEM = {
   //{ "tickInterval", "Aktualisierung [ms]", Prop_Read | Prop_Write ,0,20000,500},
   { "ip",         "IP",         Prop_Read                         },
   { "on",         "Power",      Prop_Read  | Prop_Write           },
@@ -54,15 +32,15 @@ size_t HyperionDevice::getPropertyCount() const {
 
 const KinoPropertyInfo* HyperionDevice::getPropertyInfo(size_t index) const {
   if (index >= getPropertyCount()) return nullptr;
-  return &_properties[index];
+  //return &_properties[index];
+  static KinoPropertyInfo buffer; 
+  memcpy_P(&buffer, &_properties[index], sizeof(KinoPropertyInfo));
+  
+  return &buffer;
 }
 
 KinoError HyperionDevice::get(const char* prop, KinoVariant& out) {
   if (!prop) return KinoError::PropertyNotSupported;
-  /*if (strcmp(prop,"tickInterval")==0) {
-    out.setInt(_tickInterval);
-    return KinoError::OK;
-  }*/
   if (strcmp(prop,"ip")==0) {
     char buf[20];
     snprintf(buf, sizeof(buf), "%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
@@ -81,10 +59,6 @@ KinoError HyperionDevice::get(const char* prop, KinoVariant& out) {
 }
 
 KinoError HyperionDevice::set(const char* prop, const KinoVariant& value) {
-  /*if (strcmp(prop,"tickInterval")==0) {
-    if (!setTickInterval(value.asInt())) return KinoError::InvalidValue;
-    return KinoError::OK;
-  }*/
   if ((strcmp(prop,"power")==0)||(strcmp(prop,"on")==0)) {
     return KinoError::OK;
   }
@@ -97,7 +71,7 @@ KinoError HyperionDevice::set(const char* prop, const KinoVariant& value) {
 
 bool HyperionDevice::getStatusUpdate(const char* devName, JsonObject& root) {
   if (_dirty > 0) {
-    root["dev"].set(devName);
+    root["dev"].set((char*)devName);
     if (_dirty & ON)    root["on"].set(_powerStatus);
     if (_dirty & LIVE)  root["live"].set(_ledDeviceStatus);
     _dirty = NONE;
@@ -105,8 +79,6 @@ bool HyperionDevice::getStatusUpdate(const char* devName, JsonObject& root) {
   }
   return false;
 }
-
-// ===== Public API =====
 
 bool HyperionDevice::begin() {
   return getStatus();
@@ -134,7 +106,6 @@ bool HyperionDevice::getStatus() {
   serializeJson(req, jsonBuffer);
   if (!http.begin(wifi, url)) {
     Serial.println(F("[HyperionDevice::getStatus] could not connect"));
-    //wifi.stop();
     NetworkHelper::resetWiFiClient(wifi);
     yield();
     delay(1000);
@@ -146,8 +117,6 @@ bool HyperionDevice::getStatus() {
   bool success = (httpCode == HTTP_CODE_OK || httpCode == 204 || httpCode == 207);
   if (!success) {
     Serial.printf("[HyperionDevice::getStatus] POST failed, error: %s (%d)\n", http.errorToString(httpCode).c_str(), httpCode);
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return false;
   }
@@ -155,12 +124,9 @@ bool HyperionDevice::getStatus() {
   WiFiClient* stream = http.getStreamPtr();
   bool ok = parseComponentsFromStream(*stream);
   if (!ok) Serial.println(F("HyperionDevice::getStatus() : parseComponentsFromStream failed"));
-  //http.end();
-  //wifi.stop();
   NetworkHelper::resetClients(wifi, http, true);
   return ok;
 }
-
 
 bool HyperionDevice::isBroadcasting() const {
   return _powerStatus && _ledDeviceStatus;
@@ -191,8 +157,6 @@ bool HyperionDevice::stopBroadcast() {
   return setBroadcast(false);
 }
 
-// ===== Getter =====
-
 bool HyperionDevice::getPowerStatus() const {
   return _powerStatus;
 }
@@ -201,7 +165,6 @@ bool HyperionDevice::getLedDeviceStatus() const {
   return _ledDeviceStatus;
 }
 
-// ===== JSON-RPC Helper =====
 void HyperionDevice::EnsureTimeoutBeforeRequest(unsigned long timeout) {
   static unsigned long LastRequest = 0;
   unsigned long now = millis();
@@ -216,58 +179,6 @@ bool HyperionDevice::sendJsonRpc(const JsonDocument& request) {
   return httpPOST("json-rpc", request);
 }
 
-
-// ===== HTTP Helper =====
-
-/* httpPOST V2 */
-/*
-bool HyperionDevice::httpPOST(const char* path, const JsonDocument& request) {
-  WiFiClient client;
-  if (!client.connect(_ip, 8090)) {
-    Serial.println(F("HyperionDevice::httpPOST(): could not connect"));
-    NetworkHelper::resetClient(client);
-    return false;
-  }
-
-  size_t len = measureJson(request);
-  char ipbuf[20];
-  snprintf(ipbuf, 20, "%d.%d.%d.%d", _ip[0], _ip[1], _ip[2], _ip[3]);
-
-  // Header senden
-  client.printf(
-    "POST %s HTTP/1.1\r\n"
-    "Host: %s\r\n"
-    "Content-Type: application/json\r\n"
-    "Content-Length: %d\r\n"
-    "Connection: close\r\n\r\n",
-    path,
-    ipbuf,
-    len
-  );
-
-  // Payload direkt streamen
-  serializeJson(request, client);
-
-  // Auf Antwort warten
-  if (!waitForClientData(client)) {
-    NetworkHelper::resetClient(client);
-    return false;
-  }
-
-  // Header überspringen
-  if (!NetworkHelper::skipHeader(client)) {
-    NetworkHelper::resetClient(client);
-    return false;
-  }
-
-  // Jetzt direkt parsen (wir nutzen die Funktion von vorhin)
-  // nach POST bekommt man keine vollständige Json- Antwort über den Status zurück!
-  // Trotzdem versuchen wir es, damit wenigstens der client sauber zurückgelassen wird.
-  parseComponentsFromStream(client); 
-  NetworkHelper::resetClient(client);
-  return true;
-}
-*/
 bool HyperionDevice::httpPOST(const char* path, const JsonDocument& request) {
   WiFiClient wifi;
   HTTPClient http;
@@ -279,7 +190,6 @@ bool HyperionDevice::httpPOST(const char* path, const JsonDocument& request) {
   serializeJson(request, jsonBuffer);
   if (!http.begin(wifi, url)) {
     Serial.println(F("[HyperionDevice::getStatus] could not connect"));
-    //wifi.stop();
     NetworkHelper::resetWiFiClient(wifi);
     yield();
     delay(1000);
@@ -293,8 +203,6 @@ bool HyperionDevice::httpPOST(const char* path, const JsonDocument& request) {
   bool success = (httpCode == HTTP_CODE_OK || httpCode == 204 || httpCode == 207);
   if (!success) {
     Serial.printf("[HyperionDevice::httpPOST] POST failed, error: %s (%d)\n", http.errorToString(httpCode).c_str(), httpCode);
-    //http.end();
-    //wifi.stop();
     NetworkHelper::resetClients(wifi, http, false);
     return false;
   }
@@ -302,8 +210,6 @@ bool HyperionDevice::httpPOST(const char* path, const JsonDocument& request) {
   WiFiClient* stream = http.getStreamPtr();
   bool ok = parsePostResponse(*stream);
   if (!ok) Serial.println(F("HyperionDevice::httpPOST] parsePostResponse failed"));
-  //http.end();
-  //wifi.stop();
   NetworkHelper::resetClients(wifi, http, true);
   return ok;
 }
@@ -313,10 +219,10 @@ bool HyperionDevice::parseComponentsFromStream(Stream& client) {
 
   // 2. Das Dokument für die gefilterten Daten
   // Da wir nur Namen und Bools für ca. 8-10 Komponenten speichern, reicht 1KB locker
-  _doc.clear();
+  httpJson.clear();
   
   // 3. Direkt vom Stream lesen
-  DeserializationError err = deserializeJson(_doc, client, DeserializationOption::Filter(_filter));
+  DeserializationError err = deserializeJson(httpJson, client, DeserializationOption::Filter(_filter));
 
   if (err) {
     Serial.print(F("Hyperion Parse Error: "));
@@ -325,7 +231,7 @@ bool HyperionDevice::parseComponentsFromStream(Stream& client) {
   }
   
   // 4. Daten extrahieren (Hyperion liefert info -> components)
-  JsonArray components = _doc["info"]["components"];
+  JsonArray components = httpJson["info"]["components"];
   if (components.isNull()) {
     return false;
   }
@@ -344,19 +250,17 @@ bool HyperionDevice::parseComponentsFromStream(Stream& client) {
     }
   }
 
-  _doc.clear();
+  httpJson.clear();
   return true;
 }
 
 bool HyperionDevice::parsePostResponse(Stream& s) {
   StaticJsonDocument<64> filter;
-  //StaticJsonDocument<64> response;
-  _doc.clear();
+  httpJson.clear();
   filter["success"] = true;
   filter["tan"] = true;
-  //DeserializationError e = deserializeJson(response, s, DeserializationOption::Filter(filter));
-  DeserializationError e = deserializeJson(_doc, s, DeserializationOption::Filter(filter));
-  return (!e && _doc["success"]);
+  DeserializationError e = deserializeJson(httpJson, s, DeserializationOption::Filter(filter));
+  return (!e && httpJson["success"]);
 }
 
 StaticJsonDocument<64> HyperionDevice::_filter;
